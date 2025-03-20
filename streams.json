@@ -1,0 +1,58 @@
+{
+  "streams": [
+    {
+      "title": "DAZN F1 FHD --> NEW ERA (FHD)",
+      "group_title": "Fórmula 1",
+      "acestream_id": "9f04b67904bf5ec6782ab34e8105bca264c10b62",
+      "network_caching": 10000
+    },
+    {
+      "title": "DAZN F1 FHD --> NEW ERA (FHD)",
+      "group_title": "Fórmula 1",
+      "acestream_id": "4f1d222c600e66ef4990b3d7ea13bfa53f7bfea1",
+      "network_caching": 10000
+    },
+    {
+      "title": "DAZN F1 FHD --> NEW ERA (FHD)",
+      "group_title": "Fórmula 1",
+      "acestream_id": "5d8613b5fde87f366bb5e41ac8011007a4c6bd3c",
+      "network_caching": 10000
+    },
+    {
+      "title": "DAZN F1 FHD --> NEW ERA (FHD)",
+      "group_title": "Fórmula 1",
+      "acestream_id": "751aa1f2429dfb9484b67a3ede00d859c6212994",
+      "network_caching": 10000
+    },
+    {
+      "title": "DAZN F1 FHD --> NEW ERA II (FHD)",
+      "group_title": "Fórmula 1",
+      "acestream_id": "c367738691c63896679e523d4c1c7933729acc7b",
+      "network_caching": 10000
+    },
+    {
+      "title": "DAZN F1 FHD --> ELCANO (FHD)",
+      "group_title": "Fórmula 1",
+      "acestream_id": "d6281d4e6310269b416180442a470d23a4a99dc9",
+      "network_caching": 10000
+    },
+    {
+      "title": "DAZN F1 FHD --> ELCANO (FHD)",
+      "group_title": "Fórmula 1",
+      "acestream_id": "2c6e4c897661e6b0257bfe931b66d20b2ec763b6",
+      "network_caching": 10000
+    },
+    {
+      "title": "DAZN F1 FHD --> ELCANO (FHD)",
+      "group_title": "Fórmula 1",
+      "acestream_id": "71eef80158aa8b37f3dc59f6793c6696df9a2dfa",
+      "network_caching": 10000
+    },
+    {
+      "title": "DAZN F1 SD --> ELCANO (SD)",
+      "group_title": "Fórmula 1",
+      "acestream_id": "268289e7a3c5209960b53b4d43c8c65fab294b85",
+      "network_caching": 10000
+    }
+  ]
+}
