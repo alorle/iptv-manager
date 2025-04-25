@@ -1,8 +1,21 @@
 # syntax=docker/dockerfile:1
 
+ARG NODE_VERSION=22.15.0
 ARG GO_VERSION=1.24.1
 
-# First stage: the executable builder.
+# First stage: the frontend builder.
+FROM node:${NODE_VERSION}-alpine AS frontend
+WORKDIR /src
+
+COPY ./package.json ./package-lock.json ./
+
+RUN npm install
+
+COPY ./ ./
+
+RUN npm run build
+
+# Second stage: the executable builder.
 FROM golang:${GO_VERSION}-alpine AS builder
 WORKDIR /src
 
@@ -11,6 +24,7 @@ COPY ./go.mod ./go.sum ./
 RUN go mod download
 
 COPY ./ ./
+COPY --from=frontend /src/dist /src/dist
 
 RUN go build -o /app .
 
