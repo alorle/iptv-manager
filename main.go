@@ -65,7 +65,7 @@ func main() {
 	server := api.NewServer(channelUseCase)
 	h := api.NewStrictHandler(server, nil)
 
-	router.Handle("/m3u8", handlers.NewPlaylistHandler(channelUseCase, acestreamURL, epgUrl))
+	router.Handle("/playlist.m3u", handlers.NewPlaylistHandler(channelUseCase, acestreamURL, epgUrl))
 	router.Handle("/api/", http.StripPrefix("/api", m(api.HandlerFromMux(h, nil))))
 	router.Handle("/api/documentation.json", handlers.NewDocumentationHandler(swagger))
 
