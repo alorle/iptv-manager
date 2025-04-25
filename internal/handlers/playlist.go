@@ -8,21 +8,23 @@ import (
 	"github.com/alorle/iptv-manager/internal/usecase"
 )
 
-type M3U8Handler struct {
-	channelUseCase *usecase.ChannelUseCase
+type playlistHandler struct {
+	channelUseCase usecase.GetChannelUseCase
 	acestreamURL   *url.URL
 	epgURL         string
 }
 
-func NewM3U8Handler(useCase *usecase.ChannelUseCase, acestreamURL *url.URL, epgURL string) *M3U8Handler {
-	return &M3U8Handler{
-		channelUseCase: useCase,
+var _ http.Handler = (*playlistHandler)(nil)
+
+func NewPlaylistHandler(channelUseCase usecase.GetChannelUseCase, acestreamURL *url.URL, epgURL string) *playlistHandler {
+	return &playlistHandler{
+		channelUseCase: channelUseCase,
 		acestreamURL:   acestreamURL,
 		epgURL:         epgURL,
 	}
 }
 
-func (h *M3U8Handler) HandleM3U8(w http.ResponseWriter, req *http.Request) {
+func (h *playlistHandler) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	guideUrls := []string{}
 	if h.epgURL != "" {
 		guideUrls = append(guideUrls, h.epgURL)
@@ -30,7 +32,7 @@ func (h *M3U8Handler) HandleM3U8(w http.ResponseWriter, req *http.Request) {
 
 	encoder := m3u.NewEncoder(guideUrls)
 
-	channels, err := h.channelUseCase.GetAllChannels()
+	channels, err := h.channelUseCase.GetChannels()
 	if err != nil {
 		http.Error(w, "Error retrieving channels", http.StatusInternalServerError)
 		return

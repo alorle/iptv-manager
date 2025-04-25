@@ -4,10 +4,12 @@ import (
 	"fmt"
 	"net/url"
 	"strings"
+
+	"github.com/google/uuid"
 )
 
 type Channel struct {
-	ID             string
+	ID             uuid.UUID
 	Title          string
 	GuideID        string
 	GroupTitle     string

@@ -1,4 +1,4 @@
-package json
+package main
 
 import (
 	"encoding/json"
@@ -6,17 +6,8 @@ import (
 	"os"
 
 	domain "github.com/alorle/iptv-manager/internal"
+	"github.com/google/uuid"
 )
-
-type JSONChannelRepository struct {
-	filePath string
-}
-
-func NewJSONChannelRepository(filePath string) *JSONChannelRepository {
-	return &JSONChannelRepository{
-		filePath: filePath,
-	}
-}
 
 type jsonChannel struct {
 	Title          string   `json:"title"`
@@ -32,20 +23,21 @@ type jsonConfig struct {
 	Channels []jsonChannel `json:"streams"`
 }
 
-func (r *JSONChannelRepository) GetAll() ([]*domain.Channel, error) {
-	data, err := os.ReadFile(r.filePath)
+func loadChannels(filePath string) ([]*domain.Channel, error) {
+	data, err := os.ReadFile(filePath)
 	if err != nil {
-		return nil, fmt.Errorf("error reading %s: %v", r.filePath, err)
+		return nil, fmt.Errorf("error reading %s: %v", filePath, err)
 	}
 
 	var config jsonConfig
 	if err := json.Unmarshal(data, &config); err != nil {
-		return nil, fmt.Errorf("error parsing %s: %v", r.filePath, err)
+		return nil, fmt.Errorf("error parsing %s: %v", filePath, err)
 	}
 
 	channels := make([]*domain.Channel, len(config.Channels))
 	for i, c := range config.Channels {
 		channels[i] = &domain.Channel{
+			ID:             uuid.New(),
 			Title:          c.Title,
 			GuideID:        c.GuideID,
 			GroupTitle:     c.GroupTitle,

@@ -4,16 +4,18 @@ import (
 	domain "github.com/alorle/iptv-manager/internal"
 )
 
-type ChannelUseCase struct {
-	channelRepo domain.ChannelRepository
+type GetChannelUseCase interface {
+	GetChannels() ([]*domain.Channel, error)
 }
 
-func NewChannelUseCase(repo domain.ChannelRepository) *ChannelUseCase {
-	return &ChannelUseCase{
-		channelRepo: repo,
-	}
+type channelsUseCase struct {
+	repo domain.ChannelRepository
 }
 
-func (uc *ChannelUseCase) GetAllChannels() ([]*domain.Channel, error) {
-	return uc.channelRepo.GetAll()
+func NewChannelsUseCase(repo domain.ChannelRepository) *channelsUseCase {
+	return &channelsUseCase{repo: repo}
+}
+
+func (uc *channelsUseCase) GetChannels() ([]*domain.Channel, error) {
+	return uc.repo.GetAll()
 }

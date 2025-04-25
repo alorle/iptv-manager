@@ -1,0 +1,91 @@
+openapi: 3.0.3
+info:
+  title: Acestream Manager API
+  description: API for managing Acestream channels and generating M3U playlists
+  version: 1.0.0
+  contact:
+    name: Acestream Manager
+
+servers:
+  - url: http://localhost:8080/api
+    description: Local development server
+
+tags:
+  - name: channels
+    description: Operations related to channels
+
+components:
+  schemas:
+    Channel:
+      type: object
+      required:
+        - id
+        - name
+        - acestream_id
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique identifier for the channel
+        name:
+          type: string
+          description: Name of the channel
+        acestream_id:
+          type: string
+          description: Acestream ID of the channel
+        category:
+          type: string
+          description: Category of the channel (e.g., Sports, Movies, News)
+        epg_id:
+          type: string
+          description: EPG ID for electronic program guide information
+        quality:
+          type: string
+          description: Quality of the channel
+        tags:
+          type: array
+          items:
+            type: string
+          description: Tags of the channel
+        created_at:
+          type: string
+          format: date-time
+          description: Creation timestamp
+        updated_at:
+          type: string
+          format: date-time
+          description: Last update timestamp
+
+    Error:
+      type: object
+      properties:
+        message:
+          type: string
+          description: Error message
+        code:
+          type: integer
+          description: Error code
+
+paths:
+  /channels:
+    get:
+      operationId: listChannels
+      tags:
+        - channels
+      summary: List all channels
+      description: Returns a list of all channels
+      responses:
+        "200":
+          description: Successful operation
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Channel"
+        "500":
+          description: Server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
