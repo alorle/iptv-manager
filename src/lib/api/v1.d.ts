@@ -12,23 +12,19 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * List all channels
-         * @description Returns a list of all channels
+         * List all channel views
+         * @description Returns a list of all channels (derived from streams grouped by guide_id)
          */
         get: operations["listChannels"];
         put?: never;
-        /**
-         * Create a new channel
-         * @description Creates a new channel with streams
-         */
-        post: operations["createChannel"];
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
         patch?: never;
         trace?: never;
     };
-    "/channels/{id}": {
+    "/channels/{guide_id}": {
         parameters: {
             query?: never;
             header?: never;
@@ -36,21 +32,65 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * Get a channel by ID
-         * @description Returns a single channel
+         * Get a channel view by guide_id
+         * @description Returns a single channel view (streams grouped by guide_id with EPG metadata)
          */
-        get: operations["getChannel"];
+        get: operations["getChannelByGuideId"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/streams": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
         /**
-         * Update a channel
-         * @description Updates an existing channel
+         * List all streams
+         * @description Returns a list of all streams
          */
-        put: operations["updateChannel"];
+        get: operations["listStreams"];
+        put?: never;
+        /**
+         * Create a new stream
+         * @description Creates a new stream. Channel view is automatically derived.
+         */
+        post: operations["createStream"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/streams/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get a stream by ID
+         * @description Returns a single stream
+         */
+        get: operations["getStream"];
+        /**
+         * Update a stream
+         * @description Updates an existing stream. Channel view is automatically updated.
+         */
+        put: operations["updateStream"];
         post?: never;
         /**
-         * Delete a channel
-         * @description Deletes a channel by ID
+         * Delete a stream
+         * @description Deletes a stream by ID. Channel view is automatically updated.
          */
-        delete: operations["deleteChannel"];
+        delete: operations["deleteStream"];
         options?: never;
         head?: never;
         patch?: never;
@@ -80,34 +120,28 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        /** @description Read-only channel view derived from streams grouped by guide_id and enriched with EPG metadata */
         Channel: {
-            /**
-             * Format: uuid
-             * @description Unique identifier for the channel
-             */
-            id: string;
-            /** @description Title of the channel */
-            title: string;
-            /** @description EPG ID for electronic program guide information */
+            /** @description EPG ID for electronic program guide information (grouping key) */
             guide_id: string;
-            /** @description URL to the channel logo image */
-            logo?: string;
-            /** @description Category/group of the channel (e.g., Sports, Movies, News) */
-            group_title: string;
+            /** @description Title of the channel (from EPG) */
+            readonly title: string;
+            /** @description URL to the channel logo image (from EPG) */
+            readonly logo?: string;
+            /** @description Category/group of the channel (from EPG or manual) */
+            readonly group_title: string;
             /** @description Available streams for this channel */
-            streams: components["schemas"]["Stream"][];
+            readonly streams: components["schemas"]["Stream"][];
         };
+        /** @description Primary entity representing a single Acestream source */
         Stream: {
             /**
              * Format: uuid
              * @description Unique identifier for the stream
              */
-            id: string;
-            /**
-             * Format: uuid
-             * @description ID of the parent channel
-             */
-            channel_id: string;
+            readonly id?: string;
+            /** @description EPG ID that groups this stream into a channel */
+            guide_id: string;
             /** @description Acestream ID for this stream */
             acestream_id: string;
             /** @description Quality of the stream (e.g., SD, HD, FHD) */
@@ -169,55 +203,13 @@ export interface operations {
             };
         };
     };
-    createChannel: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["Channel"];
-            };
-        };
-        responses: {
-            /** @description Channel created successfully */
-            201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Channel"];
-                };
-            };
-            /** @description Invalid input */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description Server error */
-            500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-        };
-    };
-    getChannel: {
+    getChannelByGuideId: {
         parameters: {
             query?: never;
             header?: never;
             path: {
-                /** @description Channel ID */
-                id: string;
+                /** @description EPG guide ID */
+                guide_id: string;
             };
             cookie?: never;
         };
@@ -232,7 +224,7 @@ export interface operations {
                     "application/json": components["schemas"]["Channel"];
                 };
             };
-            /** @description Channel not found */
+            /** @description Channel not found (no streams with this guide_id) */
             404: {
                 headers: {
                     [name: string]: unknown;
@@ -252,29 +244,55 @@ export interface operations {
             };
         };
     };
-    updateChannel: {
+    listStreams: {
         parameters: {
             query?: never;
             header?: never;
-            path: {
-                /** @description Channel ID */
-                id: string;
-            };
+            path?: never;
             cookie?: never;
         };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["Channel"];
-            };
-        };
+        requestBody?: never;
         responses: {
-            /** @description Channel updated successfully */
+            /** @description Successful operation */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["Channel"];
+                    "application/json": components["schemas"]["Stream"][];
+                };
+            };
+            /** @description Server error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    createStream: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["Stream"];
+            };
+        };
+        responses: {
+            /** @description Stream created successfully */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Stream"];
                 };
             };
             /** @description Invalid input */
@@ -286,7 +304,39 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description Channel not found */
+            /** @description Server error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    getStream: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Stream ID */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful operation */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Stream"];
+                };
+            };
+            /** @description Stream not found */
             404: {
                 headers: {
                     [name: string]: unknown;
@@ -306,26 +356,80 @@ export interface operations {
             };
         };
     };
-    deleteChannel: {
+    updateStream: {
         parameters: {
             query?: never;
             header?: never;
             path: {
-                /** @description Channel ID */
+                /** @description Stream ID */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["Stream"];
+            };
+        };
+        responses: {
+            /** @description Stream updated successfully */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Stream"];
+                };
+            };
+            /** @description Invalid input */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Stream not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Server error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    deleteStream: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Stream ID */
                 id: string;
             };
             cookie?: never;
         };
         requestBody?: never;
         responses: {
-            /** @description Channel deleted successfully */
+            /** @description Stream deleted successfully */
             204: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content?: never;
             };
-            /** @description Channel not found */
+            /** @description Stream not found */
             404: {
                 headers: {
                     [name: string]: unknown;

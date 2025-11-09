@@ -76,19 +76,20 @@ func main() {
 	}
 	swagger.Servers = nil
 
-	channels, err := loadChannels(streamsFile)
+	// Load streams from JSON file (supports both new flat format and old nested format)
+	streams, err := loadStreams(streamsFile)
 	if err != nil {
-		fmt.Printf("Error creating JSONChannelRepository: %v\n", err)
+		fmt.Printf("Error loading streams: %v\n", err)
 		return
 	}
 
-	channelRepo, err := internalJson.NewInMemoryChannelsRepository(channels)
+	// Create stream repository
+	streamRepo, err := internalJson.NewInMemoryStreamsRepository(streams)
 	if err != nil {
-		fmt.Printf("Error creating JSONChannelRepository: %v\n", err)
+		fmt.Printf("Error creating StreamRepository: %v\n", err)
 		return
 	}
-	channelRepo.SetFilePath(streamsFile)
-	channelUseCase := usecase.NewChannelsUseCase(channelRepo)
+	streamRepo.SetFilePath(streamsFile)
 
 	// Initialize EPG service
 	epgClient := epg.NewClient(epgUrl)
@@ -105,14 +106,17 @@ func main() {
 
 	epgUseCase := usecase.NewEPGUseCase(epgCache)
 
+	// Create stream use case (replaces channel use case)
+	streamUseCase := usecase.NewStreamUseCase(streamRepo, epgCache)
+
 	m := middleware.OapiRequestValidator(swagger)
 
 	router := http.NewServeMux()
 
-	server := api.NewServer(channelUseCase, epgUseCase)
+	server := api.NewServer(streamUseCase, epgUseCase)
 	h := api.NewStrictHandler(server, nil)
 
-	router.Handle("/playlist.m3u", handlers.NewPlaylistHandler(channelUseCase, acestreamURL, epgUrl))
+	router.Handle("/playlist.m3u", handlers.NewPlaylistHandler(streamUseCase, acestreamURL, epgUrl))
 	router.Handle("/api/", http.StripPrefix("/api", m(api.HandlerFromMux(h, nil))))
 	router.Handle("/api/documentation.json", handlers.NewDocumentationHandler(swagger))
 

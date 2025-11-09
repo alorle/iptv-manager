@@ -3,7 +3,7 @@ import createFetchClient from "openapi-fetch";
 import createClient from "openapi-react-query";
 import { useQueryClient, useMutation } from '@tanstack/react-query';
 import ChannelListItem from '../ChannelListItem/ChannelListItem';
-import ChannelFormDialog from '../ChannelFormDialog/ChannelFormDialog';
+import StreamFormDialog from '../StreamFormDialog/StreamFormDialog';
 
 const fetchClient = createFetchClient<paths>({
   baseUrl: "/api/",
@@ -11,13 +11,6 @@ const fetchClient = createFetchClient<paths>({
 const $api = createClient(fetchClient);
 
 type Stream = components["schemas"]["Stream"];
-
-interface ChannelFormData {
-  title: string;
-  guide_id: string;
-  logo: string;
-  group_title: string;
-}
 
 function ChannelsList() {
   const queryClient = useQueryClient();
@@ -27,37 +20,19 @@ function ChannelsList() {
     "/channels",
   );
 
-  const deleteMutation = useMutation({
-    mutationFn: async (id: string) => {
-      const response = await fetch(`/api/channels/${id}`, {
-        method: 'DELETE',
-      });
-      if (!response.ok) {
-        throw new Error('Failed to delete channel');
-      }
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({
-        queryKey: ['get', '/channels'],
-      });
-    },
-  });
-
-  const createMutation = useMutation({
-    mutationFn: async (data: ChannelFormData) => {
-      const response = await fetch('/api/channels', {
+  // Stream CRUD mutations
+  const createStreamMutation = useMutation({
+    mutationFn: async (data: Omit<Stream, 'id'>) => {
+      const response = await fetch('/api/streams', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({
-          id: '00000000-0000-0000-0000-000000000000', // Backend will generate
-          ...data,
-          streams: [], // Start with no streams
-        }),
+        body: JSON.stringify(data),
       });
       if (!response.ok) {
-        throw new Error('Failed to create channel');
+        const error = await response.json();
+        throw new Error(error.message || 'Failed to create stream');
       }
       return response.json();
     },
@@ -68,27 +43,18 @@ function ChannelsList() {
     },
   });
 
-  const updateMutation = useMutation({
-    mutationFn: async ({ id, data }: { id: string; data: ChannelFormData }) => {
-      // First get the existing channel to preserve streams
-      const existingChannel = channels?.find(ch => ch.id === id);
-      if (!existingChannel) {
-        throw new Error('Channel not found');
-      }
-
-      const response = await fetch(`/api/channels/${id}`, {
+  const updateStreamMutation = useMutation({
+    mutationFn: async ({ id, data }: { id: string; data: Omit<Stream, 'id'> }) => {
+      const response = await fetch(`/api/streams/${id}`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({
-          id,
-          ...data,
-          streams: existingChannel.streams, // Preserve existing streams
-        }),
+        body: JSON.stringify(data),
       });
       if (!response.ok) {
-        throw new Error('Failed to update channel');
+        const error = await response.json();
+        throw new Error(error.message || 'Failed to update stream');
       }
       return response.json();
     },
@@ -99,27 +65,14 @@ function ChannelsList() {
     },
   });
 
-  const updateStreamsMutation = useMutation({
-    mutationFn: async ({ channelId, streams }: { channelId: string; streams: Stream[] }) => {
-      const channel = channels?.find(ch => ch.id === channelId);
-      if (!channel) {
-        throw new Error('Channel not found');
-      }
-
-      const response = await fetch(`/api/channels/${channelId}`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          ...channel,
-          streams,
-        }),
+  const deleteStreamMutation = useMutation({
+    mutationFn: async (id: string) => {
+      const response = await fetch(`/api/streams/${id}`, {
+        method: 'DELETE',
       });
       if (!response.ok) {
-        throw new Error('Failed to update streams');
+        throw new Error('Failed to delete stream');
       }
-      return response.json();
     },
     onSuccess: () => {
       queryClient.invalidateQueries({
@@ -128,20 +81,16 @@ function ChannelsList() {
     },
   });
 
-  const handleDelete = async (id: string) => {
-    await deleteMutation.mutateAsync(id);
+  const handleCreateStream = async (data: Omit<Stream, 'id'>) => {
+    await createStreamMutation.mutateAsync(data);
   };
 
-  const handleCreate = async (data: ChannelFormData) => {
-    await createMutation.mutateAsync(data);
+  const handleUpdateStream = async (id: string, data: Omit<Stream, 'id'>) => {
+    await updateStreamMutation.mutateAsync({ id, data });
   };
 
-  const handleUpdate = async (id: string, data: ChannelFormData) => {
-    await updateMutation.mutateAsync({ id, data });
-  };
-
-  const handleUpdateStreams = async (channelId: string, streams: Stream[]) => {
-    await updateStreamsMutation.mutateAsync({ channelId, streams });
+  const handleDeleteStream = async (id: string) => {
+    await deleteStreamMutation.mutateAsync(id);
   };
 
   if (isLoading || !channels) return <div className="p-4">Loading...</div>;
@@ -152,22 +101,22 @@ function ChannelsList() {
     <div className="max-w-4xl mx-auto p-4">
       <div className="flex justify-between items-center mb-6">
         <h1 className="text-2xl font-bold text-gray-900">Channels</h1>
-        <ChannelFormDialog mode="create" onSubmit={handleCreate} />
+        <StreamFormDialog mode="create" onSubmit={handleCreateStream} />
       </div>
 
       {channels.length === 0 ? (
         <div className="text-center py-12 text-gray-500">
-          <p>No channels yet. Create your first channel to get started!</p>
+          <p>No channels yet. Add streams to create channels!</p>
         </div>
       ) : (
         channels.map((channel, index) => (
           <ChannelListItem
-            key={channel.id}
+            key={channel.guide_id}
             channel={channel}
             index={index + 1}
-            onDelete={handleDelete}
-            onUpdate={handleUpdate}
-            onUpdateStreams={handleUpdateStreams}
+            onCreateStream={handleCreateStream}
+            onUpdateStream={handleUpdateStream}
+            onDeleteStream={handleDeleteStream}
           />
         ))
       )}

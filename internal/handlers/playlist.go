@@ -10,18 +10,18 @@ import (
 )
 
 type playlistHandler struct {
-	channelUseCase usecase.GetChannelUseCase
-	acestreamURL   *url.URL
-	epgURL         string
+	streamUseCase usecase.StreamUseCase
+	acestreamURL  *url.URL
+	epgURL        string
 }
 
 var _ http.Handler = (*playlistHandler)(nil)
 
-func NewPlaylistHandler(channelUseCase usecase.GetChannelUseCase, acestreamURL *url.URL, epgURL string) *playlistHandler {
+func NewPlaylistHandler(streamUseCase usecase.StreamUseCase, acestreamURL *url.URL, epgURL string) *playlistHandler {
 	return &playlistHandler{
-		channelUseCase: channelUseCase,
-		acestreamURL:   acestreamURL,
-		epgURL:         epgURL,
+		streamUseCase: streamUseCase,
+		acestreamURL:  acestreamURL,
+		epgURL:        epgURL,
 	}
 }
 
@@ -33,7 +33,7 @@ func (h *playlistHandler) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 
 	encoder := m3u.NewEncoder(guideUrls)
 
-	channels, err := h.channelUseCase.GetChannels()
+	channels, err := h.streamUseCase.GetChannelViews()
 	if err != nil {
 		http.Error(w, "Error retrieving channels", http.StatusInternalServerError)
 		return

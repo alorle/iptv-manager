@@ -2,15 +2,14 @@ package api
 
 import (
 	"context"
-	"errors"
 
 	domain "github.com/alorle/iptv-manager/internal"
-	"github.com/alorle/iptv-manager/internal/memory"
-	"github.com/google/uuid"
 )
 
+// Read-only channel view endpoints
+
 func (s server) ListChannels(ctx context.Context, request ListChannelsRequestObject) (ListChannelsResponseObject, error) {
-	channels, err := s.getChannelsUseCase.GetChannels()
+	channels, err := s.streamUseCase.GetChannelViews()
 	if err != nil {
 		code := 500
 		msg := err.Error()
@@ -24,83 +23,21 @@ func (s server) ListChannels(ctx context.Context, request ListChannelsRequestObj
 	return response, nil
 }
 
-func (s server) GetChannel(ctx context.Context, request GetChannelRequestObject) (GetChannelResponseObject, error) {
-	channel, err := s.getChannelsUseCase.GetChannel(request.Id)
+func (s server) GetChannelByGuideId(ctx context.Context, request GetChannelByGuideIdRequestObject) (GetChannelByGuideIdResponseObject, error) {
+	channel, err := s.streamUseCase.GetChannelViewByGuideID(request.GuideId)
 	if err != nil {
-		if errors.Is(err, memory.ErrChannelNotFound) {
-			code := 404
-			msg := "Channel not found"
-			return GetChannel404JSONResponse(Error{Code: &code, Message: &msg}), nil
-		}
 		code := 500
 		msg := err.Error()
-		return GetChannel500JSONResponse(Error{Code: &code, Message: &msg}), nil
+		return GetChannelByGuideId500JSONResponse(Error{Code: &code, Message: &msg}), nil
 	}
 
-	return GetChannel200JSONResponse(domainChannelToAPIChannel(channel)), nil
-}
-
-func (s server) CreateChannel(ctx context.Context, request CreateChannelRequestObject) (CreateChannelResponseObject, error) {
-	channel := apiChannelToDomainChannel((*Channel)(request.Body))
-
-	// Validate guide_id against EPG if EPG is available
-	if s.epgUseCase.IsEPGAvailable() && !s.epgUseCase.ValidateGuideID(channel.GuideID) {
-		code := 400
-		msg := "Invalid guide_id: channel not found in EPG. Please select a channel from the EPG list."
-		return CreateChannel400JSONResponse(Error{Code: &code, Message: &msg}), nil
+	if channel == nil {
+		code := 404
+		msg := "Channel not found (no streams with this guide_id)"
+		return GetChannelByGuideId404JSONResponse(Error{Code: &code, Message: &msg}), nil
 	}
 
-	if err := s.getChannelsUseCase.CreateChannel(channel); err != nil {
-		if errors.Is(err, memory.ErrChannelExists) {
-			code := 400
-			msg := "Channel with this ID already exists"
-			return CreateChannel400JSONResponse(Error{Code: &code, Message: &msg}), nil
-		}
-		code := 500
-		msg := err.Error()
-		return CreateChannel500JSONResponse(Error{Code: &code, Message: &msg}), nil
-	}
-
-	return CreateChannel201JSONResponse(domainChannelToAPIChannel(channel)), nil
-}
-
-func (s server) UpdateChannel(ctx context.Context, request UpdateChannelRequestObject) (UpdateChannelResponseObject, error) {
-	channel := apiChannelToDomainChannel((*Channel)(request.Body))
-
-	// Validate guide_id against EPG if EPG is available
-	if s.epgUseCase.IsEPGAvailable() && !s.epgUseCase.ValidateGuideID(channel.GuideID) {
-		code := 400
-		msg := "Invalid guide_id: channel not found in EPG. Please select a channel from the EPG list."
-		return UpdateChannel400JSONResponse(Error{Code: &code, Message: &msg}), nil
-	}
-
-	if err := s.getChannelsUseCase.UpdateChannel(request.Id, channel); err != nil {
-		if errors.Is(err, memory.ErrChannelNotFound) {
-			code := 404
-			msg := "Channel not found"
-			return UpdateChannel404JSONResponse(Error{Code: &code, Message: &msg}), nil
-		}
-		code := 500
-		msg := err.Error()
-		return UpdateChannel500JSONResponse(Error{Code: &code, Message: &msg}), nil
-	}
-
-	return UpdateChannel200JSONResponse(domainChannelToAPIChannel(channel)), nil
-}
-
-func (s server) DeleteChannel(ctx context.Context, request DeleteChannelRequestObject) (DeleteChannelResponseObject, error) {
-	if err := s.getChannelsUseCase.DeleteChannel(request.Id); err != nil {
-		if errors.Is(err, memory.ErrChannelNotFound) {
-			code := 404
-			msg := "Channel not found"
-			return DeleteChannel404JSONResponse(Error{Code: &code, Message: &msg}), nil
-		}
-		code := 500
-		msg := err.Error()
-		return DeleteChannel500JSONResponse(Error{Code: &code, Message: &msg}), nil
-	}
-
-	return DeleteChannel204Response{}, nil
+	return GetChannelByGuideId200JSONResponse(domainChannelToAPIChannel(channel)), nil
 }
 
 // Helper functions for conversion
@@ -108,9 +45,10 @@ func (s server) DeleteChannel(ctx context.Context, request DeleteChannelRequestO
 func domainChannelToAPIChannel(channel *domain.Channel) Channel {
 	streams := make([]Stream, len(channel.Streams))
 	for i, stream := range channel.Streams {
+		streamID := stream.ID
 		streams[i] = Stream{
-			Id:             stream.ID,
-			ChannelId:      stream.ChannelID,
+			Id:             &streamID,
+			GuideId:        stream.GuideID,
 			AcestreamId:    stream.AcestreamID,
 			Quality:        &stream.Quality,
 			Tags:           &stream.Tags,
@@ -119,53 +57,10 @@ func domainChannelToAPIChannel(channel *domain.Channel) Channel {
 	}
 
 	return Channel{
-		Id:         channel.ID,
-		Title:      channel.Title,
 		GuideId:    channel.GuideID,
+		Title:      &channel.Title,
 		Logo:       &channel.Logo,
-		GroupTitle: channel.GroupTitle,
-		Streams:    streams,
+		GroupTitle: &channel.GroupTitle,
+		Streams:    &streams,
 	}
-}
-
-func apiChannelToDomainChannel(channel *Channel) *domain.Channel {
-	streams := make([]*domain.Stream, len(channel.Streams))
-	for i, stream := range channel.Streams {
-		quality := ""
-		if stream.Quality != nil {
-			quality = *stream.Quality
-		}
-		tags := []string{}
-		if stream.Tags != nil {
-			tags = *stream.Tags
-		}
-
-		streams[i] = &domain.Stream{
-			ID:             stream.Id,
-			ChannelID:      stream.ChannelId,
-			AcestreamID:    stream.AcestreamId,
-			Quality:        quality,
-			Tags:           tags,
-			NetworkCaching: uint64(stream.NetworkCaching),
-		}
-	}
-
-	logo := ""
-	if channel.Logo != nil {
-		logo = *channel.Logo
-	}
-
-	return &domain.Channel{
-		ID:         channel.Id,
-		Title:      channel.Title,
-		GuideID:    channel.GuideId,
-		Logo:       logo,
-		GroupTitle: channel.GroupTitle,
-		Streams:    streams,
-	}
-}
-
-// UUID helper function for consistency
-func parseUUID(s string) (uuid.UUID, error) {
-	return uuid.Parse(s)
 }

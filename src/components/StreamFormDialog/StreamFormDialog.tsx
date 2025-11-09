@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useForm } from 'react-hook-form';
+import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { Plus, Edit } from 'lucide-react';
@@ -15,10 +15,12 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { components } from '../../lib/api/v1';
+import EPGChannelCombobox from '../EPGChannelCombobox/EPGChannelCombobox';
 
 type Stream = components["schemas"]["Stream"];
 
 const streamSchema = z.object({
+  guide_id: z.string().min(1, 'Guide ID is required'),
   acestream_id: z.string().min(1, 'Acestream ID is required'),
   quality: z.string(),
   tags: z.string(), // Comma-separated, will be split
@@ -30,12 +32,14 @@ type StreamFormData = z.infer<typeof streamSchema>;
 interface StreamFormDialogProps {
   mode: 'create' | 'edit';
   stream?: Stream;
-  onSubmit: (data: Omit<Stream, 'id' | 'channel_id'>) => Promise<void>;
+  guideId?: string; // Pre-filled guide_id when adding stream to existing channel
+  onSubmit: (data: Omit<Stream, 'id'>) => Promise<void>;
 }
 
 export default function StreamFormDialog({
   mode,
   stream,
+  guideId,
   onSubmit,
 }: StreamFormDialogProps) {
   const [open, setOpen] = useState(false);
@@ -44,18 +48,21 @@ export default function StreamFormDialog({
   const {
     register,
     handleSubmit,
+    control,
     formState: { errors },
     reset,
   } = useForm<StreamFormData>({
     resolver: zodResolver(streamSchema),
     defaultValues: stream
       ? {
+          guide_id: stream.guide_id,
           acestream_id: stream.acestream_id,
           quality: stream.quality || '',
           tags: stream.tags?.join(', ') || '',
           network_caching: stream.network_caching,
         }
       : {
+          guide_id: guideId || '',
           acestream_id: '',
           quality: '',
           tags: '',
@@ -67,6 +74,7 @@ export default function StreamFormDialog({
     setIsSubmitting(true);
     try {
       await onSubmit({
+        guide_id: data.guide_id,
         acestream_id: data.acestream_id,
         quality: data.quality,
         tags: data.tags.split(',').map(t => t.trim()).filter(t => t),
@@ -116,12 +124,47 @@ export default function StreamFormDialog({
               </DialogTitle>
               <DialogDescription>
                 {mode === 'create'
-                  ? 'Add a new stream to this channel.'
+                  ? 'Add a new stream. Select channel from EPG.'
                   : 'Update the stream information.'}
               </DialogDescription>
             </DialogHeader>
 
             <div className="grid gap-4 py-4">
+              {/* Guide ID field - show combobox if not pre-filled, otherwise show readonly */}
+              {guideId ? (
+                <div className="grid gap-2">
+                  <Label htmlFor="guide_id">Guide ID (Channel)</Label>
+                  <Input
+                    id="guide_id"
+                    value={guideId}
+                    disabled
+                    className="bg-gray-100"
+                  />
+                </div>
+              ) : (
+                <div className="grid gap-2">
+                  <Label htmlFor="guide_id">Guide ID (Channel) *</Label>
+                  <Controller
+                    name="guide_id"
+                    control={control}
+                    render={({ field }) => (
+                      <EPGChannelCombobox
+                        value={field.value}
+                        onChange={(guideId) => {
+                          field.onChange(guideId);
+                        }}
+                        error={errors.guide_id?.message}
+                      />
+                    )}
+                  />
+                  {errors.guide_id && (
+                    <p className="text-sm text-red-600">
+                      {errors.guide_id.message}
+                    </p>
+                  )}
+                </div>
+              )}
+
               <div className="grid gap-2">
                 <Label htmlFor="acestream_id">Acestream ID *</Label>
                 <Input

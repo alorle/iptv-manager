@@ -8,18 +8,20 @@ import (
 	"github.com/google/uuid"
 )
 
+// Channel is now a derived view (not stored directly)
+// It represents streams grouped by GuideID with metadata from EPG
 type Channel struct {
-	ID         uuid.UUID
-	Title      string
-	GuideID    string
-	Logo       string
-	GroupTitle string
-	Streams    []*Stream
+	Title      string    // From EPG (via GuideID)
+	GuideID    string    // Group key
+	Logo       string    // From EPG
+	GroupTitle string    // From EPG
+	Streams    []*Stream // Streams with matching GuideID
 }
 
+// Stream is the primary entity (stored directly)
 type Stream struct {
 	ID             uuid.UUID
-	ChannelID      uuid.UUID
+	GuideID        string // EPG reference - replaces ChannelID
 	AcestreamID    string
 	Quality        string
 	Tags           []string

@@ -8,16 +8,16 @@ import "github.com/alorle/iptv-manager/internal/usecase"
 var _ StrictServerInterface = (*server)(nil)
 
 type server struct {
-	getChannelsUseCase usecase.GetChannelUseCase
-	epgUseCase         *usecase.EPGUseCase
+	streamUseCase usecase.StreamUseCase
+	epgUseCase    *usecase.EPGUseCase
 }
 
 func NewServer(
-	getChannelsUseCase usecase.GetChannelUseCase,
+	streamUseCase usecase.StreamUseCase,
 	epgUseCase *usecase.EPGUseCase,
 ) server {
 	return server{
-		getChannelsUseCase: getChannelsUseCase,
-		epgUseCase:         epgUseCase,
+		streamUseCase: streamUseCase,
+		epgUseCase:    epgUseCase,
 	}
 }
