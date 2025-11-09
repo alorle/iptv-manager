@@ -13,7 +13,11 @@ IPTV Manager is a dual-stack application (Go backend + React frontend) that mana
 The backend follows Clean Architecture principles with clear separation of concerns:
 
 - **Domain Layer** (`internal/`): Core business entities and repository interfaces
-  - `Channel` struct: Core domain model with methods for generating stream URLs and formatted titles
+  - `Channel` struct: TV channel entity with EPG metadata (title, guideId, logo, groupTitle)
+  - `Stream` struct: Access method for a channel (acestream_id, quality, tags, networkCaching)
+  - One channel can have multiple streams
+  - `Stream.FullTitle()`: Generates formatted title with quality and tags
+  - `Stream.GetStreamURL()`: Constructs Acestream URL
   - `ChannelRepository` interface: Defines data access contract
 
 - **Use Case Layer** (`internal/usecase/`): Application business rules
@@ -25,9 +29,10 @@ The backend follows Clean Architecture principles with clear separation of conce
 - **API Layer** (`internal/api/`): HTTP handlers generated from OpenAPI spec
   - Generated using oapi-codegen with strict server interface
   - Code generation config in `internal/api/cfg.yaml`
+  - Returns nested structure: channels with embedded streams array
 
 - **Handlers** (`internal/handlers/`): Custom HTTP handlers not part of OpenAPI spec
-  - `playlist.go`: Generates M3U playlist from channels
+  - `playlist.go`: Generates M3U playlist by flattening channels→streams with incremental numbering
   - `documentation.go`: Serves OpenAPI spec
 
 - **M3U Package** (`internal/m3u/`): M3U playlist encoding with TVG tags support
@@ -103,22 +108,35 @@ Environment variables (see `.env.example`):
 
 ## Data Format
 
-Channels are defined in `streams.json`:
+Channels are defined in `streams.json` with nested structure:
 ```json
 {
-  "streams": [
+  "channels": [
     {
       "title": "Channel Name",
       "guideId": "EPG ID",
+      "logo": "http://example.com/logo.png",
       "groupTitle": "Category",
-      "quality": "FHD",
-      "tags": ["TAG1", "TAG2"],
-      "acestream_id": "hex_hash",
-      "networkCaching": 10000
+      "streams": [
+        {
+          "acestream_id": "hex_hash",
+          "quality": "FHD",
+          "tags": ["TAG1", "TAG2"],
+          "networkCaching": 10000
+        }
+      ]
     }
   ]
 }
 ```
+
+**Important Business Logic:**
+- A **Channel** represents a TV channel with EPG metadata (for program guides)
+- A **Stream** represents a way to access that channel (multiple streams per channel for different qualities/sources)
+- The `/playlist.m3u` endpoint flattens this structure: one M3U entry per stream, with incremental numbering
+  - First stream: "Channel Name [FHD] [TAG1]"
+  - Second stream: "Channel Name (#2) [FHD] [TAG2]"
+  - Nth stream: "Channel Name (#N) [quality] [tags]"
 
 ## Code Generation
 

@@ -14,16 +14,25 @@ func (s server) ListChannels(ctx context.Context, request ListChannelsRequestObj
 
 	response := ListChannels200JSONResponse{}
 	for _, channel := range channels {
+		streams := make([]Stream, len(channel.Streams))
+		for i, stream := range channel.Streams {
+			streams[i] = Stream{
+				Id:             stream.ID,
+				ChannelId:      stream.ChannelID,
+				AcestreamId:    stream.AcestreamID,
+				Quality:        &stream.Quality,
+				Tags:           &stream.Tags,
+				NetworkCaching: int(stream.NetworkCaching),
+			}
+		}
+
 		response = append(response, Channel{
-			Id:          channel.ID,
-			Name:        channel.Title,
-			AcestreamId: channel.StreamID,
-			Category:    &channel.GroupTitle,
-			EpgId:       &channel.GuideID,
-			Quality:     &channel.Quality,
-			Tags:        &channel.Tags,
-			CreatedAt:   nil,
-			UpdatedAt:   nil,
+			Id:         channel.ID,
+			Title:      channel.Title,
+			GuideId:    channel.GuideID,
+			Logo:       &channel.Logo,
+			GroupTitle: channel.GroupTitle,
+			Streams:    streams,
 		})
 	}
 	return response, nil

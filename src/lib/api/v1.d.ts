@@ -34,28 +34,36 @@ export interface components {
              * @description Unique identifier for the channel
              */
             id: string;
-            /** @description Name of the channel */
-            name: string;
-            /** @description Acestream ID of the channel */
-            acestream_id: string;
-            /** @description Category of the channel (e.g., Sports, Movies, News) */
-            category?: string;
+            /** @description Title of the channel */
+            title: string;
             /** @description EPG ID for electronic program guide information */
-            epg_id?: string;
-            /** @description Quality of the channel */
+            guide_id: string;
+            /** @description URL to the channel logo image */
+            logo?: string;
+            /** @description Category/group of the channel (e.g., Sports, Movies, News) */
+            group_title: string;
+            /** @description Available streams for this channel */
+            streams: components["schemas"]["Stream"][];
+        };
+        Stream: {
+            /**
+             * Format: uuid
+             * @description Unique identifier for the stream
+             */
+            id: string;
+            /**
+             * Format: uuid
+             * @description ID of the parent channel
+             */
+            channel_id: string;
+            /** @description Acestream ID for this stream */
+            acestream_id: string;
+            /** @description Quality of the stream (e.g., SD, HD, FHD) */
             quality?: string;
-            /** @description Tags of the channel */
+            /** @description Tags associated with this stream */
             tags?: string[];
-            /**
-             * Format: date-time
-             * @description Creation timestamp
-             */
-            created_at?: string;
-            /**
-             * Format: date-time
-             * @description Last update timestamp
-             */
-            updated_at?: string;
+            /** @description Network caching value in milliseconds */
+            network_caching: number;
         };
         Error: {
             /** @description Error message */

@@ -2,7 +2,7 @@ openapi: 3.0.3
 info:
   title: Acestream Manager API
   description: API for managing Acestream channels and generating M3U playlists
-  version: 1.0.0
+  version: 2.0.0
   contact:
     name: Acestream Manager
 
@@ -20,41 +20,63 @@ components:
       type: object
       required:
         - id
-        - name
-        - acestream_id
+        - title
+        - guide_id
+        - group_title
+        - streams
       properties:
         id:
           type: string
           format: uuid
           description: Unique identifier for the channel
-        name:
+        title:
           type: string
-          description: Name of the channel
-        acestream_id:
-          type: string
-          description: Acestream ID of the channel
-        category:
-          type: string
-          description: Category of the channel (e.g., Sports, Movies, News)
-        epg_id:
+          description: Title of the channel
+        guide_id:
           type: string
           description: EPG ID for electronic program guide information
+        logo:
+          type: string
+          description: URL to the channel logo image
+        group_title:
+          type: string
+          description: Category/group of the channel (e.g., Sports, Movies, News)
+        streams:
+          type: array
+          items:
+            $ref: "#/components/schemas/Stream"
+          description: Available streams for this channel
+
+    Stream:
+      type: object
+      required:
+        - id
+        - channel_id
+        - acestream_id
+        - network_caching
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique identifier for the stream
+        channel_id:
+          type: string
+          format: uuid
+          description: ID of the parent channel
+        acestream_id:
+          type: string
+          description: Acestream ID for this stream
         quality:
           type: string
-          description: Quality of the channel
+          description: Quality of the stream (e.g., SD, HD, FHD)
         tags:
           type: array
           items:
             type: string
-          description: Tags of the channel
-        created_at:
-          type: string
-          format: date-time
-          description: Creation timestamp
-        updated_at:
-          type: string
-          format: date-time
-          description: Last update timestamp
+          description: Tags associated with this stream
+        network_caching:
+          type: integer
+          description: Network caching value in milliseconds
 
     Error:
       type: object

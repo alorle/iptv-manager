@@ -16,7 +16,6 @@ import (
 	"net/url"
 	"path"
 	"strings"
-	"time"
 
 	"github.com/getkin/kin-openapi/openapi3"
 	strictnethttp "github.com/oapi-codegen/runtime/strictmiddleware/nethttp"
@@ -25,32 +24,23 @@ import (
 
 // Channel defines model for Channel.
 type Channel struct {
-	// AcestreamId Acestream ID of the channel
-	AcestreamId string `json:"acestream_id"`
+	// GroupTitle Category/group of the channel (e.g., Sports, Movies, News)
+	GroupTitle string `json:"group_title"`
 
-	// Category Category of the channel (e.g., Sports, Movies, News)
-	Category *string `json:"category,omitempty"`
-
-	// CreatedAt Creation timestamp
-	CreatedAt *time.Time `json:"created_at,omitempty"`
-
-	// EpgId EPG ID for electronic program guide information
-	EpgId *string `json:"epg_id,omitempty"`
+	// GuideId EPG ID for electronic program guide information
+	GuideId string `json:"guide_id"`
 
 	// Id Unique identifier for the channel
 	Id openapi_types.UUID `json:"id"`
 
-	// Name Name of the channel
-	Name string `json:"name"`
+	// Logo URL to the channel logo image
+	Logo *string `json:"logo,omitempty"`
 
-	// Quality Quality of the channel
-	Quality *string `json:"quality,omitempty"`
+	// Streams Available streams for this channel
+	Streams []Stream `json:"streams"`
 
-	// Tags Tags of the channel
-	Tags *[]string `json:"tags,omitempty"`
-
-	// UpdatedAt Last update timestamp
-	UpdatedAt *time.Time `json:"updated_at,omitempty"`
+	// Title Title of the channel
+	Title string `json:"title"`
 }
 
 // Error defines model for Error.
@@ -60,6 +50,27 @@ type Error struct {
 
 	// Message Error message
 	Message *string `json:"message,omitempty"`
+}
+
+// Stream defines model for Stream.
+type Stream struct {
+	// AcestreamId Acestream ID for this stream
+	AcestreamId string `json:"acestream_id"`
+
+	// ChannelId ID of the parent channel
+	ChannelId openapi_types.UUID `json:"channel_id"`
+
+	// Id Unique identifier for the stream
+	Id openapi_types.UUID `json:"id"`
+
+	// NetworkCaching Network caching value in milliseconds
+	NetworkCaching int `json:"network_caching"`
+
+	// Quality Quality of the stream (e.g., SD, HD, FHD)
+	Quality *string `json:"quality,omitempty"`
+
+	// Tags Tags associated with this stream
+	Tags *[]string `json:"tags,omitempty"`
 }
 
 // ServerInterface represents all server handlers.
@@ -305,18 +316,20 @@ func (sh *strictHandler) ListChannels(w http.ResponseWriter, r *http.Request) {
 // Base64 encoded, gzipped, json marshaled Swagger object
 var swaggerSpec = []string{
 
-	"H4sIAAAAAAAC/5RU30/jSAz+V0a+e7iTck3v0Ekob4hDp0oLyy7LE6qQN3HTQfMLj9NVhfq/r2bSBmjC",
-	"Ct4yY/v7vtif5wlqb4N35CRC9QSxXpPF/Hm+RufIpM/APhCLphzAmqIwob3XTTo3FGvWQbR3UMHZIaoW",
-	"/ym/UrImVe+hCpBtIKggCmvXwq6AGoVaz9sx0Pk+cgSi/qBZOyvUTfAssVCXfqMpFuqKfsQ/JxmYUKi5",
-	"R5ngSDHtnRJtKQraAAWsPNuUDA0K/ZUiU7AU2sn/v7j+P/35yrMiQ7Wwd7pWgX3LaFXb6YaUdj1HqpiA",
-	"noK9dfqxI6UbcqJXmjgzvG7uILzrdDMF7NDSGPoKLb1jUo8dGi0Tg/rSB94BIdjGcf03bOO4WAvZnDxG",
-	"6S+QGbfp3IXmzQF/wiiqT/jwjHcFMD12mqmB6g5yS3MHi9crsBwq/fcHqiVpumD2PF6d2jcTA8jJKscG",
-	"KO2EWuKEZSlGbN+sO4Sn9B/pSlfJe70UJ1jnlvW2eLG5l+hwT3603NeL7DubErRr1XPNfnJRoWtUS44Y",
-	"JWVcntyqYHBrdJSYRGoxk2zq7HoBBWyIY0/292w+mycNPpDDoKGCk9l8dgIFBJR1bmh5oE2HliYc8JWk",
-	"YxcVqqQg+QyNGdRCRue8iosmGUZHOX8OMsXgXeyn9898fugcuUyFIRhd5+ryISa+wxOavgYL/860ggp+",
-	"K58f23L/0paHZ3Zk7N2o+zddXVOMq86oQXSq+/eDun4lpzfuFDnxhljRPl5A7KzF9HDnnh13tV/1Oxiu",
-	"lhkzZpQUGW2qr9GohjZkfLDkRPW5UEDHBipYi4SqLE3KW/so1en8dF4mX+yWA98x6udDn6JiMumZUOJf",
-	"6tx7f7jZLXc/AwAA///brLi6FAcAAA==",
+	"H4sIAAAAAAAC/5RV32/bNhD+Vw63PWyAYBsNBhR6C5JuNZB0WdM+FUHAUmeZHUUyx5MDo/D/PpD6EdvS",
+	"tuZN4t199+n77qjvqH0TvCMnEcvvGPWWGpUfr7bKObLpMbAPxGIoB2r2bXgUI5bSa0VRswlivMMSr5RQ",
+	"7Xm/zFngNyBbAt1hwS+0qBcF3AfPEgu49TtDsYAP9Bx/xQJlHwhLjMLG1XgosG5NRY+mmvZ5d/cHrK9h",
+	"4xnIkhb2zmgI7GtWDeQ6MG7juVG5YgZ8DvazM08tganIidkY4tzh6BOwwA4US2xbU80BW1/7GeiPNyD+",
+	"RI6UCKZRNc3BRGFSTZwiXe6UseqrJehTepImHrE0Ql3tz0wbLPGn5YvTy97m5X2uT8367opZ7fP7vL2f",
+	"0vGZq1PuhwKZnlrDVGH5BTuVMuCRpcXJIL187sMI579+Iy2JzTtmz9NJ1L6a4ZiTIcdGKOOEauKE1VCM",
+	"SfF/qRvCcx814dXrNyGmNHWfMzu7l0N0mOBsXXc0Nwi9zrNY6+vBjaCYnLxmTl+3ACO//8V1JM+e/37U",
+	"Sm/T0aTJhy4B+gTYKZt6OmiMtSaS9q6Ks+Y9tcoa2U8h/+oCgxi9vsN9c13A++sCfn9/PXvNiKpn1uyT",
+	"qiOoGL02SqiCZyPbM6vGJZtCnuzT3EIcuVqcDsxUwelOJMh0v3Vr4ERpSY9ONXQyYbfKqV67syG8W2dr",
+	"m5SQTHip6ZlFUK6CmhyxkpRxe/EZglV7a6LEcaVnusHl3RoL3BHHrtmbxWqxShx8IKeCwRIvFqvFBRYY",
+	"lGyzhMuhbf7HkEwN+UjSsougIDFIVitrR7aY0Tlf9+sKS7wxUa5egkwxeBe7BX2zWg3KkcutVAjW6Fy9",
+	"/BZTv+FvmJ5+6DYd/phT+yfq37daU4yb1sJIOtX99kpe/0WnuzTnmhPviIH6eIGxbRrF+16zc1W77fiC",
+	"49FDxowZJUXOfbrxWlmoaEfWhyZdSl0uFtiyxRK3IqFcLm3K2/oo5dvV29UyzcXhYex3jvrnoFMEJps3",
+	"Uvwxz372x5PDw+GfAAAA//+pN7eb3wgAAA==",
 }
 
 // GetSwagger returns the content of the embedded swagger specification file

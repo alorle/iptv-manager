@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"fmt"
 	"net/http"
 	"net/url"
 
@@ -38,18 +39,37 @@ func (h *playlistHandler) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
+	// Track title occurrences for incremental numbering
+	titleCounts := make(map[string]int)
+
+	// Flatten channels → streams for M3U generation
 	for _, channel := range channels {
-		encoder.AddChannel(&m3u.Channel{
-			SeqId:    1,
-			Title:    channel.FullTitle(),
-			URI:      channel.GetStreamURL(h.acestreamURL),
-			Duration: -1,
-			TVGTags: &m3u.TVGTags{
-				ID:         channel.GuideID,
-				Name:       channel.FullTitle(),
-				GroupTitle: channel.GroupTitle,
-			},
-		})
+		for _, stream := range channel.Streams {
+			// Increment counter for this channel title
+			titleCounts[channel.Title]++
+			count := titleCounts[channel.Title]
+
+			// Generate display title with incremental numbering if needed
+			displayTitle := channel.Title
+			if count > 1 {
+				displayTitle = fmt.Sprintf("%s (#%d)", channel.Title, count)
+			}
+
+			// Add quality and tags to the title
+			fullTitle := stream.FullTitle(displayTitle)
+
+			encoder.AddChannel(&m3u.Channel{
+				SeqId:    1,
+				Title:    fullTitle,
+				URI:      stream.GetStreamURL(h.acestreamURL),
+				Duration: -1,
+				TVGTags: &m3u.TVGTags{
+					ID:         channel.GuideID,
+					Name:       fullTitle,
+					GroupTitle: channel.GroupTitle,
+				},
+			})
+		}
 	}
 
 	w.WriteHeader(http.StatusOK)
