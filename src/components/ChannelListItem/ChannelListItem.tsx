@@ -38,7 +38,7 @@ export default function ChannelListItem({
   };
 
   return (
-    <div className="mb-6 p-4 border border-gray-300 rounded-lg bg-white shadow-sm">
+    <div className="mb-6 p-4 border border-gray-300 rounded-lg bg-white shadow-sm dark:border-gray-700 dark:bg-gray-900">
       <div className="flex items-start gap-4 mb-3">
         {channel.logo && (
           <img
@@ -51,20 +51,20 @@ export default function ChannelListItem({
           />
         )}
         <div className="flex-1">
-          <h2 className="text-xl font-bold text-gray-900">
+          <h2 className="text-xl font-bold text-gray-900 dark:text-gray-100">
             #{index} - {channel.title}
           </h2>
-          <p className="text-sm text-gray-600 mt-1">
+          <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
             <span className="font-semibold">Guide ID:</span> {channel.guide_id}
           </p>
-          <p className="text-sm text-gray-600">
+          <p className="text-sm text-gray-600 dark:text-gray-400">
             <span className="font-semibold">Group:</span> {channel.group_title}
           </p>
         </div>
       </div>
 
       <div className="flex justify-between items-center mt-4 mb-2">
-        <h3 className="text-lg font-semibold text-gray-800">
+        <h3 className="text-lg font-semibold text-gray-800 dark:text-gray-200">
           Streams ({channel.streams?.length || 0})
         </h3>
         <StreamFormDialog
@@ -83,16 +83,16 @@ export default function ChannelListItem({
           channel.streams.map((stream: Stream, streamIndex: number) => (
             <div
               key={stream.id}
-              className="p-3 bg-gray-50 rounded border border-gray-200"
+              className="p-3 bg-gray-50 rounded border border-gray-200 dark:bg-gray-800 dark:border-gray-700"
             >
               <div className="flex justify-between items-start gap-3">
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 mb-2">
-                    <p className="font-semibold text-gray-700">
+                    <p className="font-semibold text-gray-700 dark:text-gray-300">
                       Stream #{streamIndex + 1}
                     </p>
                     {stream.quality && (
-                      <span className="px-2 py-0.5 text-xs font-medium bg-blue-100 text-blue-800 rounded">
+                      <span className="px-2 py-0.5 text-xs font-medium bg-blue-100 text-blue-800 rounded dark:bg-blue-900 dark:text-blue-200">
                         {stream.quality}
                       </span>
                     )}
@@ -101,7 +101,7 @@ export default function ChannelListItem({
                         {stream.tags.map((tag, idx) => (
                           <span
                             key={idx}
-                            className="px-2 py-0.5 text-xs font-medium bg-gray-200 text-gray-700 rounded"
+                            className="px-2 py-0.5 text-xs font-medium bg-gray-200 text-gray-700 rounded dark:bg-gray-700 dark:text-gray-300"
                           >
                             {tag}
                           </span>
@@ -109,7 +109,7 @@ export default function ChannelListItem({
                       </div>
                     )}
                   </div>
-                  <p className="text-sm font-mono bg-white p-2 rounded border border-gray-200 break-all">
+                  <p className="text-sm font-mono bg-white p-2 rounded border border-gray-200 break-all dark:bg-gray-950 dark:border-gray-700 dark:text-gray-300">
                     {stream.acestream_id}
                   </p>
                 </div>
@@ -124,7 +124,7 @@ export default function ChannelListItem({
                     variant="ghost"
                     size="sm"
                     onClick={() => handleDeleteStream(stream.id!)}
-                    className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                    className="text-red-600 hover:text-red-700 hover:bg-red-50 dark:text-red-400 dark:hover:text-red-300 dark:hover:bg-red-950"
                   >
                     <Trash2 className="h-3 w-3" />
                   </Button>

@@ -64,7 +64,7 @@ export default function EPGChannelCombobox({
         variant="outline"
         role="combobox"
         aria-expanded={open}
-        className={`w-full justify-between ${error ? 'border-red-500' : ''}`}
+        className={`w-full justify-between ${error ? 'border-red-500 dark:border-red-400' : ''}`}
         onClick={() => setOpen(!open)}
       >
         {selectedChannel ? (
@@ -81,14 +81,14 @@ export default function EPGChannelCombobox({
             </span>
           </div>
         ) : (
-          <span className="text-muted-foreground">Select EPG channel...</span>
+          <span className="text-gray-500">Select EPG channel...</span>
         )}
         <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
       </Button>
 
       {open && (
-        <div className="absolute z-50 mt-1 w-full rounded-md border bg-white shadow-lg">
-          <div className="p-2 border-b">
+        <div className="absolute z-50 mt-1 w-full rounded-md border bg-white shadow-lg dark:border-gray-700 dark:bg-gray-900">
+          <div className="p-2 border-b border-gray-200 dark:border-gray-700">
             <Input
               placeholder="Search channels..."
               value={searchQuery}
@@ -100,13 +100,13 @@ export default function EPGChannelCombobox({
 
           <div className="max-h-[300px] overflow-y-auto p-1">
             {isLoading && (
-              <div className="flex items-center justify-center py-6">
+              <div className="flex items-center justify-center py-6 dark:text-gray-400">
                 <Loader2 className="h-5 w-5 animate-spin" />
               </div>
             )}
 
             {isError && (
-              <div className="py-6 text-center text-sm text-red-600">
+              <div className="py-6 text-center text-sm text-red-600 dark:text-red-400">
                 Failed to load EPG channels. Please check EPG_URL configuration.
               </div>
             )}
@@ -124,7 +124,7 @@ export default function EPGChannelCombobox({
                 <button
                   key={channel.id}
                   type="button"
-                  className="relative flex w-full cursor-pointer items-center gap-2 rounded-sm px-2 py-2 text-sm outline-none hover:bg-gray-100 focus:bg-gray-100"
+                  className="relative flex w-full cursor-pointer items-center gap-2 rounded-sm px-2 py-2 text-sm outline-none hover:bg-gray-100 focus:bg-gray-100 dark:hover:bg-gray-800 dark:focus:bg-gray-800 dark:text-gray-100"
                   onClick={() => handleSelect(channel)}
                 >
                   {channel.logo && (
@@ -138,7 +138,7 @@ export default function EPGChannelCombobox({
                     <span className="font-medium truncate w-full">
                       {channel.name}
                     </span>
-                    <span className="text-xs text-gray-500 truncate w-full">
+                    <span className="text-xs text-gray-500 dark:text-gray-400 truncate w-full">
                       {channel.id}
                     </span>
                   </div>

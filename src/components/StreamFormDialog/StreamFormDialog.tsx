@@ -138,7 +138,7 @@ export default function StreamFormDialog({
                     id="guide_id"
                     value={guideId}
                     disabled
-                    className="bg-gray-100"
+                    className="bg-gray-100 dark:bg-gray-700"
                   />
                 </div>
               ) : (
@@ -158,7 +158,7 @@ export default function StreamFormDialog({
                     )}
                   />
                   {errors.guide_id && (
-                    <p className="text-sm text-red-600">
+                    <p className="text-sm text-red-600 dark:text-red-400">
                       {errors.guide_id.message}
                     </p>
                   )}
@@ -174,7 +174,7 @@ export default function StreamFormDialog({
                   className="font-mono text-sm"
                 />
                 {errors.acestream_id && (
-                  <p className="text-sm text-red-600">
+                  <p className="text-sm text-red-600 dark:text-red-400">
                     {errors.acestream_id.message}
                   </p>
                 )}
@@ -188,7 +188,7 @@ export default function StreamFormDialog({
                   placeholder="SD, HD, FHD, 4K"
                 />
                 {errors.quality && (
-                  <p className="text-sm text-red-600">{errors.quality.message}</p>
+                  <p className="text-sm text-red-600 dark:text-red-400">{errors.quality.message}</p>
                 )}
               </div>
 
@@ -200,7 +200,7 @@ export default function StreamFormDialog({
                   placeholder="Spanish, English, etc."
                 />
                 {errors.tags && (
-                  <p className="text-sm text-red-600">{errors.tags.message}</p>
+                  <p className="text-sm text-red-600 dark:text-red-400">{errors.tags.message}</p>
                 )}
               </div>
 
@@ -215,7 +215,7 @@ export default function StreamFormDialog({
                   placeholder="10000"
                 />
                 {errors.network_caching && (
-                  <p className="text-sm text-red-600">
+                  <p className="text-sm text-red-600 dark:text-red-400">
                     {errors.network_caching.message}
                   </p>
                 )}

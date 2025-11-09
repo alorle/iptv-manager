@@ -93,19 +93,19 @@ function ChannelsList() {
     await deleteStreamMutation.mutateAsync(id);
   };
 
-  if (isLoading || !channels) return <div className="p-4">Loading...</div>;
+  if (isLoading || !channels) return <div className="p-4 dark:text-gray-400">Loading...</div>;
 
-  if (error) return <div className="p-4 text-red-600">An error occurred: {error.message}</div>;
+  if (error) return <div className="p-4 text-red-600 dark:text-red-400">An error occurred: {error.message}</div>;
 
   return (
     <div className="max-w-4xl mx-auto p-4">
       <div className="flex justify-between items-center mb-6">
-        <h1 className="text-2xl font-bold text-gray-900">Channels</h1>
+        <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">Channels</h1>
         <StreamFormDialog mode="create" onSubmit={handleCreateStream} />
       </div>
 
       {channels.length === 0 ? (
-        <div className="text-center py-12 text-gray-500">
+        <div className="text-center py-12 text-gray-500 dark:text-gray-400">
           <p>No channels yet. Add streams to create channels!</p>
         </div>
       ) : (
