@@ -97,6 +97,11 @@ function ChannelsList() {
 
   if (error) return <div className="p-4 text-red-600 dark:text-red-400">An error occurred: {error.message}</div>;
 
+  // Sort channels by title (case-insensitive)
+  const sortedChannels = [...channels].sort((a, b) =>
+    a.title.localeCompare(b.title, undefined, { sensitivity: 'base' })
+  );
+
   return (
     <div className="max-w-4xl mx-auto p-4">
       <div className="flex justify-between items-center mb-6">
@@ -104,12 +109,12 @@ function ChannelsList() {
         <StreamFormDialog mode="create" onSubmit={handleCreateStream} />
       </div>
 
-      {channels.length === 0 ? (
+      {sortedChannels.length === 0 ? (
         <div className="text-center py-12 text-gray-500 dark:text-gray-400">
           <p>No channels yet. Add streams to create channels!</p>
         </div>
       ) : (
-        channels.map((channel, index) => (
+        sortedChannels.map((channel, index) => (
           <ChannelListItem
             key={channel.guide_id}
             channel={channel}
