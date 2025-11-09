@@ -17,6 +17,8 @@ tags:
     description: CRUD operations for streams (primary entity)
   - name: epg
     description: Operations related to EPG (Electronic Program Guide)
+  - name: config
+    description: Application configuration
 
 components:
   schemas:
@@ -107,6 +109,16 @@ components:
         logo:
           type: string
           description: URL to the channel logo from EPG
+
+    Config:
+      type: object
+      required:
+        - acestream_url
+      properties:
+        acestream_url:
+          type: string
+          description: Base URL for Acestream/Acexy proxy
+          example: http://acexy.alorle.com/ace/getstream
 
 paths:
   /channels:
@@ -352,6 +364,27 @@ paths:
                 type: array
                 items:
                   $ref: "#/components/schemas/EPGChannel"
+        "500":
+          description: Server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /config:
+    get:
+      operationId: getConfig
+      tags:
+        - config
+      summary: Get application configuration
+      description: Returns configuration values needed by the frontend
+      responses:
+        "200":
+          description: Successful operation
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Config"
         "500":
           description: Server error
           content:

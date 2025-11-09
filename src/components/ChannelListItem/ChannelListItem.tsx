@@ -1,6 +1,7 @@
 import { Trash2 } from 'lucide-react';
 import { components } from '../../lib/api/v1';
 import StreamFormDialog from '../StreamFormDialog/StreamFormDialog';
+import StreamPreviewDialog from '../StreamPreviewDialog/StreamPreviewDialog';
 import { Button } from '@/components/ui/button';
 
 type Channel = components["schemas"]["Channel"];
@@ -114,6 +115,10 @@ export default function ChannelListItem({
                   </p>
                 </div>
                 <div className="flex gap-1 flex-shrink-0">
+                  <StreamPreviewDialog
+                    stream={stream}
+                    channelTitle={channel.title}
+                  />
                   <StreamFormDialog
                     mode="edit"
                     stream={stream}

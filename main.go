@@ -113,7 +113,7 @@ func main() {
 
 	router := http.NewServeMux()
 
-	server := api.NewServer(streamUseCase, epgUseCase)
+	server := api.NewServer(streamUseCase, epgUseCase, acestreamBase)
 	h := api.NewStrictHandler(server, nil)
 
 	router.Handle("/playlist.m3u", handlers.NewPlaylistHandler(streamUseCase, acestreamURL, epgUrl))
