@@ -11,8 +11,8 @@
   },
   "dependencies": {
     "@tanstack/react-query": "^5.74.4",
-    "openapi-fetch": "^0.13.5",
-    "openapi-react-query": "^0.3.1",
+    "openapi-fetch": "^0.15.0",
+    "openapi-react-query": "^0.5.1",
     "react": "^19.0.0",
     "react-dom": "^19.0.0"
   },
@@ -20,14 +20,14 @@
     "@eslint/js": "^9.22.0",
     "@types/react": "^19.0.10",
     "@types/react-dom": "^19.0.4",
-    "@vitejs/plugin-react": "^4.3.4",
+    "@vitejs/plugin-react": "^5.1.0",
     "eslint": "^9.22.0",
-    "eslint-plugin-react-hooks": "^5.2.0",
+    "eslint-plugin-react-hooks": "^7.0.1",
     "eslint-plugin-react-refresh": "^0.4.19",
     "globals": "^16.0.0",
     "openapi-typescript": "^7.6.1",
-    "typescript": "~5.7.2",
+    "typescript": "^5.9.3",
     "typescript-eslint": "^8.26.1",
-    "vite": "^6.3.1"
+    "vite": "^7.2.2"
   }
 }

@@ -1,7 +1,7 @@
 # syntax=docker/dockerfile:1
 
-ARG NODE_VERSION=22.15.0
-ARG GO_VERSION=1.24.1
+ARG NODE_VERSION=24.11.0
+ARG GO_VERSION=1.25.4
 
 # First stage: the frontend builder.
 FROM node:${NODE_VERSION}-alpine AS frontend
