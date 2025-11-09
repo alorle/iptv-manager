@@ -175,4 +175,164 @@ The main handler in `main.go` routes requests based on path and file extension t
 ### Frontend
 - `@tanstack/react-query`: Data fetching and state management
 - `openapi-fetch` + `openapi-react-query`: Type-safe API client from OpenAPI spec
-- `react-player`: Video player component
+
+## Important Architectural Patterns
+
+### Strict Server Interface
+
+The API uses oapi-codegen's "strict server" pattern. This means:
+- Handlers receive typed request objects, not raw `http.Request`
+- Handlers return typed response objects, not write to `http.ResponseWriter`
+- Request parsing and response serialization are handled by generated code
+- All validation is declarative in `openapi.yaml`
+
+When implementing API endpoints in `internal/api/channels.go`, work with domain types only.
+
+### Extension-Based Routing
+
+The routing logic in `main.go` uses file extensions to determine handler:
+- No extension or special paths (`/api/*`, `*.m3u`) → API router
+- Has extension (`.js`, `.css`, images) → Vite handler
+- Special case: `/` and `/index.html` always go to Vite handler
+
+When adding new API endpoints, avoid file extensions in the path.
+
+### M3U Flattening Logic
+
+The `playlist.go` handler implements critical business logic:
+- Tracks title occurrences with a map to handle duplicate channel names
+- Generates incremental numbering (#2, #3, etc.) for multiple streams of the same channel
+- Preserves EPG metadata (guideId, logo, groupTitle) across all streams
+- Each stream gets a unique URL with Acestream parameters
+
+This flattening is necessary because M3U format is flat (one entry per stream) but our data model is hierarchical (channels contain streams).
+
+### UUID Generation Strategy
+
+UUIDs are generated at load time (in `config.go`), not stored in JSON:
+- Keeps `streams.json` human-editable (no need to manually create UUIDs)
+- Provides type safety in API (OpenAPI spec requires UUID format)
+- Each application restart generates new UUIDs (acceptable for in-memory data)
+- Stream UUIDs inherit their parent channel's ID for referential integrity
+
+### Dependency Injection Flow
+
+Dependencies are wired in `main.go`:
+```go
+// 1. Load data from JSON
+channels := loadChannels(streamsFile)
+
+// 2. Create repository with data
+repo := internalJson.NewInMemoryChannelsRepository(channels)
+
+// 3. Create use case with repository
+useCase := usecase.NewChannelsUseCase(repo)
+
+// 4. Inject use case into handlers
+server := api.NewServer(useCase)
+playlistHandler := handlers.NewPlaylistHandler(useCase, ...)
+```
+
+This makes the system testable and allows swapping implementations (e.g., adding a database repository).
+
+## Common Development Tasks
+
+### Updating Dependencies
+
+```bash
+# Update Go dependencies
+go get -u ./...
+go mod tidy
+go generate ./internal/api/server.go  # Regenerate after oapi-codegen updates
+go build -o ./.tmp/main .
+
+# Update npm dependencies
+npm update
+npm outdated  # Check for major version updates
+npm install <package>@latest  # Install major updates
+npx openapi-typescript openapi.yaml -o src/lib/api/v1.d.ts  # Regenerate types
+npm run build
+```
+
+Note: If you encounter Go dependency conflicts (especially with `yaml-jsonpath` and `go-yit`), you may need to pin `go-yit` to a compatible version.
+
+### Adding a New API Endpoint
+
+1. Update `openapi.yaml` with new endpoint definition
+2. Regenerate backend code: `go generate ./internal/api/server.go`
+3. Implement handler in `internal/api/*.go` (you'll get compile errors until you do)
+4. Regenerate frontend types: `npx openapi-typescript openapi.yaml -o src/lib/api/v1.d.ts`
+5. Update frontend components to use new endpoint
+
+The strict server interface ensures you can't forget to implement the endpoint—you'll get a compile error.
+
+### Adding a Custom Handler (Outside OpenAPI)
+
+For endpoints that don't fit OpenAPI (like `/playlist.m3u`):
+1. Create handler in `internal/handlers/`
+2. Register in `main.go` router before the Vite handler
+3. Ensure the path doesn't conflict with extension-based routing logic
+
+### Modifying the Data Model
+
+1. Update domain entities in `internal/channel.go`
+2. Update JSON structs in `config.go` if storage format changes
+3. Update `openapi.yaml` to reflect new API schema
+4. Regenerate both backend and frontend code
+5. Update repository implementations in `internal/memory/`
+
+## Troubleshooting
+
+### Air doesn't restart after Go file changes
+- Check `.air.toml` excluded directories
+- Ensure you're editing files with `.go` extension
+- Air doesn't watch `src/` (frontend) or `node_modules/`
+
+### Vite dev server not found
+- Ensure `npm run dev` is running on port 5173
+- Backend must be started with `-dev` flag or via `air`
+- Check `vite.config.ts` doesn't override default port
+
+### ESLint errors in `.direnv/` directory
+- The `eslint.config.js` should ignore `.direnv` (it contains Go module cache)
+- Pattern: `{ ignores: ['dist', '.direnv'] }`
+
+### TypeScript types don't match API response
+- Regenerate types: `npx openapi-typescript openapi.yaml -o src/lib/api/v1.d.ts`
+- Ensure `openapi.yaml` matches backend implementation
+- Check if you forgot to regenerate after updating OpenAPI spec
+
+### Go generate fails with YAML errors
+- Usually a dependency version conflict (yaml.v3 vs yaml.v4)
+- Check `go mod graph | grep yaml` to debug
+- May need to pin `go-yit` to compatible version
+
+## File Organization Reference
+
+**Do not edit (generated)**:
+- `internal/api/api.gen.go` - Generated from OpenAPI spec
+- `src/lib/api/v1.d.ts` - Generated TypeScript types
+- `dist/` - Built frontend assets
+
+**Edit these for API changes**:
+- `openapi.yaml` - Single source of truth for API contract
+- `internal/api/channels.go` - API endpoint implementations
+- `internal/handlers/*.go` - Custom (non-OpenAPI) handlers
+
+**Edit these for business logic**:
+- `internal/channel.go` - Domain entities (Channel, Stream)
+- `internal/repository.go` - Repository interfaces
+- `internal/usecase/*.go` - Application business rules
+- `internal/memory/*.go` - In-memory data access
+
+**Edit these for frontend**:
+- `src/components/` - React components
+- `src/lib/api/client.ts` - API client setup
+- `src/App.tsx` - Application root
+
+**Infrastructure**:
+- `main.go` - Application entry point, routing, dependency injection
+- `config.go` - JSON loading and parsing
+- `.air.toml` - Live reload configuration
+- `vite.config.ts` - Vite build configuration
+- `Containerfile` - Container build (multi-stage with frontend + backend)
