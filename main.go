@@ -84,6 +84,7 @@ func main() {
 		fmt.Printf("Error creating JSONChannelRepository: %v\n", err)
 		return
 	}
+	channelRepo.SetFilePath(streamsFile)
 	channelUseCase := usecase.NewChannelsUseCase(channelRepo)
 
 	m := middleware.OapiRequestValidator(swagger)
