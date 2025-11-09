@@ -43,6 +43,13 @@ func (s server) GetChannel(ctx context.Context, request GetChannelRequestObject)
 func (s server) CreateChannel(ctx context.Context, request CreateChannelRequestObject) (CreateChannelResponseObject, error) {
 	channel := apiChannelToDomainChannel((*Channel)(request.Body))
 
+	// Validate guide_id against EPG if EPG is available
+	if s.epgUseCase.IsEPGAvailable() && !s.epgUseCase.ValidateGuideID(channel.GuideID) {
+		code := 400
+		msg := "Invalid guide_id: channel not found in EPG. Please select a channel from the EPG list."
+		return CreateChannel400JSONResponse(Error{Code: &code, Message: &msg}), nil
+	}
+
 	if err := s.getChannelsUseCase.CreateChannel(channel); err != nil {
 		if errors.Is(err, memory.ErrChannelExists) {
 			code := 400
@@ -59,6 +66,13 @@ func (s server) CreateChannel(ctx context.Context, request CreateChannelRequestO
 
 func (s server) UpdateChannel(ctx context.Context, request UpdateChannelRequestObject) (UpdateChannelResponseObject, error) {
 	channel := apiChannelToDomainChannel((*Channel)(request.Body))
+
+	// Validate guide_id against EPG if EPG is available
+	if s.epgUseCase.IsEPGAvailable() && !s.epgUseCase.ValidateGuideID(channel.GuideID) {
+		code := 400
+		msg := "Invalid guide_id: channel not found in EPG. Please select a channel from the EPG list."
+		return UpdateChannel400JSONResponse(Error{Code: &code, Message: &msg}), nil
+	}
 
 	if err := s.getChannelsUseCase.UpdateChannel(request.Id, channel); err != nil {
 		if errors.Is(err, memory.ErrChannelNotFound) {

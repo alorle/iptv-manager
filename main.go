@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"embed"
 	"flag"
 	"fmt"
@@ -9,8 +10,10 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"time"
 
 	"github.com/alorle/iptv-manager/internal/api"
+	"github.com/alorle/iptv-manager/internal/epg"
 	"github.com/alorle/iptv-manager/internal/handlers"
 	internalJson "github.com/alorle/iptv-manager/internal/memory"
 	"github.com/alorle/iptv-manager/internal/usecase"
@@ -87,11 +90,26 @@ func main() {
 	channelRepo.SetFilePath(streamsFile)
 	channelUseCase := usecase.NewChannelsUseCase(channelRepo)
 
+	// Initialize EPG service
+	epgClient := epg.NewClient(epgUrl)
+	epgCache := epg.NewCache(epgClient, 12*time.Hour) // 12-hour cache TTL
+
+	// Create context for EPG operations
+	ctx := context.Background()
+
+	// Fetch initial EPG data (non-blocking)
+	go epgCache.InitialFetch(ctx)
+
+	// Start background EPG refresh
+	epgCache.StartBackgroundRefresh(ctx)
+
+	epgUseCase := usecase.NewEPGUseCase(epgCache)
+
 	m := middleware.OapiRequestValidator(swagger)
 
 	router := http.NewServeMux()
 
-	server := api.NewServer(channelUseCase)
+	server := api.NewServer(channelUseCase, epgUseCase)
 	h := api.NewStrictHandler(server, nil)
 
 	router.Handle("/playlist.m3u", handlers.NewPlaylistHandler(channelUseCase, acestreamURL, epgUrl))

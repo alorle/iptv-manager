@@ -9,12 +9,15 @@ var _ StrictServerInterface = (*server)(nil)
 
 type server struct {
 	getChannelsUseCase usecase.GetChannelUseCase
+	epgUseCase         *usecase.EPGUseCase
 }
 
 func NewServer(
 	getChannelsUseCase usecase.GetChannelUseCase,
+	epgUseCase *usecase.EPGUseCase,
 ) server {
 	return server{
 		getChannelsUseCase: getChannelsUseCase,
+		epgUseCase:         epgUseCase,
 	}
 }

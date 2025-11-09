@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useForm } from 'react-hook-form';
+import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { Plus, Edit } from 'lucide-react';
@@ -14,6 +14,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import EPGChannelCombobox from '@/components/EPGChannelCombobox/EPGChannelCombobox';
 import { components } from '../../lib/api/v1';
 
 type Channel = components["schemas"]["Channel"];
@@ -46,6 +47,8 @@ export default function ChannelFormDialog({
     handleSubmit,
     formState: { errors },
     reset,
+    control,
+    setValue,
   } = useForm<ChannelFormData>({
     resolver: zodResolver(channelSchema),
     defaultValues: channel
@@ -131,11 +134,23 @@ export default function ChannelFormDialog({
               </div>
 
               <div className="grid gap-2">
-                <Label htmlFor="guide_id">Guide ID *</Label>
-                <Input
-                  id="guide_id"
-                  {...register('guide_id')}
-                  placeholder="EPG ID"
+                <Label htmlFor="guide_id">EPG Channel *</Label>
+                <Controller
+                  name="guide_id"
+                  control={control}
+                  render={({ field }) => (
+                    <EPGChannelCombobox
+                      value={field.value}
+                      onChange={(guideId, logo) => {
+                        field.onChange(guideId);
+                        // Auto-populate logo from EPG if available
+                        if (logo) {
+                          setValue('logo', logo);
+                        }
+                      }}
+                      error={errors.guide_id?.message}
+                    />
+                  )}
                 />
                 {errors.guide_id && (
                   <p className="text-sm text-red-600">{errors.guide_id.message}</p>

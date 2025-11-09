@@ -44,6 +44,18 @@ type Channel struct {
 	Title string `json:"title"`
 }
 
+// EPGChannel defines model for EPGChannel.
+type EPGChannel struct {
+	// Id EPG channel identifier (e.g., dazn.f1.hd)
+	Id string `json:"id"`
+
+	// Logo URL to the channel logo from EPG
+	Logo *string `json:"logo,omitempty"`
+
+	// Name Display name of the channel
+	Name string `json:"name"`
+}
+
 // Error defines model for Error.
 type Error struct {
 	// Code Error code
@@ -74,6 +86,12 @@ type Stream struct {
 	Tags *[]string `json:"tags,omitempty"`
 }
 
+// ListEPGChannelsParams defines parameters for ListEPGChannels.
+type ListEPGChannelsParams struct {
+	// Search Search query to filter channels by name or ID
+	Search *string `form:"search,omitempty" json:"search,omitempty"`
+}
+
 // CreateChannelJSONRequestBody defines body for CreateChannel for application/json ContentType.
 type CreateChannelJSONRequestBody = Channel
 
@@ -97,6 +115,9 @@ type ServerInterface interface {
 	// Update a channel
 	// (PUT /channels/{id})
 	UpdateChannel(w http.ResponseWriter, r *http.Request, id openapi_types.UUID)
+	// List all EPG channels
+	// (GET /epg/channels)
+	ListEPGChannels(w http.ResponseWriter, r *http.Request, params ListEPGChannelsParams)
 }
 
 // ServerInterfaceWrapper converts contexts to parameters.
@@ -202,6 +223,33 @@ func (siw *ServerInterfaceWrapper) UpdateChannel(w http.ResponseWriter, r *http.
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.UpdateChannel(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListEPGChannels operation middleware
+func (siw *ServerInterfaceWrapper) ListEPGChannels(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListEPGChannelsParams
+
+	// ------------- Optional query parameter "search" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "search", r.URL.Query(), &params.Search)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "search", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListEPGChannels(w, r, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -336,6 +384,7 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc("DELETE "+options.BaseURL+"/channels/{id}", wrapper.DeleteChannel)
 	m.HandleFunc("GET "+options.BaseURL+"/channels/{id}", wrapper.GetChannel)
 	m.HandleFunc("PUT "+options.BaseURL+"/channels/{id}", wrapper.UpdateChannel)
+	m.HandleFunc("GET "+options.BaseURL+"/epg/channels", wrapper.ListEPGChannels)
 
 	return m
 }
@@ -514,6 +563,32 @@ func (response UpdateChannel500JSONResponse) VisitUpdateChannelResponse(w http.R
 	return json.NewEncoder(w).Encode(response)
 }
 
+type ListEPGChannelsRequestObject struct {
+	Params ListEPGChannelsParams
+}
+
+type ListEPGChannelsResponseObject interface {
+	VisitListEPGChannelsResponse(w http.ResponseWriter) error
+}
+
+type ListEPGChannels200JSONResponse []EPGChannel
+
+func (response ListEPGChannels200JSONResponse) VisitListEPGChannelsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type ListEPGChannels500JSONResponse Error
+
+func (response ListEPGChannels500JSONResponse) VisitListEPGChannelsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(500)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
 // StrictServerInterface represents all server handlers.
 type StrictServerInterface interface {
 	// List all channels
@@ -531,6 +606,9 @@ type StrictServerInterface interface {
 	// Update a channel
 	// (PUT /channels/{id})
 	UpdateChannel(ctx context.Context, request UpdateChannelRequestObject) (UpdateChannelResponseObject, error)
+	// List all EPG channels
+	// (GET /epg/channels)
+	ListEPGChannels(ctx context.Context, request ListEPGChannelsRequestObject) (ListEPGChannelsResponseObject, error)
 }
 
 type StrictHandlerFunc = strictnethttp.StrictHTTPHandlerFunc
@@ -702,27 +780,56 @@ func (sh *strictHandler) UpdateChannel(w http.ResponseWriter, r *http.Request, i
 	}
 }
 
+// ListEPGChannels operation middleware
+func (sh *strictHandler) ListEPGChannels(w http.ResponseWriter, r *http.Request, params ListEPGChannelsParams) {
+	var request ListEPGChannelsRequestObject
+
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListEPGChannels(ctx, request.(ListEPGChannelsRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListEPGChannels")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListEPGChannelsResponseObject); ok {
+		if err := validResponse.VisitListEPGChannelsResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
 // Base64 encoded, gzipped, json marshaled Swagger object
 var swaggerSpec = []string{
 
-	"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",
+	"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",
 }
 
 // GetSwagger returns the content of the embedded swagger specification file

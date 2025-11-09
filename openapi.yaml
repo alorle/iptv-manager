@@ -13,6 +13,8 @@ servers:
 tags:
   - name: channels
     description: Operations related to channels
+  - name: epg
+    description: Operations related to EPG (Electronic Program Guide)
 
 components:
   schemas:
@@ -87,6 +89,22 @@ components:
         code:
           type: integer
           description: Error code
+
+    EPGChannel:
+      type: object
+      required:
+        - id
+        - name
+      properties:
+        id:
+          type: string
+          description: EPG channel identifier (e.g., dazn.f1.hd)
+        name:
+          type: string
+          description: Display name of the channel
+        logo:
+          type: string
+          description: URL to the channel logo from EPG
 
 paths:
   /channels:
@@ -245,6 +263,36 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Error"
+        "500":
+          description: Server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /epg/channels:
+    get:
+      operationId: listEPGChannels
+      tags:
+        - epg
+      summary: List all EPG channels
+      description: Returns a list of all channels available in the EPG guide
+      parameters:
+        - name: search
+          in: query
+          required: false
+          description: Search query to filter channels by name or ID
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Successful operation
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/EPGChannel"
         "500":
           description: Server error
           content:
