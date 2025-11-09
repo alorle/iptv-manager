@@ -125,9 +125,8 @@ func main() {
 			// Server the index.html file.
 			ctx := r.Context()
 			ctx = vite.MetadataToContext(ctx, vite.Metadata{
-				Title: "Hello, Vite!",
+				Title: "IPTV Manager",
 			})
-			ctx = vite.ScriptsToContext(ctx, `<script>console.log('Hello, nice to meet you in the console!')</script>`)
 			viteHandler.ServeHTTP(w, r.WithContext(ctx))
 			return
 		}
