@@ -16,48 +16,11 @@ import (
 	"net/url"
 	"path"
 	"strings"
+	"time"
 
 	"github.com/getkin/kin-openapi/openapi3"
-	"github.com/oapi-codegen/runtime"
 	strictnethttp "github.com/oapi-codegen/runtime/strictmiddleware/nethttp"
-	openapi_types "github.com/oapi-codegen/runtime/types"
 )
-
-// Channel Read-only channel view derived from streams grouped by guide_id and enriched with EPG metadata
-type Channel struct {
-	// GroupTitle Category/group of the channel (from EPG or manual)
-	GroupTitle *string `json:"group_title,omitempty"`
-
-	// GuideId EPG ID for electronic program guide information (grouping key)
-	GuideId string `json:"guide_id"`
-
-	// Logo URL to the channel logo image (from EPG)
-	Logo *string `json:"logo,omitempty"`
-
-	// Streams Available streams for this channel
-	Streams *[]Stream `json:"streams,omitempty"`
-
-	// Title Title of the channel (from EPG)
-	Title *string `json:"title,omitempty"`
-}
-
-// Config defines model for Config.
-type Config struct {
-	// AcestreamUrl Base URL for Acestream/Acexy proxy
-	AcestreamUrl string `json:"acestream_url"`
-}
-
-// EPGChannel defines model for EPGChannel.
-type EPGChannel struct {
-	// Id EPG channel identifier (e.g., dazn.f1.hd)
-	Id string `json:"id"`
-
-	// Logo URL to the channel logo from EPG
-	Logo *string `json:"logo,omitempty"`
-
-	// Name Display name of the channel
-	Name string `json:"name"`
-}
 
 // Error defines model for Error.
 type Error struct {
@@ -68,68 +31,23 @@ type Error struct {
 	Message *string `json:"message,omitempty"`
 }
 
-// Stream Primary entity representing a single Acestream source
-type Stream struct {
-	// AcestreamId Acestream ID for this stream
-	AcestreamId string `json:"acestream_id"`
+// HealthResponse defines model for HealthResponse.
+type HealthResponse struct {
+	// Status Health status of the application
+	Status string `json:"status"`
 
-	// GuideId EPG ID that groups this stream into a channel
-	GuideId string `json:"guide_id"`
+	// Timestamp Current server timestamp in ISO 8601 format
+	Timestamp time.Time `json:"timestamp"`
 
-	// Id Unique identifier for the stream
-	Id *openapi_types.UUID `json:"id,omitempty"`
-
-	// NetworkCaching Network caching value in milliseconds
-	NetworkCaching int `json:"network_caching"`
-
-	// Quality Quality of the stream (e.g., SD, HD, FHD)
-	Quality *string `json:"quality,omitempty"`
-
-	// Tags Tags associated with this stream
-	Tags *[]string `json:"tags,omitempty"`
+	// Version Application version
+	Version string `json:"version"`
 }
-
-// ListEPGChannelsParams defines parameters for ListEPGChannels.
-type ListEPGChannelsParams struct {
-	// Search Search query to filter channels by name or ID
-	Search *string `form:"search,omitempty" json:"search,omitempty"`
-}
-
-// CreateStreamJSONRequestBody defines body for CreateStream for application/json ContentType.
-type CreateStreamJSONRequestBody = Stream
-
-// UpdateStreamJSONRequestBody defines body for UpdateStream for application/json ContentType.
-type UpdateStreamJSONRequestBody = Stream
 
 // ServerInterface represents all server handlers.
 type ServerInterface interface {
-	// List all channel views
-	// (GET /channels)
-	ListChannels(w http.ResponseWriter, r *http.Request)
-	// Get a channel view by guide_id
-	// (GET /channels/{guide_id})
-	GetChannelByGuideId(w http.ResponseWriter, r *http.Request, guideId string)
-	// Get application configuration
-	// (GET /config)
-	GetConfig(w http.ResponseWriter, r *http.Request)
-	// List all EPG channels
-	// (GET /epg/channels)
-	ListEPGChannels(w http.ResponseWriter, r *http.Request, params ListEPGChannelsParams)
-	// List all streams
-	// (GET /streams)
-	ListStreams(w http.ResponseWriter, r *http.Request)
-	// Create a new stream
-	// (POST /streams)
-	CreateStream(w http.ResponseWriter, r *http.Request)
-	// Delete a stream
-	// (DELETE /streams/{id})
-	DeleteStream(w http.ResponseWriter, r *http.Request, id openapi_types.UUID)
-	// Get a stream by ID
-	// (GET /streams/{id})
-	GetStream(w http.ResponseWriter, r *http.Request, id openapi_types.UUID)
-	// Update a stream
-	// (PUT /streams/{id})
-	UpdateStream(w http.ResponseWriter, r *http.Request, id openapi_types.UUID)
+	// Get application health status
+	// (GET /health)
+	GetHealth(w http.ResponseWriter, r *http.Request)
 }
 
 // ServerInterfaceWrapper converts contexts to parameters.
@@ -141,180 +59,11 @@ type ServerInterfaceWrapper struct {
 
 type MiddlewareFunc func(http.Handler) http.Handler
 
-// ListChannels operation middleware
-func (siw *ServerInterfaceWrapper) ListChannels(w http.ResponseWriter, r *http.Request) {
+// GetHealth operation middleware
+func (siw *ServerInterfaceWrapper) GetHealth(w http.ResponseWriter, r *http.Request) {
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.ListChannels(w, r)
-	}))
-
-	for _, middleware := range siw.HandlerMiddlewares {
-		handler = middleware(handler)
-	}
-
-	handler.ServeHTTP(w, r)
-}
-
-// GetChannelByGuideId operation middleware
-func (siw *ServerInterfaceWrapper) GetChannelByGuideId(w http.ResponseWriter, r *http.Request) {
-
-	var err error
-
-	// ------------- Path parameter "guide_id" -------------
-	var guideId string
-
-	err = runtime.BindStyledParameterWithOptions("simple", "guide_id", r.PathValue("guide_id"), &guideId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
-	if err != nil {
-		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "guide_id", Err: err})
-		return
-	}
-
-	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.GetChannelByGuideId(w, r, guideId)
-	}))
-
-	for _, middleware := range siw.HandlerMiddlewares {
-		handler = middleware(handler)
-	}
-
-	handler.ServeHTTP(w, r)
-}
-
-// GetConfig operation middleware
-func (siw *ServerInterfaceWrapper) GetConfig(w http.ResponseWriter, r *http.Request) {
-
-	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.GetConfig(w, r)
-	}))
-
-	for _, middleware := range siw.HandlerMiddlewares {
-		handler = middleware(handler)
-	}
-
-	handler.ServeHTTP(w, r)
-}
-
-// ListEPGChannels operation middleware
-func (siw *ServerInterfaceWrapper) ListEPGChannels(w http.ResponseWriter, r *http.Request) {
-
-	var err error
-
-	// Parameter object where we will unmarshal all parameters from the context
-	var params ListEPGChannelsParams
-
-	// ------------- Optional query parameter "search" -------------
-
-	err = runtime.BindQueryParameter("form", true, false, "search", r.URL.Query(), &params.Search)
-	if err != nil {
-		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "search", Err: err})
-		return
-	}
-
-	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.ListEPGChannels(w, r, params)
-	}))
-
-	for _, middleware := range siw.HandlerMiddlewares {
-		handler = middleware(handler)
-	}
-
-	handler.ServeHTTP(w, r)
-}
-
-// ListStreams operation middleware
-func (siw *ServerInterfaceWrapper) ListStreams(w http.ResponseWriter, r *http.Request) {
-
-	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.ListStreams(w, r)
-	}))
-
-	for _, middleware := range siw.HandlerMiddlewares {
-		handler = middleware(handler)
-	}
-
-	handler.ServeHTTP(w, r)
-}
-
-// CreateStream operation middleware
-func (siw *ServerInterfaceWrapper) CreateStream(w http.ResponseWriter, r *http.Request) {
-
-	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.CreateStream(w, r)
-	}))
-
-	for _, middleware := range siw.HandlerMiddlewares {
-		handler = middleware(handler)
-	}
-
-	handler.ServeHTTP(w, r)
-}
-
-// DeleteStream operation middleware
-func (siw *ServerInterfaceWrapper) DeleteStream(w http.ResponseWriter, r *http.Request) {
-
-	var err error
-
-	// ------------- Path parameter "id" -------------
-	var id openapi_types.UUID
-
-	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
-	if err != nil {
-		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
-		return
-	}
-
-	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.DeleteStream(w, r, id)
-	}))
-
-	for _, middleware := range siw.HandlerMiddlewares {
-		handler = middleware(handler)
-	}
-
-	handler.ServeHTTP(w, r)
-}
-
-// GetStream operation middleware
-func (siw *ServerInterfaceWrapper) GetStream(w http.ResponseWriter, r *http.Request) {
-
-	var err error
-
-	// ------------- Path parameter "id" -------------
-	var id openapi_types.UUID
-
-	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
-	if err != nil {
-		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
-		return
-	}
-
-	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.GetStream(w, r, id)
-	}))
-
-	for _, middleware := range siw.HandlerMiddlewares {
-		handler = middleware(handler)
-	}
-
-	handler.ServeHTTP(w, r)
-}
-
-// UpdateStream operation middleware
-func (siw *ServerInterfaceWrapper) UpdateStream(w http.ResponseWriter, r *http.Request) {
-
-	var err error
-
-	// ------------- Path parameter "id" -------------
-	var id openapi_types.UUID
-
-	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
-	if err != nil {
-		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
-		return
-	}
-
-	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.UpdateStream(w, r, id)
+		siw.Handler.GetHealth(w, r)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -444,298 +193,30 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 		ErrorHandlerFunc:   options.ErrorHandlerFunc,
 	}
 
-	m.HandleFunc("GET "+options.BaseURL+"/channels", wrapper.ListChannels)
-	m.HandleFunc("GET "+options.BaseURL+"/channels/{guide_id}", wrapper.GetChannelByGuideId)
-	m.HandleFunc("GET "+options.BaseURL+"/config", wrapper.GetConfig)
-	m.HandleFunc("GET "+options.BaseURL+"/epg/channels", wrapper.ListEPGChannels)
-	m.HandleFunc("GET "+options.BaseURL+"/streams", wrapper.ListStreams)
-	m.HandleFunc("POST "+options.BaseURL+"/streams", wrapper.CreateStream)
-	m.HandleFunc("DELETE "+options.BaseURL+"/streams/{id}", wrapper.DeleteStream)
-	m.HandleFunc("GET "+options.BaseURL+"/streams/{id}", wrapper.GetStream)
-	m.HandleFunc("PUT "+options.BaseURL+"/streams/{id}", wrapper.UpdateStream)
+	m.HandleFunc("GET "+options.BaseURL+"/health", wrapper.GetHealth)
 
 	return m
 }
 
-type ListChannelsRequestObject struct {
+type GetHealthRequestObject struct {
 }
 
-type ListChannelsResponseObject interface {
-	VisitListChannelsResponse(w http.ResponseWriter) error
+type GetHealthResponseObject interface {
+	VisitGetHealthResponse(w http.ResponseWriter) error
 }
 
-type ListChannels200JSONResponse []Channel
+type GetHealth200JSONResponse HealthResponse
 
-func (response ListChannels200JSONResponse) VisitListChannelsResponse(w http.ResponseWriter) error {
+func (response GetHealth200JSONResponse) VisitGetHealthResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(200)
 
 	return json.NewEncoder(w).Encode(response)
 }
 
-type ListChannels500JSONResponse Error
+type GetHealth500JSONResponse Error
 
-func (response ListChannels500JSONResponse) VisitListChannelsResponse(w http.ResponseWriter) error {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(500)
-
-	return json.NewEncoder(w).Encode(response)
-}
-
-type GetChannelByGuideIdRequestObject struct {
-	GuideId string `json:"guide_id"`
-}
-
-type GetChannelByGuideIdResponseObject interface {
-	VisitGetChannelByGuideIdResponse(w http.ResponseWriter) error
-}
-
-type GetChannelByGuideId200JSONResponse Channel
-
-func (response GetChannelByGuideId200JSONResponse) VisitGetChannelByGuideIdResponse(w http.ResponseWriter) error {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(200)
-
-	return json.NewEncoder(w).Encode(response)
-}
-
-type GetChannelByGuideId404JSONResponse Error
-
-func (response GetChannelByGuideId404JSONResponse) VisitGetChannelByGuideIdResponse(w http.ResponseWriter) error {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(404)
-
-	return json.NewEncoder(w).Encode(response)
-}
-
-type GetChannelByGuideId500JSONResponse Error
-
-func (response GetChannelByGuideId500JSONResponse) VisitGetChannelByGuideIdResponse(w http.ResponseWriter) error {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(500)
-
-	return json.NewEncoder(w).Encode(response)
-}
-
-type GetConfigRequestObject struct {
-}
-
-type GetConfigResponseObject interface {
-	VisitGetConfigResponse(w http.ResponseWriter) error
-}
-
-type GetConfig200JSONResponse Config
-
-func (response GetConfig200JSONResponse) VisitGetConfigResponse(w http.ResponseWriter) error {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(200)
-
-	return json.NewEncoder(w).Encode(response)
-}
-
-type GetConfig500JSONResponse Error
-
-func (response GetConfig500JSONResponse) VisitGetConfigResponse(w http.ResponseWriter) error {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(500)
-
-	return json.NewEncoder(w).Encode(response)
-}
-
-type ListEPGChannelsRequestObject struct {
-	Params ListEPGChannelsParams
-}
-
-type ListEPGChannelsResponseObject interface {
-	VisitListEPGChannelsResponse(w http.ResponseWriter) error
-}
-
-type ListEPGChannels200JSONResponse []EPGChannel
-
-func (response ListEPGChannels200JSONResponse) VisitListEPGChannelsResponse(w http.ResponseWriter) error {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(200)
-
-	return json.NewEncoder(w).Encode(response)
-}
-
-type ListEPGChannels500JSONResponse Error
-
-func (response ListEPGChannels500JSONResponse) VisitListEPGChannelsResponse(w http.ResponseWriter) error {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(500)
-
-	return json.NewEncoder(w).Encode(response)
-}
-
-type ListStreamsRequestObject struct {
-}
-
-type ListStreamsResponseObject interface {
-	VisitListStreamsResponse(w http.ResponseWriter) error
-}
-
-type ListStreams200JSONResponse []Stream
-
-func (response ListStreams200JSONResponse) VisitListStreamsResponse(w http.ResponseWriter) error {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(200)
-
-	return json.NewEncoder(w).Encode(response)
-}
-
-type ListStreams500JSONResponse Error
-
-func (response ListStreams500JSONResponse) VisitListStreamsResponse(w http.ResponseWriter) error {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(500)
-
-	return json.NewEncoder(w).Encode(response)
-}
-
-type CreateStreamRequestObject struct {
-	Body *CreateStreamJSONRequestBody
-}
-
-type CreateStreamResponseObject interface {
-	VisitCreateStreamResponse(w http.ResponseWriter) error
-}
-
-type CreateStream201JSONResponse Stream
-
-func (response CreateStream201JSONResponse) VisitCreateStreamResponse(w http.ResponseWriter) error {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(201)
-
-	return json.NewEncoder(w).Encode(response)
-}
-
-type CreateStream400JSONResponse Error
-
-func (response CreateStream400JSONResponse) VisitCreateStreamResponse(w http.ResponseWriter) error {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(400)
-
-	return json.NewEncoder(w).Encode(response)
-}
-
-type CreateStream500JSONResponse Error
-
-func (response CreateStream500JSONResponse) VisitCreateStreamResponse(w http.ResponseWriter) error {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(500)
-
-	return json.NewEncoder(w).Encode(response)
-}
-
-type DeleteStreamRequestObject struct {
-	Id openapi_types.UUID `json:"id"`
-}
-
-type DeleteStreamResponseObject interface {
-	VisitDeleteStreamResponse(w http.ResponseWriter) error
-}
-
-type DeleteStream204Response struct {
-}
-
-func (response DeleteStream204Response) VisitDeleteStreamResponse(w http.ResponseWriter) error {
-	w.WriteHeader(204)
-	return nil
-}
-
-type DeleteStream404JSONResponse Error
-
-func (response DeleteStream404JSONResponse) VisitDeleteStreamResponse(w http.ResponseWriter) error {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(404)
-
-	return json.NewEncoder(w).Encode(response)
-}
-
-type DeleteStream500JSONResponse Error
-
-func (response DeleteStream500JSONResponse) VisitDeleteStreamResponse(w http.ResponseWriter) error {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(500)
-
-	return json.NewEncoder(w).Encode(response)
-}
-
-type GetStreamRequestObject struct {
-	Id openapi_types.UUID `json:"id"`
-}
-
-type GetStreamResponseObject interface {
-	VisitGetStreamResponse(w http.ResponseWriter) error
-}
-
-type GetStream200JSONResponse Stream
-
-func (response GetStream200JSONResponse) VisitGetStreamResponse(w http.ResponseWriter) error {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(200)
-
-	return json.NewEncoder(w).Encode(response)
-}
-
-type GetStream404JSONResponse Error
-
-func (response GetStream404JSONResponse) VisitGetStreamResponse(w http.ResponseWriter) error {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(404)
-
-	return json.NewEncoder(w).Encode(response)
-}
-
-type GetStream500JSONResponse Error
-
-func (response GetStream500JSONResponse) VisitGetStreamResponse(w http.ResponseWriter) error {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(500)
-
-	return json.NewEncoder(w).Encode(response)
-}
-
-type UpdateStreamRequestObject struct {
-	Id   openapi_types.UUID `json:"id"`
-	Body *UpdateStreamJSONRequestBody
-}
-
-type UpdateStreamResponseObject interface {
-	VisitUpdateStreamResponse(w http.ResponseWriter) error
-}
-
-type UpdateStream200JSONResponse Stream
-
-func (response UpdateStream200JSONResponse) VisitUpdateStreamResponse(w http.ResponseWriter) error {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(200)
-
-	return json.NewEncoder(w).Encode(response)
-}
-
-type UpdateStream400JSONResponse Error
-
-func (response UpdateStream400JSONResponse) VisitUpdateStreamResponse(w http.ResponseWriter) error {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(400)
-
-	return json.NewEncoder(w).Encode(response)
-}
-
-type UpdateStream404JSONResponse Error
-
-func (response UpdateStream404JSONResponse) VisitUpdateStreamResponse(w http.ResponseWriter) error {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(404)
-
-	return json.NewEncoder(w).Encode(response)
-}
-
-type UpdateStream500JSONResponse Error
-
-func (response UpdateStream500JSONResponse) VisitUpdateStreamResponse(w http.ResponseWriter) error {
+func (response GetHealth500JSONResponse) VisitGetHealthResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(500)
 
@@ -744,33 +225,9 @@ func (response UpdateStream500JSONResponse) VisitUpdateStreamResponse(w http.Res
 
 // StrictServerInterface represents all server handlers.
 type StrictServerInterface interface {
-	// List all channel views
-	// (GET /channels)
-	ListChannels(ctx context.Context, request ListChannelsRequestObject) (ListChannelsResponseObject, error)
-	// Get a channel view by guide_id
-	// (GET /channels/{guide_id})
-	GetChannelByGuideId(ctx context.Context, request GetChannelByGuideIdRequestObject) (GetChannelByGuideIdResponseObject, error)
-	// Get application configuration
-	// (GET /config)
-	GetConfig(ctx context.Context, request GetConfigRequestObject) (GetConfigResponseObject, error)
-	// List all EPG channels
-	// (GET /epg/channels)
-	ListEPGChannels(ctx context.Context, request ListEPGChannelsRequestObject) (ListEPGChannelsResponseObject, error)
-	// List all streams
-	// (GET /streams)
-	ListStreams(ctx context.Context, request ListStreamsRequestObject) (ListStreamsResponseObject, error)
-	// Create a new stream
-	// (POST /streams)
-	CreateStream(ctx context.Context, request CreateStreamRequestObject) (CreateStreamResponseObject, error)
-	// Delete a stream
-	// (DELETE /streams/{id})
-	DeleteStream(ctx context.Context, request DeleteStreamRequestObject) (DeleteStreamResponseObject, error)
-	// Get a stream by ID
-	// (GET /streams/{id})
-	GetStream(ctx context.Context, request GetStreamRequestObject) (GetStreamResponseObject, error)
-	// Update a stream
-	// (PUT /streams/{id})
-	UpdateStream(ctx context.Context, request UpdateStreamRequestObject) (UpdateStreamResponseObject, error)
+	// Get application health status
+	// (GET /health)
+	GetHealth(ctx context.Context, request GetHealthRequestObject) (GetHealthResponseObject, error)
 }
 
 type StrictHandlerFunc = strictnethttp.StrictHTTPHandlerFunc
@@ -802,239 +259,23 @@ type strictHandler struct {
 	options     StrictHTTPServerOptions
 }
 
-// ListChannels operation middleware
-func (sh *strictHandler) ListChannels(w http.ResponseWriter, r *http.Request) {
-	var request ListChannelsRequestObject
+// GetHealth operation middleware
+func (sh *strictHandler) GetHealth(w http.ResponseWriter, r *http.Request) {
+	var request GetHealthRequestObject
 
 	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
-		return sh.ssi.ListChannels(ctx, request.(ListChannelsRequestObject))
+		return sh.ssi.GetHealth(ctx, request.(GetHealthRequestObject))
 	}
 	for _, middleware := range sh.middlewares {
-		handler = middleware(handler, "ListChannels")
+		handler = middleware(handler, "GetHealth")
 	}
 
 	response, err := handler(r.Context(), w, r, request)
 
 	if err != nil {
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
-	} else if validResponse, ok := response.(ListChannelsResponseObject); ok {
-		if err := validResponse.VisitListChannelsResponse(w); err != nil {
-			sh.options.ResponseErrorHandlerFunc(w, r, err)
-		}
-	} else if response != nil {
-		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
-	}
-}
-
-// GetChannelByGuideId operation middleware
-func (sh *strictHandler) GetChannelByGuideId(w http.ResponseWriter, r *http.Request, guideId string) {
-	var request GetChannelByGuideIdRequestObject
-
-	request.GuideId = guideId
-
-	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
-		return sh.ssi.GetChannelByGuideId(ctx, request.(GetChannelByGuideIdRequestObject))
-	}
-	for _, middleware := range sh.middlewares {
-		handler = middleware(handler, "GetChannelByGuideId")
-	}
-
-	response, err := handler(r.Context(), w, r, request)
-
-	if err != nil {
-		sh.options.ResponseErrorHandlerFunc(w, r, err)
-	} else if validResponse, ok := response.(GetChannelByGuideIdResponseObject); ok {
-		if err := validResponse.VisitGetChannelByGuideIdResponse(w); err != nil {
-			sh.options.ResponseErrorHandlerFunc(w, r, err)
-		}
-	} else if response != nil {
-		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
-	}
-}
-
-// GetConfig operation middleware
-func (sh *strictHandler) GetConfig(w http.ResponseWriter, r *http.Request) {
-	var request GetConfigRequestObject
-
-	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
-		return sh.ssi.GetConfig(ctx, request.(GetConfigRequestObject))
-	}
-	for _, middleware := range sh.middlewares {
-		handler = middleware(handler, "GetConfig")
-	}
-
-	response, err := handler(r.Context(), w, r, request)
-
-	if err != nil {
-		sh.options.ResponseErrorHandlerFunc(w, r, err)
-	} else if validResponse, ok := response.(GetConfigResponseObject); ok {
-		if err := validResponse.VisitGetConfigResponse(w); err != nil {
-			sh.options.ResponseErrorHandlerFunc(w, r, err)
-		}
-	} else if response != nil {
-		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
-	}
-}
-
-// ListEPGChannels operation middleware
-func (sh *strictHandler) ListEPGChannels(w http.ResponseWriter, r *http.Request, params ListEPGChannelsParams) {
-	var request ListEPGChannelsRequestObject
-
-	request.Params = params
-
-	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
-		return sh.ssi.ListEPGChannels(ctx, request.(ListEPGChannelsRequestObject))
-	}
-	for _, middleware := range sh.middlewares {
-		handler = middleware(handler, "ListEPGChannels")
-	}
-
-	response, err := handler(r.Context(), w, r, request)
-
-	if err != nil {
-		sh.options.ResponseErrorHandlerFunc(w, r, err)
-	} else if validResponse, ok := response.(ListEPGChannelsResponseObject); ok {
-		if err := validResponse.VisitListEPGChannelsResponse(w); err != nil {
-			sh.options.ResponseErrorHandlerFunc(w, r, err)
-		}
-	} else if response != nil {
-		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
-	}
-}
-
-// ListStreams operation middleware
-func (sh *strictHandler) ListStreams(w http.ResponseWriter, r *http.Request) {
-	var request ListStreamsRequestObject
-
-	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
-		return sh.ssi.ListStreams(ctx, request.(ListStreamsRequestObject))
-	}
-	for _, middleware := range sh.middlewares {
-		handler = middleware(handler, "ListStreams")
-	}
-
-	response, err := handler(r.Context(), w, r, request)
-
-	if err != nil {
-		sh.options.ResponseErrorHandlerFunc(w, r, err)
-	} else if validResponse, ok := response.(ListStreamsResponseObject); ok {
-		if err := validResponse.VisitListStreamsResponse(w); err != nil {
-			sh.options.ResponseErrorHandlerFunc(w, r, err)
-		}
-	} else if response != nil {
-		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
-	}
-}
-
-// CreateStream operation middleware
-func (sh *strictHandler) CreateStream(w http.ResponseWriter, r *http.Request) {
-	var request CreateStreamRequestObject
-
-	var body CreateStreamJSONRequestBody
-	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
-		return
-	}
-	request.Body = &body
-
-	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
-		return sh.ssi.CreateStream(ctx, request.(CreateStreamRequestObject))
-	}
-	for _, middleware := range sh.middlewares {
-		handler = middleware(handler, "CreateStream")
-	}
-
-	response, err := handler(r.Context(), w, r, request)
-
-	if err != nil {
-		sh.options.ResponseErrorHandlerFunc(w, r, err)
-	} else if validResponse, ok := response.(CreateStreamResponseObject); ok {
-		if err := validResponse.VisitCreateStreamResponse(w); err != nil {
-			sh.options.ResponseErrorHandlerFunc(w, r, err)
-		}
-	} else if response != nil {
-		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
-	}
-}
-
-// DeleteStream operation middleware
-func (sh *strictHandler) DeleteStream(w http.ResponseWriter, r *http.Request, id openapi_types.UUID) {
-	var request DeleteStreamRequestObject
-
-	request.Id = id
-
-	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
-		return sh.ssi.DeleteStream(ctx, request.(DeleteStreamRequestObject))
-	}
-	for _, middleware := range sh.middlewares {
-		handler = middleware(handler, "DeleteStream")
-	}
-
-	response, err := handler(r.Context(), w, r, request)
-
-	if err != nil {
-		sh.options.ResponseErrorHandlerFunc(w, r, err)
-	} else if validResponse, ok := response.(DeleteStreamResponseObject); ok {
-		if err := validResponse.VisitDeleteStreamResponse(w); err != nil {
-			sh.options.ResponseErrorHandlerFunc(w, r, err)
-		}
-	} else if response != nil {
-		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
-	}
-}
-
-// GetStream operation middleware
-func (sh *strictHandler) GetStream(w http.ResponseWriter, r *http.Request, id openapi_types.UUID) {
-	var request GetStreamRequestObject
-
-	request.Id = id
-
-	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
-		return sh.ssi.GetStream(ctx, request.(GetStreamRequestObject))
-	}
-	for _, middleware := range sh.middlewares {
-		handler = middleware(handler, "GetStream")
-	}
-
-	response, err := handler(r.Context(), w, r, request)
-
-	if err != nil {
-		sh.options.ResponseErrorHandlerFunc(w, r, err)
-	} else if validResponse, ok := response.(GetStreamResponseObject); ok {
-		if err := validResponse.VisitGetStreamResponse(w); err != nil {
-			sh.options.ResponseErrorHandlerFunc(w, r, err)
-		}
-	} else if response != nil {
-		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
-	}
-}
-
-// UpdateStream operation middleware
-func (sh *strictHandler) UpdateStream(w http.ResponseWriter, r *http.Request, id openapi_types.UUID) {
-	var request UpdateStreamRequestObject
-
-	request.Id = id
-
-	var body UpdateStreamJSONRequestBody
-	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
-		return
-	}
-	request.Body = &body
-
-	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
-		return sh.ssi.UpdateStream(ctx, request.(UpdateStreamRequestObject))
-	}
-	for _, middleware := range sh.middlewares {
-		handler = middleware(handler, "UpdateStream")
-	}
-
-	response, err := handler(r.Context(), w, r, request)
-
-	if err != nil {
-		sh.options.ResponseErrorHandlerFunc(w, r, err)
-	} else if validResponse, ok := response.(UpdateStreamResponseObject); ok {
-		if err := validResponse.VisitUpdateStreamResponse(w); err != nil {
+	} else if validResponse, ok := response.(GetHealthResponseObject); ok {
+		if err := validResponse.VisitGetHealthResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {
@@ -1045,34 +286,16 @@ func (sh *strictHandler) UpdateStream(w http.ResponseWriter, r *http.Request, id
 // Base64 encoded, gzipped, json marshaled Swagger object
 var swaggerSpec = []string{
 
-	"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",
-	"AP//kOoFDHogAAA=",
+	"H4sIAAAAAAAC/6xUwW7UMBD9FWvgGDYpFajKraoQrASiahEXtAfjTBKXxDbjScWqyr8j20l22+yKC6eM",
+	"4vHMm/fe+AmU7Z01aNhD+QRetdjLGH4gshQCR9Yhscb4W9kKw7dCr0g71tZAmZJFPMuA9w6hBG0YGyQY",
+	"M+jRe9mcvTcfL1c9kzYNjOPyx/58QMWh1ieUHbd36J01HtcAPUse/LpVuifSsbC14BaFdK7TSsaUDPCP",
+	"7F0X2rUxeb9GlAHrHj3L3q1b3AxEaFh4pEcksWQKbcT2/qu4el9ciNpSLxkymIISKsn4JiSfaveI5GP1",
+	"l82uD9DFnHQ8wsWm2BQnKSX8PWjCCsofM1uHPscD7lb0h+va1DY5wbBUHEIj+5C1vf32XXyRRk6yPwd8",
+	"rwMykagVqkX1S1zfbgMhYQBd77VpjhUR0lRCm5qkZxoUD4Riwcua45iTrDdzuaNRZg7GDKxDI52GEi43",
+	"xeYSMnCS2+iSPAEKYYO85vkOeSDjo13UJHD7Dy9lQhvVDVUYaEIThzlQGyFRTN5WUMJH5DQJBH2StyO8",
+	"t0Uxk40mwjvqkz/4ZI20tyF6TVhDCa/yw2Ln01bnL1YnqnneVNqLeQ3GDN79RxzpaTnR/j4tDk7nGfih",
+	"7yXtE0HPvPFMguAH2fhg6EnNXayeFjH8f6nqZ6tkJyp8xM66/rC0kMFAXXgBmF2Z513Ia63n8qq4KvLg",
+	"oXG3dDvzxiRvLwIHeNOGTOjG3fg3AAD///7UiCR6BQAA",
 }
 
 // GetSwagger returns the content of the embedded swagger specification file

@@ -1,26 +1,14 @@
 package api
 
-import "github.com/alorle/iptv-manager/internal/usecase"
-
 //go:generate go tool oapi-codegen -config cfg.yaml ../../openapi.yaml
 
-// ensure that we've conformed to the `StrictServerInterface ` with a compile-time check
-var _ StrictServerInterface = (*server)(nil)
+// Server implements the API endpoints
+type Server struct{}
 
-type server struct {
-	streamUseCase usecase.StreamUseCase
-	epgUseCase    *usecase.EPGUseCase
-	acestreamURL  string
+// NewServer creates a new API server instance
+func NewServer() *Server {
+	return &Server{}
 }
 
-func NewServer(
-	streamUseCase usecase.StreamUseCase,
-	epgUseCase *usecase.EPGUseCase,
-	acestreamURL string,
-) server {
-	return server{
-		streamUseCase: streamUseCase,
-		epgUseCase:    epgUseCase,
-		acestreamURL:  acestreamURL,
-	}
-}
+// ensure that we've conformed to the `StrictServerInterface` with a compile-time check
+var _ StrictServerInterface = (*Server)(nil)

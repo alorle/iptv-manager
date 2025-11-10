@@ -20,12 +20,12 @@ type Channel struct {
 
 // Stream is the primary entity (stored directly)
 type Stream struct {
-	ID             uuid.UUID
-	GuideID        string // EPG reference - replaces ChannelID
+	GuideID        string
 	AcestreamID    string
 	Quality        string
 	Tags           []string
 	NetworkCaching uint64
+	ID             uuid.UUID
 }
 
 func (s *Stream) FullTitle(channelTitle string) string {

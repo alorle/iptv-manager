@@ -1,0 +1,23 @@
+# Generated files
+internal/api/api.gen.go
+src/lib/api/v1.d.ts
+
+# Build artifacts
+dist/
+node_modules/
+.tmp/
+*.tsbuildinfo
+
+# Lock files (don't format these)
+go.sum
+package-lock.json
+
+# OS files
+.DS_Store
+
+# IDE
+.vscode/
+.idea/
+
+# Air temporary files
+tmp/

@@ -1,0 +1,13 @@
+{
+  "recommendations": [
+    "golang.go",
+    "esbenp.prettier-vscode",
+    "dbaeumer.vscode-eslint",
+    "bradlc.vscode-tailwindcss",
+    "redhat.vscode-yaml",
+    "humao.rest-client",
+    "editorconfig.editorconfig",
+    "vitest.vitest-runner"
+  ],
+  "unwantedRecommendations": []
+}

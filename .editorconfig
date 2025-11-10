@@ -1,0 +1,34 @@
+root = true
+
+[*]
+charset = utf-8
+end_of_line = lf
+insert_final_newline = true
+trim_trailing_whitespace = true
+
+# Go uses tabs by convention
+[*.go]
+indent_style = tab
+indent_size = 4
+
+# Frontend files use spaces
+[*.{js,jsx,ts,tsx,json,yaml,yml,css,html}]
+indent_style = space
+indent_size = 2
+
+# Markdown preserves trailing whitespace for line breaks
+[*.md]
+trim_trailing_whitespace = false
+
+# Makefiles require tabs
+[Makefile]
+indent_style = tab
+
+# Configuration files
+[.air.toml]
+indent_style = space
+indent_size = 2
+
+# Lock files should not be edited
+[{package-lock.json,go.sum}]
+insert_final_newline = false

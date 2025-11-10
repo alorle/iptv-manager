@@ -4,61 +4,63 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-IPTV Manager is a dual-stack application (Go backend + React frontend) that manages Acestream channels and generates M3U playlists for IPTV clients. The application reads channel configurations from `streams.json` and provides both an API and a web interface for channel management.
+IPTV Manager is a self-hosted web application for managing Acestream streams with EPG integration. The application enables users to organize streaming sources, match them with EPG metadata, and generate M3U playlists compatible with Jellyfin and similar IPTV clients.
+
+**Current State**: Minimal MVP on `redesign` branch with health check endpoint. See [docs/PRD.md](docs/PRD.md) for comprehensive feature roadmap moving to stream-centric architecture.
+
+**Tech Stack**: Go backend + React 19 frontend, both served from single binary with embedded static assets.
 
 ## Architecture
 
 ### Backend (Go)
 
-The backend follows Clean Architecture principles with clear separation of concerns:
+Clean Architecture with minimal complexity:
 
-- **Domain Layer** (`internal/`): Core business entities and repository interfaces
-  - `Channel` struct: TV channel entity with EPG metadata (title, guideId, logo, groupTitle)
-  - `Stream` struct: Access method for a channel (acestream_id, quality, tags, networkCaching)
-  - One channel can have multiple streams
-  - `Stream.FullTitle()`: Generates formatted title with quality and tags
-  - `Stream.GetStreamURL()`: Constructs Acestream URL
-  - `ChannelRepository` interface: Defines data access contract
-
-- **Use Case Layer** (`internal/usecase/`): Application business rules
-  - `GetChannelUseCase`: Orchestrates channel retrieval logic
-
-- **Repository Layer** (`internal/memory/`): Data access implementations
-  - In-memory repository that loads channels from JSON file at startup
-
-- **API Layer** (`internal/api/`): HTTP handlers generated from OpenAPI spec
-  - Generated using oapi-codegen with strict server interface
-  - Code generation config in `internal/api/cfg.yaml`
-  - Returns nested structure: channels with embedded streams array
-
-- **Handlers** (`internal/handlers/`): Custom HTTP handlers not part of OpenAPI spec
-  - `playlist.go`: Generates M3U playlist by flattening channels→streams with incremental numbering
-  - `documentation.go`: Serves OpenAPI spec
-
-- **M3U Package** (`internal/m3u/`): M3U playlist encoding with TVG tags support
+- **API Layer** ([internal/api/](internal/api/)): HTTP handlers generated from [openapi.yaml](openapi.yaml)
+  - [api.gen.go](internal/api/api.gen.go): Generated using oapi-codegen with strict server interface (DO NOT EDIT)
+  - [health.go](internal/api/health.go): Health check endpoint implementation
+  - [server.go](internal/api/server.go): Server setup and interface compliance
+  - [cfg.yaml](internal/api/cfg.yaml): Code generation config
+- **Domain Layer** ([internal/](internal/)): Domain entities and repository interfaces
+  - [channel.go](internal/channel.go): Stream and Channel entities (stream-centric model)
+  - [repository.go](internal/repository.go): Repository interfaces
 
 ### Frontend (React + TypeScript)
 
-- Built with Vite and React 19
-- Uses TanStack Query for data fetching and caching
-- TypeScript types generated from OpenAPI spec (stored in `src/lib/api/v1.d.ts`)
-- Components in `src/components/` follow a modular structure
+- Built with Vite, React 19, TanStack Query
+- **Type-safe API client**: Uses `openapi-react-query` with `openapi-fetch`
+  - TypeScript types generated from OpenAPI spec in [src/lib/api/v1.d.ts](src/lib/api/v1.d.ts) (DO NOT EDIT)
+  - API client configured in [src/lib/api/client.ts](src/lib/api/client.ts)
+- Tailwind CSS v4 via `@tailwindcss/vite`
+- Path alias: `@/` → `./src/`
 
 ### Dual-Mode Server
 
-The Go application serves both API and frontend:
-- In development mode (`-dev` flag): Proxies to Vite dev server at `http://localhost:5173`
-- In production: Serves embedded static files from `dist/` directory
-- Uses `github.com/olivere/vite` package for Vite integration
+The Go application in [main.go](main.go) serves both API and frontend:
+
+- **Development** (`-dev` flag or via `air`): Proxies to Vite dev server at `http://localhost:5173`
+- **Production**: Serves embedded static files from `dist/` via `//go:embed all:dist`
+- **Routing**: Extension-based (no extension = API, has extension = static asset)
 
 ## Development Commands
 
-### Backend
+### Full Stack Development Workflow
+
+**Normal development** (two terminals):
 
 ```bash
-# Run with live reload (Air)
-air
+# Terminal 1: Vite dev server
+npm run dev
 
+# Terminal 2: Go server with live reload
+air
+```
+
+This is the recommended approach - changes to both frontend and backend will auto-reload.
+
+### Backend Only
+
+```bash
 # Build backend
 go build -o ./.tmp/main .
 
@@ -69,270 +71,476 @@ go run . -dev
 go generate ./internal/api/server.go
 ```
 
-### Frontend
+### Frontend Only
 
 ```bash
-# Start Vite dev server
-npm run dev
-
 # Build frontend for production
 npm run build
 
-# Type-check
+# Type-check only
 tsc -b
 
-# Lint
+# Lint and format
 npm run lint
+npm run format
+
+# Run tests
+npm run test
+npm run test:watch
+npm run test:ui
+npm run test:coverage
 
 # Preview production build
 npm run preview
 
 # Generate TypeScript types from OpenAPI spec
-npx openapi-typescript openapi.yaml -o src/lib/api/v1.d.ts
+npm run generate:api
 ```
-
-### Full Stack Development
-
-For active development, run both simultaneously:
-1. Terminal 1: `npm run dev` (Vite dev server on port 5173)
-2. Terminal 2: `air` (Go server with live reload on configured port)
 
 ## Configuration
 
-Environment variables (see `.env.example`):
+Environment variables (see [.env.example](.env.example)):
+
 - `HTTP_ADDRESS`: Server bind address (default: `0.0.0.0`)
 - `HTTP_PORT`: Server port (default: `8080`)
-- `STREAMS_FILE`: Path to channels JSON file (default: `streams.json`)
-- `ACESTREAM_URL`: Acestream engine URL (default: `http://127.0.0.1:6878/ace/getstream`)
-- `EPG_URL`: Optional EPG (Electronic Program Guide) URL
 
-## Data Format
+## Tooling & Quality Assurance
 
-Channels are defined in `streams.json` with nested structure:
-```json
-{
-  "channels": [
+### Code Quality Tools
+
+**Linting:**
+
+- **Frontend**: ESLint with TypeScript, React Hooks, accessibility (jsx-a11y), and import rules
+  - Config: [eslint.config.js](eslint.config.js)
+  - Run: `npm run lint` or `npm run lint:fix`
+- **Backend**: golangci-lint with 15+ linters (gofmt, govet, errcheck, staticcheck, gosec, revive, etc.)
+  - Config: [.golangci.yml](.golangci.yml)
+  - Run: `golangci-lint run` or `make lint`
+
+**Formatting:**
+
+- **Frontend**: Prettier with consistent rules (semi, no trailing commas, 100 char width)
+  - Config: [.prettierrc](.prettierrc), [.prettierignore](.prettierignore)
+  - Run: `npm run format` or `npm run format:check`
+- **Backend**: gofmt + goimports (automatic via VSCode on save)
+  - Run: `make format`
+- **Cross-editor**: EditorConfig ensures tabs for Go, spaces for TS/JS/JSON/YAML
+  - Config: [.editorconfig](.editorconfig)
+
+**Type Checking:**
+
+- TypeScript with strict mode enabled
+- Run: `npm run typecheck` or `npx tsc -b`
+
+**Testing:**
+
+- **Frontend**: Vitest with React Testing Library
+  - Config: [vitest.config.ts](vitest.config.ts), [src/test/setup.ts](src/test/setup.ts)
+  - Test utilities: [src/test/utils.tsx](src/test/utils.tsx) (custom render with providers)
+  - Run: `npm run test` (single run), `npm run test:watch` (watch mode)
+  - UI: `npm run test:ui` (opens Vitest UI)
+  - Coverage: `npm run test:coverage`
+  - Test files are co-located with source files (e.g., `Component.test.tsx` next to `Component.tsx`)
+- **Backend**: Go standard testing package
+  - Run: `go test ./...` or `make test-backend`
+
+### VSCode Integration
+
+Recommended extensions ([.vscode/extensions.json](.vscode/extensions.json)):
+
+- golang.go (Go support with gopls)
+- esbenp.prettier-vscode (Prettier formatting)
+- dbaeumer.vscode-eslint (ESLint integration)
+- bradlc.vscode-tailwindcss (Tailwind IntelliSense)
+- redhat.vscode-yaml (OpenAPI spec editing)
+- humao.rest-client (API testing)
+- editorconfig.editorconfig (EditorConfig support)
+
+**Debugging** ([.vscode/launch.json](.vscode/launch.json)):
+
+- "Launch Backend (Dev Mode)" - Start backend with `-dev` flag
+- "Attach to Frontend (Chrome)" - Debug React app in Chrome
+- "Full Stack Debug" - Debug both simultaneously
+
+**Tasks** ([.vscode/tasks.json](.vscode/tasks.json)):
+
+- Generate API code (backend + frontend)
+- Build (frontend, backend, or both)
+- Format all code
+- Lint (frontend + backend)
+- Type check
+- Run tests
+
+**Settings** ([.vscode/settings.json](.vscode/settings.json)):
+
+- Format on save with Prettier (frontend) and goimports (backend)
+- Auto-fix ESLint issues on save
+- gopls configuration with advanced analyses and hints
+- Tailwind IntelliSense for `cn()` utility
+
+### Git Hooks (Lefthook)
+
+Pre-commit hooks automatically run on `git commit` ([.lefthook.yml](.lefthook.yml)):
+
+- Lint and format staged frontend files
+- Format and lint staged Go files
+- Stage fixed files automatically
+
+Pre-push hooks run before `git push`:
+
+- TypeScript type checking
+- Frontend tests
+- Frontend build
+- Backend tests
+- Backend build
+
+**Setup**: Run `npx lefthook install` (or `npm install` with prepare script)
+
+### Makefile Commands
+
+Common tasks ([Makefile](Makefile)):
+
+```bash
+make help                    # Show all available commands
+make install                 # Install Go + npm dependencies
+make dev-backend             # Start backend with air (live reload)
+make dev-frontend            # Start Vite dev server
+make build                   # Build both frontend and backend
+make test                    # Run all tests (frontend + backend)
+make test-frontend           # Run frontend tests only
+make test-frontend-watch     # Run frontend tests in watch mode
+make test-frontend-ui        # Run frontend tests with UI
+make test-frontend-coverage  # Run frontend tests with coverage
+make test-backend            # Run backend tests only
+make test-coverage           # Run all tests with coverage
+make lint                    # Run all linters (frontend + backend)
+make format                  # Format all code
+make generate                # Generate code from OpenAPI spec
+make clean                   # Clean build artifacts
+make ci                      # Run all CI checks locally
+```
+
+### CI/CD Pipeline
+
+GitHub Actions workflow ([.github/workflows/ci.yaml](.github/workflows/ci.yaml)) runs on PRs and main/redesign branches:
+
+**Frontend checks:**
+
+- ESLint
+- Prettier format check
+- TypeScript type checking
+- Vitest tests
+- Build verification
+
+**Backend checks:**
+
+- Go build
+- Go tests with race detector
+- golangci-lint
+
+**OpenAPI validation:**
+
+- Validates OpenAPI spec syntax
+
+All checks must pass before merging.
+
+## Code Generation Workflow
+
+**Critical**: This project uses OpenAPI as the single source of truth. Always follow this sequence:
+
+1. **Define the API contract**: Edit [openapi.yaml](openapi.yaml)
+2. **Generate backend code**: `go generate ./internal/api/server.go`
+3. **Implement handlers**: Add implementation in [internal/api/](internal/api/) (you'll get compile errors until you do)
+4. **Generate frontend types**: `npm run generate:api`
+5. **Update frontend**: Use the `$api` client from [src/lib/api/client.ts](src/lib/api/client.ts) in React components
+
+**Tools used**:
+
+- Backend: `oapi-codegen` (managed as Go tool dependency in [go.mod](go.mod))
+- Frontend: `openapi-typescript` (generates types), `openapi-react-query` + `openapi-fetch` (type-safe hooks and client)
+
+**Never edit generated files**: [internal/api/api.gen.go](internal/api/api.gen.go) and [src/lib/api/v1.d.ts](src/lib/api/v1.d.ts) are regenerated from spec.
+
+## Using the API Client
+
+The frontend uses `openapi-react-query` for type-safe API calls:
+
+```tsx
+import { $api } from "@/lib/api/client";
+
+function MyComponent() {
+  // Type-safe query with auto-complete for paths and parameters
+  const { data, isLoading, isError } = $api.useQuery(
+    "get",
+    "/health",
+    {},
     {
-      "title": "Channel Name",
-      "guideId": "EPG ID",
-      "logo": "http://example.com/logo.png",
-      "groupTitle": "Category",
-      "streams": [
-        {
-          "acestream_id": "hex_hash",
-          "quality": "FHD",
-          "tags": ["TAG1", "TAG2"],
-          "networkCaching": 10000
-        }
-      ]
+      refetchInterval: 5000,
     }
-  ]
+  );
+
+  // data is fully typed based on OpenAPI schema
+  if (data) {
+    console.log(data.status, data.version, data.timestamp);
+  }
 }
 ```
 
-**Important Business Logic:**
-- A **Channel** represents a TV channel with EPG metadata (for program guides)
-- A **Stream** represents a way to access that channel (multiple streams per channel for different qualities/sources)
-- The `/playlist.m3u` endpoint flattens this structure: one M3U entry per stream, with incremental numbering
-  - First stream: "Channel Name [FHD] [TAG1]"
-  - Second stream: "Channel Name (#2) [FHD] [TAG2]"
-  - Nth stream: "Channel Name (#N) [quality] [tags]"
+For mutations:
 
-## Code Generation
+```tsx
+const { mutate } = $api.useMutation("post", "/streams");
+mutate({
+  body: { name: "My Stream", url: "..." },
+});
+```
 
-This project uses code generation for API contracts:
-
-1. **Backend**: OpenAPI → Go server code
-   - Trigger: `go generate ./internal/api/server.go`
-   - Source: `openapi.yaml`
-   - Output: `internal/api/api.gen.go`
-   - Tool: oapi-codegen (managed as Go tool dependency)
-
-2. **Frontend**: OpenAPI → TypeScript types
-   - Trigger: `npx openapi-typescript openapi.yaml -o src/lib/api/v1.d.ts`
-   - Source: `openapi.yaml`
-   - Output: `src/lib/api/v1.d.ts`
-
-When modifying the API, update `openapi.yaml` first, then regenerate both backend and frontend code.
-
-## Routing
-
-- `/` - Frontend application (served by Vite handler)
-- `/api/channels` - REST API endpoints (OpenAPI spec)
-- `/api/documentation.json` - OpenAPI spec JSON
-- `/playlist.m3u` - M3U playlist generator
-
-The main handler in `main.go` routes requests based on path and file extension to either the API router or Vite handler.
-
-## Key Dependencies
-
-### Backend
-- `oapi-codegen`: OpenAPI code generation
-- `kin-openapi`: OpenAPI spec parsing
-- `nethttp-middleware`: Request validation middleware
-- `olivere/vite`: Vite integration for Go
-
-### Frontend
-- `@tanstack/react-query`: Data fetching and state management
-- `openapi-fetch` + `openapi-react-query`: Type-safe API client from OpenAPI spec
-
-## Important Architectural Patterns
+## Key Architectural Patterns
 
 ### Strict Server Interface
 
-The API uses oapi-codegen's "strict server" pattern. This means:
-- Handlers receive typed request objects, not raw `http.Request`
-- Handlers return typed response objects, not write to `http.ResponseWriter`
-- Request parsing and response serialization are handled by generated code
-- All validation is declarative in `openapi.yaml`
+The API uses oapi-codegen's "strict server" pattern:
 
-When implementing API endpoints in `internal/api/channels.go`, work with domain types only.
+- Handlers receive **typed request objects**, not raw `http.Request`
+- Handlers return **typed response objects**, not write to `http.ResponseWriter`
+- Validation is **declarative in OpenAPI spec**, not in code
+- You'll get **compile errors** if you forget to implement an endpoint
+
+Example from [server.go](internal/api/server.go):
+
+```go
+// Server must implement StrictServerInterface
+var _ StrictServerInterface = (*Server)(nil)
+```
 
 ### Extension-Based Routing
 
-The routing logic in `main.go` uses file extensions to determine handler:
-- No extension or special paths (`/api/*`, `*.m3u`) → API router
-- Has extension (`.js`, `.css`, images) → Vite handler
-- Special case: `/` and `/index.html` always go to Vite handler
+The main handler in [main.go](main.go):78-100 routes requests:
 
-When adding new API endpoints, avoid file extensions in the path.
+- `/` or `/index.html` → Vite handler (always)
+- No extension (e.g., `/api/health`) → API router
+- Has extension (e.g., `/app.js`, `/logo.png`) → Vite handler
 
-### M3U Flattening Logic
+**Implication**: Don't use file extensions in API paths (e.g., `/api/data.json` would route to Vite, not API).
 
-The `playlist.go` handler implements critical business logic:
-- Tracks title occurrences with a map to handle duplicate channel names
-- Generates incremental numbering (#2, #3, etc.) for multiple streams of the same channel
-- Preserves EPG metadata (guideId, logo, groupTitle) across all streams
-- Each stream gets a unique URL with Acestream parameters
+### Dependency Injection
 
-This flattening is necessary because M3U format is flat (one entry per stream) but our data model is hierarchical (channels contain streams).
+Dependencies are wired in [main.go](main.go):68-75:
 
-### UUID Generation Strategy
-
-UUIDs are generated at load time (in `config.go`), not stored in JSON:
-- Keeps `streams.json` human-editable (no need to manually create UUIDs)
-- Provides type safety in API (OpenAPI spec requires UUID format)
-- Each application restart generates new UUIDs (acceptable for in-memory data)
-- Stream UUIDs inherit their parent channel's ID for referential integrity
-
-### Dependency Injection Flow
-
-Dependencies are wired in `main.go`:
 ```go
-// 1. Load data from JSON
-channels := loadChannels(streamsFile)
-
-// 2. Create repository with data
-repo := internalJson.NewInMemoryChannelsRepository(channels)
-
-// 3. Create use case with repository
-useCase := usecase.NewChannelsUseCase(repo)
-
-// 4. Inject use case into handlers
-server := api.NewServer(useCase)
-playlistHandler := handlers.NewPlaylistHandler(useCase, ...)
+server := api.NewServer()  // Add dependencies here as constructor args
+h := api.NewStrictHandler(server, nil)
+m := middleware.OapiRequestValidator(swagger)
 ```
 
-This makes the system testable and allows swapping implementations (e.g., adding a database repository).
+Currently no dependencies (health check only), but pattern is ready for repositories/use cases.
 
-## Common Development Tasks
-
-### Updating Dependencies
+## Updating Dependencies
 
 ```bash
-# Update Go dependencies
+# Go dependencies
 go get -u ./...
 go mod tidy
 go generate ./internal/api/server.go  # Regenerate after oapi-codegen updates
 go build -o ./.tmp/main .
 
-# Update npm dependencies
+# npm dependencies
 npm update
-npm outdated  # Check for major version updates
-npm install <package>@latest  # Install major updates
+npm outdated  # Check for major updates
+npm install <package>@latest
 npx openapi-typescript openapi.yaml -o src/lib/api/v1.d.ts  # Regenerate types
 npm run build
 ```
 
-Note: If you encounter Go dependency conflicts (especially with `yaml-jsonpath` and `go-yit`), you may need to pin `go-yit` to a compatible version.
+## Common Issues
 
-### Adding a New API Endpoint
+### Air doesn't restart
 
-1. Update `openapi.yaml` with new endpoint definition
-2. Regenerate backend code: `go generate ./internal/api/server.go`
-3. Implement handler in `internal/api/*.go` (you'll get compile errors until you do)
-4. Regenerate frontend types: `npx openapi-typescript openapi.yaml -o src/lib/api/v1.d.ts`
-5. Update frontend components to use new endpoint
-
-The strict server interface ensures you can't forget to implement the endpoint—you'll get a compile error.
-
-### Adding a Custom Handler (Outside OpenAPI)
-
-For endpoints that don't fit OpenAPI (like `/playlist.m3u`):
-1. Create handler in `internal/handlers/`
-2. Register in `main.go` router before the Vite handler
-3. Ensure the path doesn't conflict with extension-based routing logic
-
-### Modifying the Data Model
-
-1. Update domain entities in `internal/channel.go`
-2. Update JSON structs in `config.go` if storage format changes
-3. Update `openapi.yaml` to reflect new API schema
-4. Regenerate both backend and frontend code
-5. Update repository implementations in `internal/memory/`
-
-## Troubleshooting
-
-### Air doesn't restart after Go file changes
-- Check `.air.toml` excluded directories
-- Ensure you're editing files with `.go` extension
-- Air doesn't watch `src/` (frontend) or `node_modules/`
+- Check [.air.toml](.air.toml):10 - excludes `src/`, `node_modules/`, `dist/`
+- Air only watches `.go` files
 
 ### Vite dev server not found
+
 - Ensure `npm run dev` is running on port 5173
-- Backend must be started with `-dev` flag or via `air`
-- Check `vite.config.ts` doesn't override default port
+- Backend must be started with `-dev` flag or via `air` (see [.air.toml](.air.toml):6)
 
-### ESLint errors in `.direnv/` directory
-- The `eslint.config.js` should ignore `.direnv` (it contains Go module cache)
-- Pattern: `{ ignores: ['dist', '.direnv'] }`
+### Type mismatch between frontend and backend
 
-### TypeScript types don't match API response
 - Regenerate types: `npx openapi-typescript openapi.yaml -o src/lib/api/v1.d.ts`
-- Ensure `openapi.yaml` matches backend implementation
-- Check if you forgot to regenerate after updating OpenAPI spec
+- Verify [openapi.yaml](openapi.yaml) matches backend implementation
 
-### Go generate fails with YAML errors
-- Usually a dependency version conflict (yaml.v3 vs yaml.v4)
-- Check `go mod graph | grep yaml` to debug
-- May need to pin `go-yit` to compatible version
+### YAML version conflicts
 
-## File Organization Reference
+- Check `go mod graph | grep yaml`
+- Common issue: `yaml.v3` vs `yaml.v4` conflicts
+- May need to pin `go-yit` version
 
-**Do not edit (generated)**:
-- `internal/api/api.gen.go` - Generated from OpenAPI spec
-- `src/lib/api/v1.d.ts` - Generated TypeScript types
-- `dist/` - Built frontend assets
+## File Organization
 
-**Edit these for API changes**:
-- `openapi.yaml` - Single source of truth for API contract
-- `internal/api/channels.go` - API endpoint implementations
-- `internal/handlers/*.go` - Custom (non-OpenAPI) handlers
+**Generated (never edit)**:
 
-**Edit these for business logic**:
-- `internal/channel.go` - Domain entities (Channel, Stream)
-- `internal/repository.go` - Repository interfaces
-- `internal/usecase/*.go` - Application business rules
-- `internal/memory/*.go` - In-memory data access
+- [internal/api/api.gen.go](internal/api/api.gen.go)
+- [src/lib/api/v1.d.ts](src/lib/api/v1.d.ts)
+- `dist/`
 
-**Edit these for frontend**:
-- `src/components/` - React components
-- `src/lib/api/client.ts` - API client setup
-- `src/App.tsx` - Application root
+**API contract (edit first)**:
 
-**Infrastructure**:
-- `main.go` - Application entry point, routing, dependency injection
-- `config.go` - JSON loading and parsing
-- `.air.toml` - Live reload configuration
-- `vite.config.ts` - Vite build configuration
-- `Containerfile` - Container build (multi-stage with frontend + backend)
+- [openapi.yaml](openapi.yaml)
+
+**Backend implementation**:
+
+- [main.go](main.go) - Entry point, routing, dependency injection
+- [internal/api/\*.go](internal/api/) - API handlers (except api.gen.go)
+- [internal/\*.go](internal/) - Domain entities, repositories
+
+**Frontend**:
+
+- [src/App.tsx](src/App.tsx) - Root component
+- [src/components/](src/components/) - React components
+- [src/lib/utils.ts](src/lib/utils.ts) - Utilities
+
+**Configuration**:
+
+- [.air.toml](.air.toml) - Live reload config (backend)
+- [vite.config.ts](vite.config.ts) - Vite build config (frontend)
+- [package.json](package.json) - npm scripts and dependencies
+- [go.mod](go.mod) - Go modules (note `tool` directive for oapi-codegen)
+- [Containerfile](Containerfile) - Multi-stage Docker build
+
+## Current Features
+
+- **Health Check API**: `GET /api/health` returns `{"status": "healthy", "version": "1.0.0", "timestamp": "..."}`
+- **Health Check UI**: Real-time status with 5s polling, dark mode support
+
+## Next Steps (Roadmap)
+
+See [docs/PRD.md](docs/PRD.md) for full feature requirements. Key upcoming features:
+
+1. Stream management (CRUD operations)
+2. Bulk stream import with parsing (text/JSON formats)
+3. EPG integration and fuzzy matching
+4. M3U playlist generation
+5. Drag-and-drop stream reordering
+
+The Clean Architecture foundation is ready - add layers (use cases, repositories, domain logic) as features grow.
+
+## Testing Best Practices
+
+### Frontend Testing Patterns
+
+**1. Test File Organization**
+
+Co-locate test files with source files:
+
+```
+src/
+├── components/
+│   ├── Health.tsx
+│   └── Health.test.tsx
+├── lib/
+│   ├── utils.ts
+│   └── utils.test.ts
+```
+
+**2. Test Utilities**
+
+Use custom render from [src/test/utils.tsx](src/test/utils.tsx) for components that need providers:
+
+```tsx
+import { renderWithProviders, screen, userEvent } from "@/test/utils";
+
+// Automatically wraps with QueryClientProvider
+renderWithProviders(<MyComponent />);
+```
+
+**3. Mocking API Calls**
+
+For components using `$api.useQuery` or `$api.useMutation`, mock the API client:
+
+```tsx
+import { vi } from "vitest";
+import { $api } from "@/lib/api/client";
+
+vi.mock("@/lib/api/client", () => ({
+  $api: {
+    useQuery: vi.fn(),
+    useMutation: vi.fn(),
+  },
+}));
+
+// In test
+vi.mocked($api.useQuery).mockReturnValue({
+  data: mockData,
+  isLoading: false,
+  isError: false,
+} as any);
+```
+
+**4. Testing Hooks with Side Effects**
+
+For hooks that use localStorage or other browser APIs, mock them in `beforeEach`:
+
+```tsx
+beforeEach(() => {
+  localStorage.clear();
+  Object.defineProperty(window, "matchMedia", {
+    writable: true,
+    value: vi.fn().mockImplementation((query) => ({
+      matches: false,
+      media: query,
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+    })),
+  });
+});
+```
+
+**5. Test Coverage Guidelines**
+
+- **Utilities**: Aim for >90% coverage (pure functions are easy to test)
+- **UI Components**: Focus on user interactions and accessibility
+- **API-integrated components**: Test loading, error, and success states
+- **Custom hooks**: Test state changes and side effects
+
+**6. What to Test**
+
+✅ **DO test:**
+
+- Component renders correctly
+- User interactions (clicks, typing, form submission)
+- Conditional rendering based on props/state
+- Accessibility attributes (aria-labels, roles)
+- Integration with TanStack Query (loading, error, success states)
+
+❌ **DON'T test:**
+
+- Implementation details (internal state variable names)
+- Third-party library internals
+- Styling (unless critical for functionality)
+- Generated code ([src/lib/api/v1.d.ts](src/lib/api/v1.d.ts), [internal/api/api.gen.go](internal/api/api.gen.go))
+
+**7. Running Tests During Development**
+
+```bash
+# Watch mode for TDD workflow
+npm run test:watch
+
+# UI mode for interactive debugging
+npm run test:ui
+
+# Single run (used in CI)
+npm run test
+
+# With coverage
+npm run test:coverage
+```
+
+### Backend Testing
+
+Go tests follow standard Go testing practices:
+
+- Unit tests for domain logic
+- Integration tests for repositories
+- Handler tests using httptest
+
+Run with: `make test-backend` or `go test ./...`

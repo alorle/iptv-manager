@@ -1,88 +1,40 @@
 openapi: 3.0.3
 info:
-  title: Acestream Manager API
-  description: API for managing Acestream channels and generating M3U playlists
-  version: 2.0.0
+  title: Health Check API
+  description: Simple health check API for verifying application and infrastructure status
+  version: 1.0.0
   contact:
-    name: Acestream Manager
+    name: IPTV Manager
 
 servers:
   - url: http://localhost:8080/api
     description: Local development server
 
 tags:
-  - name: channels
-    description: Read-only operations for channel views (derived from streams grouped by guide_id)
-  - name: streams
-    description: CRUD operations for streams (primary entity)
-  - name: epg
-    description: Operations related to EPG (Electronic Program Guide)
-  - name: config
-    description: Application configuration
+  - name: health
+    description: Health check operations
 
 components:
   schemas:
-    Channel:
+    HealthResponse:
       type: object
-      description: Read-only channel view derived from streams grouped by guide_id and enriched with EPG metadata
       required:
-        - guide_id
-        - title
-        - group_title
-        - streams
+        - status
+        - version
+        - timestamp
       properties:
-        guide_id:
+        status:
           type: string
-          description: EPG ID for electronic program guide information (grouping key)
-        title:
+          description: Health status of the application
+          example: healthy
+        version:
           type: string
-          description: Title of the channel (from EPG)
-          readOnly: true
-        logo:
+          description: Application version
+          example: 1.0.0
+        timestamp:
           type: string
-          description: URL to the channel logo image (from EPG)
-          readOnly: true
-        group_title:
-          type: string
-          description: Category/group of the channel (from EPG or manual)
-          readOnly: true
-        streams:
-          type: array
-          items:
-            $ref: "#/components/schemas/Stream"
-          description: Available streams for this channel
-          readOnly: true
-
-    Stream:
-      type: object
-      description: Primary entity representing a single Acestream source
-      required:
-        - acestream_id
-        - guide_id
-        - network_caching
-      properties:
-        id:
-          type: string
-          format: uuid
-          description: Unique identifier for the stream
-          readOnly: true
-        guide_id:
-          type: string
-          description: EPG ID that groups this stream into a channel
-        acestream_id:
-          type: string
-          description: Acestream ID for this stream
-        quality:
-          type: string
-          description: Quality of the stream (e.g., SD, HD, FHD)
-        tags:
-          type: array
-          items:
-            type: string
-          description: Tags associated with this stream
-        network_caching:
-          type: integer
-          description: Network caching value in milliseconds
+          format: date-time
+          description: Current server timestamp in ISO 8601 format
 
     Error:
       type: object
@@ -94,297 +46,21 @@ components:
           type: integer
           description: Error code
 
-    EPGChannel:
-      type: object
-      required:
-        - id
-        - name
-      properties:
-        id:
-          type: string
-          description: EPG channel identifier (e.g., dazn.f1.hd)
-        name:
-          type: string
-          description: Display name of the channel
-        logo:
-          type: string
-          description: URL to the channel logo from EPG
-
-    Config:
-      type: object
-      required:
-        - acestream_url
-      properties:
-        acestream_url:
-          type: string
-          description: Base URL for Acestream/Acexy proxy
-          example: http://acexy.alorle.com/ace/getstream
-
 paths:
-  /channels:
+  /health:
     get:
-      operationId: listChannels
+      operationId: getHealth
       tags:
-        - channels
-      summary: List all channel views
-      description: Returns a list of all channels (derived from streams grouped by guide_id)
+        - health
+      summary: Get application health status
+      description: Returns the current health status of the application, including version and timestamp
       responses:
         "200":
-          description: Successful operation
+          description: Application is healthy
           content:
             application/json:
               schema:
-                type: array
-                items:
-                  $ref: "#/components/schemas/Channel"
-        "500":
-          description: Server error
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/Error"
-
-  /channels/{guide_id}:
-    get:
-      operationId: getChannelByGuideId
-      tags:
-        - channels
-      summary: Get a channel view by guide_id
-      description: Returns a single channel view (streams grouped by guide_id with EPG metadata)
-      parameters:
-        - name: guide_id
-          in: path
-          required: true
-          description: EPG guide ID
-          schema:
-            type: string
-      responses:
-        "200":
-          description: Successful operation
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/Channel"
-        "404":
-          description: Channel not found (no streams with this guide_id)
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/Error"
-        "500":
-          description: Server error
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/Error"
-
-  /streams:
-    get:
-      operationId: listStreams
-      tags:
-        - streams
-      summary: List all streams
-      description: Returns a list of all streams
-      responses:
-        "200":
-          description: Successful operation
-          content:
-            application/json:
-              schema:
-                type: array
-                items:
-                  $ref: "#/components/schemas/Stream"
-        "500":
-          description: Server error
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/Error"
-    post:
-      operationId: createStream
-      tags:
-        - streams
-      summary: Create a new stream
-      description: Creates a new stream. Channel view is automatically derived.
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/Stream"
-      responses:
-        "201":
-          description: Stream created successfully
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/Stream"
-        "400":
-          description: Invalid input
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/Error"
-        "500":
-          description: Server error
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/Error"
-
-  /streams/{id}:
-    get:
-      operationId: getStream
-      tags:
-        - streams
-      summary: Get a stream by ID
-      description: Returns a single stream
-      parameters:
-        - name: id
-          in: path
-          required: true
-          description: Stream ID
-          schema:
-            type: string
-            format: uuid
-      responses:
-        "200":
-          description: Successful operation
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/Stream"
-        "404":
-          description: Stream not found
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/Error"
-        "500":
-          description: Server error
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/Error"
-    put:
-      operationId: updateStream
-      tags:
-        - streams
-      summary: Update a stream
-      description: Updates an existing stream. Channel view is automatically updated.
-      parameters:
-        - name: id
-          in: path
-          required: true
-          description: Stream ID
-          schema:
-            type: string
-            format: uuid
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/Stream"
-      responses:
-        "200":
-          description: Stream updated successfully
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/Stream"
-        "400":
-          description: Invalid input
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/Error"
-        "404":
-          description: Stream not found
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/Error"
-        "500":
-          description: Server error
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/Error"
-    delete:
-      operationId: deleteStream
-      tags:
-        - streams
-      summary: Delete a stream
-      description: Deletes a stream by ID. Channel view is automatically updated.
-      parameters:
-        - name: id
-          in: path
-          required: true
-          description: Stream ID
-          schema:
-            type: string
-            format: uuid
-      responses:
-        "204":
-          description: Stream deleted successfully
-        "404":
-          description: Stream not found
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/Error"
-        "500":
-          description: Server error
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/Error"
-
-  /epg/channels:
-    get:
-      operationId: listEPGChannels
-      tags:
-        - epg
-      summary: List all EPG channels
-      description: Returns a list of all channels available in the EPG guide
-      parameters:
-        - name: search
-          in: query
-          required: false
-          description: Search query to filter channels by name or ID
-          schema:
-            type: string
-      responses:
-        "200":
-          description: Successful operation
-          content:
-            application/json:
-              schema:
-                type: array
-                items:
-                  $ref: "#/components/schemas/EPGChannel"
-        "500":
-          description: Server error
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/Error"
-
-  /config:
-    get:
-      operationId: getConfig
-      tags:
-        - config
-      summary: Get application configuration
-      description: Returns configuration values needed by the frontend
-      responses:
-        "200":
-          description: Successful operation
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/Config"
+                $ref: "#/components/schemas/HealthResponse"
         "500":
           description: Server error
           content:

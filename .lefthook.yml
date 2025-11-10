@@ -1,0 +1,42 @@
+pre-commit:
+  parallel: true
+  commands:
+    frontend-lint:
+      glob: "*.{ts,tsx,js,jsx}"
+      run: npm run lint -- --fix {staged_files}
+      stage_fixed: true
+
+    frontend-format:
+      glob: "*.{ts,tsx,js,jsx,json,yaml,yml,css,md}"
+      run: npm run format -- {staged_files}
+      stage_fixed: true
+
+    backend-format:
+      glob: "*.go"
+      run: |
+        gofmt -w {staged_files}
+        goimports -w {staged_files}
+      stage_fixed: true
+
+    backend-lint:
+      glob: "*.go"
+      run: golangci-lint run --fix ./...
+      stage_fixed: true
+
+pre-push:
+  parallel: false
+  commands:
+    frontend-typecheck:
+      run: npx tsc -b
+
+    frontend-test:
+      run: npm run test
+
+    frontend-build:
+      run: npm run build
+
+    backend-test:
+      run: go test ./...
+
+    backend-build:
+      run: go build -o ./.tmp/main .

@@ -1,0 +1,198 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Start Vite Dev Server",
+      "type": "npm",
+      "script": "dev",
+      "isBackground": true,
+      "problemMatcher": {
+        "pattern": {
+          "regexp": "^$",
+          "file": 1,
+          "location": 2,
+          "message": 3
+        },
+        "background": {
+          "activeOnStart": true,
+          "beginsPattern": "VITE.*ready",
+          "endsPattern": "Local:.*http://localhost:5173"
+        }
+      },
+      "presentation": {
+        "reveal": "silent",
+        "panel": "dedicated",
+        "group": "dev"
+      }
+    },
+    {
+      "label": "Generate API Code (Backend)",
+      "type": "shell",
+      "command": "go",
+      "args": ["generate", "./internal/api/server.go"],
+      "group": {
+        "kind": "build",
+        "isDefault": false
+      },
+      "presentation": {
+        "reveal": "always",
+        "panel": "shared",
+        "group": "generate"
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "Generate TypeScript Types (Frontend)",
+      "type": "npm",
+      "script": "generate:api",
+      "group": {
+        "kind": "build",
+        "isDefault": false
+      },
+      "presentation": {
+        "reveal": "always",
+        "panel": "shared",
+        "group": "generate"
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "Generate All API Code",
+      "dependsOn": [
+        "Generate API Code (Backend)",
+        "Generate TypeScript Types (Frontend)"
+      ],
+      "dependsOrder": "sequence",
+      "group": {
+        "kind": "build",
+        "isDefault": false
+      },
+      "presentation": {
+        "reveal": "always",
+        "panel": "shared",
+        "group": "generate"
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "Build Frontend",
+      "type": "npm",
+      "script": "build",
+      "group": {
+        "kind": "build",
+        "isDefault": false
+      },
+      "presentation": {
+        "reveal": "always",
+        "panel": "shared",
+        "group": "build"
+      },
+      "problemMatcher": ["$tsc"]
+    },
+    {
+      "label": "Build Backend",
+      "type": "shell",
+      "command": "go",
+      "args": ["build", "-o", "./.tmp/main", "."],
+      "group": {
+        "kind": "build",
+        "isDefault": false
+      },
+      "presentation": {
+        "reveal": "always",
+        "panel": "shared",
+        "group": "build"
+      },
+      "problemMatcher": ["$go"]
+    },
+    {
+      "label": "Build All",
+      "dependsOn": ["Build Frontend", "Build Backend"],
+      "dependsOrder": "parallel",
+      "group": {
+        "kind": "build",
+        "isDefault": true
+      },
+      "presentation": {
+        "reveal": "always",
+        "panel": "shared",
+        "group": "build"
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "Format All Code",
+      "type": "shell",
+      "command": "npm run format && gofmt -s -w . && goimports -w .",
+      "presentation": {
+        "reveal": "always",
+        "panel": "shared",
+        "group": "format"
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "Lint Frontend",
+      "type": "npm",
+      "script": "lint",
+      "group": {
+        "kind": "test",
+        "isDefault": false
+      },
+      "presentation": {
+        "reveal": "always",
+        "panel": "shared",
+        "group": "lint"
+      },
+      "problemMatcher": ["$eslint-stylish"]
+    },
+    {
+      "label": "Lint Backend",
+      "type": "shell",
+      "command": "golangci-lint",
+      "args": ["run", "--timeout=5m"],
+      "group": {
+        "kind": "test",
+        "isDefault": false
+      },
+      "presentation": {
+        "reveal": "always",
+        "panel": "shared",
+        "group": "lint"
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "Type Check",
+      "type": "shell",
+      "command": "npx",
+      "args": ["tsc", "-b"],
+      "group": {
+        "kind": "test",
+        "isDefault": false
+      },
+      "presentation": {
+        "reveal": "always",
+        "panel": "shared",
+        "group": "test"
+      },
+      "problemMatcher": ["$tsc"]
+    },
+    {
+      "label": "Run Go Tests",
+      "type": "shell",
+      "command": "go",
+      "args": ["test", "-v", "./..."],
+      "group": {
+        "kind": "test",
+        "isDefault": true
+      },
+      "presentation": {
+        "reveal": "always",
+        "panel": "shared",
+        "group": "test"
+      },
+      "problemMatcher": ["$go"]
+    }
+  ]
+}

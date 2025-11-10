@@ -1,16 +1,17 @@
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import './App.css'
-import ChannelsList from './components/ChannelsList/ChannelsList';
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 
+import HealthCheck from "./components/Health";
+import { ThemeToggle } from "./components/ThemeToggle";
 
-const queryClient = new QueryClient()
+const queryClient = new QueryClient();
 
 function App() {
   return (
     <QueryClientProvider client={queryClient}>
-      <ChannelsList />
+      <HealthCheck />
+      <ThemeToggle />
     </QueryClientProvider>
   );
 }
 
-export default App
+export default App;

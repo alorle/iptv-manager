@@ -1,22 +1,16 @@
 package main
 
 import (
-	"context"
 	"embed"
 	"flag"
 	"fmt"
 	"io/fs"
 	"net/http"
-	"net/url"
 	"os"
 	"path/filepath"
 	"time"
 
 	"github.com/alorle/iptv-manager/internal/api"
-	"github.com/alorle/iptv-manager/internal/epg"
-	"github.com/alorle/iptv-manager/internal/handlers"
-	internalJson "github.com/alorle/iptv-manager/internal/memory"
-	"github.com/alorle/iptv-manager/internal/usecase"
 	middleware "github.com/oapi-codegen/nethttp-middleware"
 	"github.com/olivere/vite"
 )
@@ -25,11 +19,8 @@ import (
 var dist embed.FS
 
 var (
-	httpAddress   = os.Getenv("HTTP_ADDRESS")
-	httpPort      = os.Getenv("HTTP_PORT")
-	streamsFile   = os.Getenv("STREAMS_FILE")
-	acestreamBase = os.Getenv("ACESTREAM_URL")
-	epgUrl        = os.Getenv("EPG_URL")
+	httpAddress = os.Getenv("HTTP_ADDRESS")
+	httpPort    = os.Getenv("HTTP_PORT")
 )
 
 func main() {
@@ -38,19 +29,28 @@ func main() {
 	)
 	flag.Parse()
 
+	// Set defaults
+	if httpAddress == "" {
+		httpAddress = "0.0.0.0"
+	}
+	if httpPort == "" {
+		httpPort = "8080"
+	}
+
+	// Configure Vite handler for serving frontend
 	c := vite.Config{
 		FS:      os.DirFS("."),
 		IsDev:   true,
 		ViteURL: "http://localhost:5173",
 	}
 	if !*isDev {
-		if fs, err := fs.Sub(dist, "dist"); err != nil {
+		fs, err := fs.Sub(dist, "dist")
+		if err != nil {
 			panic(err)
-		} else {
-			c = vite.Config{
-				FS:    fs,
-				IsDev: false,
-			}
+		}
+		c = vite.Config{
+			FS:    fs,
+			IsDev: false,
 		}
 	}
 	viteHandler, err := vite.NewHandler(c)
@@ -58,17 +58,7 @@ func main() {
 		panic(err)
 	}
 
-	if acestreamBase == "" {
-		acestreamBase = "http://127.0.0.1:6878/ace/getstream"
-	}
-
-	acestreamURL, err := url.Parse(acestreamBase)
-	if err != nil {
-		fmt.Printf("Error parsing ACESTREAM_URL: %v\n", err)
-		return
-	}
-	fmt.Printf("acestreamURL: %v\n", acestreamURL)
-
+	// Load OpenAPI spec
 	swagger, err := api.GetSwagger()
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error loading swagger spec\n: %s", err)
@@ -76,53 +66,19 @@ func main() {
 	}
 	swagger.Servers = nil
 
-	// Load streams from JSON file (supports both new flat format and old nested format)
-	streams, err := loadStreams(streamsFile)
-	if err != nil {
-		fmt.Printf("Error loading streams: %v\n", err)
-		return
-	}
-
-	// Create stream repository
-	streamRepo, err := internalJson.NewInMemoryStreamsRepository(streams)
-	if err != nil {
-		fmt.Printf("Error creating StreamRepository: %v\n", err)
-		return
-	}
-	streamRepo.SetFilePath(streamsFile)
-
-	// Initialize EPG service
-	epgClient := epg.NewClient(epgUrl)
-	epgCache := epg.NewCache(epgClient, 12*time.Hour) // 12-hour cache TTL
-
-	// Create context for EPG operations
-	ctx := context.Background()
-
-	// Fetch initial EPG data (non-blocking)
-	go epgCache.InitialFetch(ctx)
-
-	// Start background EPG refresh
-	epgCache.StartBackgroundRefresh(ctx)
-
-	epgUseCase := usecase.NewEPGUseCase(epgCache)
-
-	// Create stream use case (replaces channel use case)
-	streamUseCase := usecase.NewStreamUseCase(streamRepo, epgCache)
-
+	// Create API server (no dependencies needed for health check)
+	server := api.NewServer()
+	h := api.NewStrictHandler(server, nil)
 	m := middleware.OapiRequestValidator(swagger)
 
+	// Setup routes
 	router := http.NewServeMux()
-
-	server := api.NewServer(streamUseCase, epgUseCase, acestreamBase)
-	h := api.NewStrictHandler(server, nil)
-
-	router.Handle("/playlist.m3u", handlers.NewPlaylistHandler(streamUseCase, acestreamURL, epgUrl))
 	router.Handle("/api/", http.StripPrefix("/api", m(api.HandlerFromMux(h, nil))))
-	router.Handle("/api/documentation.json", handlers.NewDocumentationHandler(swagger))
 
+	// Main handler with extension-based routing
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/" || r.URL.Path == "/index.html" {
-			// Server the index.html file.
+			// Serve the index.html file
 			ctx := r.Context()
 			ctx = vite.MetadataToContext(ctx, vite.Metadata{
 				Title: "IPTV Manager",
@@ -134,17 +90,28 @@ func main() {
 		// Get the extension of the requested file
 		ext := filepath.Ext(r.URL.Path)
 
-		if len(ext) == 0 || r.URL.Path == "/api/documentation.json" || ext == ".m3u" {
+		// If no extension, it's an API route
+		if len(ext) == 0 {
 			router.ServeHTTP(w, r)
 			return
 		}
 
+		// Otherwise, serve static assets via Vite
 		viteHandler.ServeHTTP(w, r)
 	})
 
+	// Start server
 	s := &http.Server{
-		Handler: handler,
-		Addr:    fmt.Sprintf("%s:%s", httpAddress, httpPort),
+		Handler:           handler,
+		Addr:              fmt.Sprintf("%s:%s", httpAddress, httpPort),
+		ReadHeaderTimeout: 10 * time.Second,
+	}
+
+	fmt.Printf("Starting server on %s:%s\n", httpAddress, httpPort)
+	if *isDev {
+		fmt.Println("Running in DEVELOPMENT mode (proxying to Vite at http://localhost:5173)")
+	} else {
+		fmt.Println("Running in PRODUCTION mode (serving embedded assets)")
 	}
 
 	if err := s.ListenAndServe(); err != nil {
