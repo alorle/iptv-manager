@@ -73,6 +73,10 @@ func main() {
 	}
 	swagger.Servers = nil
 
+	if streamsFile == "" {
+		streamsFile = "streams.json"
+	}
+
 	channels, err := loadChannels(streamsFile)
 	if err != nil {
 		fmt.Printf("Error creating JSONChannelRepository: %v\n", err)
@@ -119,6 +123,13 @@ func main() {
 
 		viteHandler.ServeHTTP(w, r)
 	})
+
+	if httpAddress == "" {
+		httpAddress = "0.0.0.0"
+	}
+	if httpPort == "" {
+		httpPort = "8080"
+	}
 
 	s := &http.Server{
 		Handler: handler,
