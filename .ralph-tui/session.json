@@ -3,10 +3,10 @@
   "sessionId": "9e6ef0b1-49e0-4323-a350-3e44c9e24270",
   "status": "running",
   "startedAt": "2026-01-30T11:18:48.636Z",
-  "updatedAt": "2026-01-30T11:21:14.009Z",
-  "currentIteration": 0,
+  "updatedAt": "2026-01-30T11:24:53.002Z",
+  "currentIteration": 1,
   "maxIterations": 0,
-  "tasksCompleted": 0,
+  "tasksCompleted": 1,
   "isPaused": false,
   "agentPlugin": "claude",
   "trackerState": {
@@ -17,8 +17,8 @@
       {
         "id": "US-001",
         "title": "Add configuration for cache and player URL",
-        "status": "open",
-        "completedInSession": false
+        "status": "completed",
+        "completedInSession": true
       },
       {
         "id": "US-002",
@@ -64,9 +64,20 @@
       }
     ]
   },
-  "iterations": [],
+  "iterations": [
+    {
+      "iteration": 1,
+      "status": "completed",
+      "taskId": "US-001",
+      "taskTitle": "Add configuration for cache and player URL",
+      "taskCompleted": true,
+      "durationMs": 143476,
+      "startedAt": "2026-01-30T11:18:50.530Z",
+      "endedAt": "2026-01-30T11:21:14.006Z"
+    }
+  ],
   "skippedTaskIds": [],
   "cwd": "/home/alorle/gh/alorle/iptv-manager",
   "activeTaskIds": [],
-  "subagentPanelVisible": false
+  "subagentPanelVisible": true
 }
