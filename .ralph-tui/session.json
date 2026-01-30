@@ -1,0 +1,72 @@
+{
+  "version": 1,
+  "sessionId": "9e6ef0b1-49e0-4323-a350-3e44c9e24270",
+  "status": "running",
+  "startedAt": "2026-01-30T11:18:48.636Z",
+  "updatedAt": "2026-01-30T11:21:14.009Z",
+  "currentIteration": 0,
+  "maxIterations": 0,
+  "tasksCompleted": 0,
+  "isPaused": false,
+  "agentPlugin": "claude",
+  "trackerState": {
+    "plugin": "json",
+    "prdPath": "./prd.json",
+    "totalTasks": 8,
+    "tasks": [
+      {
+        "id": "US-001",
+        "title": "Add configuration for cache and player URL",
+        "status": "open",
+        "completedInSession": false
+      },
+      {
+        "id": "US-002",
+        "title": "Implement persistent cache storage layer",
+        "status": "open",
+        "completedInSession": false
+      },
+      {
+        "id": "US-003",
+        "title": "Implement M3U fetching with cache fallback",
+        "status": "open",
+        "completedInSession": false
+      },
+      {
+        "id": "US-004",
+        "title": "Implement acestream:// URL rewriting",
+        "status": "open",
+        "completedInSession": false
+      },
+      {
+        "id": "US-005",
+        "title": "Implement cache expiration and refresh logic",
+        "status": "open",
+        "completedInSession": false
+      },
+      {
+        "id": "US-006",
+        "title": "Add /playlists/elcano.m3u endpoint",
+        "status": "open",
+        "completedInSession": false
+      },
+      {
+        "id": "US-007",
+        "title": "Add /playlists/newera.m3u endpoint",
+        "status": "open",
+        "completedInSession": false
+      },
+      {
+        "id": "US-008",
+        "title": "Add integration tests for endpoints",
+        "status": "open",
+        "completedInSession": false
+      }
+    ]
+  },
+  "iterations": [],
+  "skippedTaskIds": [],
+  "cwd": "/home/alorle/gh/alorle/iptv-manager",
+  "activeTaskIds": [],
+  "subagentPanelVisible": false
+}
