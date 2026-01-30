@@ -23,6 +23,7 @@ ENV CACHE_DIR=/cache
 
 VOLUME [ "/cache" ]
 
+COPY --from=builder /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
 COPY --from=builder /etc/passwd /etc/group /etc/
 COPY --from=builder /app /app
 
