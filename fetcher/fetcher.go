@@ -92,3 +92,66 @@ func (f *Fetcher) IsExpired(url string) (bool, error) {
 	cacheKey := cache.DeriveKeyFromURL(url)
 	return f.storage.IsExpired(cacheKey, f.cacheTTL)
 }
+
+// FetchWithCache fetches M3U content with cache-first strategy
+// Checks cache freshness first, only fetches if expired
+// Returns the content, whether it was from cache, and whether cache was stale
+func (f *Fetcher) FetchWithCache(url string) ([]byte, bool, bool, error) {
+	cacheKey := cache.DeriveKeyFromURL(url)
+
+	// Step 1: Check if cached content exists
+	entry, cacheErr := f.storage.Get(cacheKey)
+
+	if cacheErr == nil {
+		// Cache exists - check if it's fresh
+		expired, expErr := f.storage.IsExpired(cacheKey, f.cacheTTL)
+		if expErr != nil {
+			log.Printf("Error checking cache expiration for %s: %v", url, expErr)
+			// Treat as expired and continue to fetch
+		} else if !expired {
+			// Cache is fresh - serve immediately
+			log.Printf("Serving fresh cache for: %s (cached at: %s, age: %s)",
+				url, entry.Timestamp.Format(time.RFC3339), time.Since(entry.Timestamp))
+			return entry.Content, true, false, nil
+		}
+
+		// Cache is expired - log and attempt refresh
+		log.Printf("Cache expired for: %s (cached at: %s, age: %s)",
+			url, entry.Timestamp.Format(time.RFC3339), time.Since(entry.Timestamp))
+	} else {
+		// No cache exists
+		log.Printf("No cache found for: %s", url)
+	}
+
+	// Step 2: Cache is expired or doesn't exist - attempt to fetch
+	log.Printf("Attempting to fetch M3U from: %s", url)
+
+	content, fetchErr := f.fetchFromURL(url)
+	if fetchErr == nil {
+		// Fetch succeeded - update cache and serve new content
+		log.Printf("Successfully fetched M3U from source: %s", url)
+
+		if setErr := f.storage.Set(cacheKey, content); setErr != nil {
+			log.Printf("Warning: Failed to update cache for %s: %v", url, setErr)
+		} else {
+			log.Printf("Cache updated for: %s", url)
+		}
+
+		return content, false, false, nil
+	}
+
+	// Step 3: Fetch failed - check if we can serve stale cache
+	log.Printf("Failed to fetch M3U from source: %v", fetchErr)
+
+	if cacheErr != nil {
+		// No cache available at all
+		log.Printf("No cache available for fallback: %s", url)
+		return nil, false, false, fmt.Errorf("upstream fetch failed and no cache available: %w", fetchErr)
+	}
+
+	// Serve stale cache with warning
+	log.Printf("WARNING: Serving stale cache for: %s (cached at: %s, age: %s)",
+		url, entry.Timestamp.Format(time.RFC3339), time.Since(entry.Timestamp))
+
+	return entry.Content, true, true, nil
+}
