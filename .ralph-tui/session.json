@@ -3,10 +3,10 @@
   "sessionId": "9e6ef0b1-49e0-4323-a350-3e44c9e24270",
   "status": "running",
   "startedAt": "2026-01-30T11:18:48.636Z",
-  "updatedAt": "2026-01-30T11:31:06.546Z",
-  "currentIteration": 3,
+  "updatedAt": "2026-01-30T11:34:09.022Z",
+  "currentIteration": 4,
   "maxIterations": 0,
-  "tasksCompleted": 3,
+  "tasksCompleted": 4,
   "isPaused": false,
   "agentPlugin": "claude",
   "trackerState": {
@@ -35,8 +35,8 @@
       {
         "id": "US-004",
         "title": "Implement acestream:// URL rewriting",
-        "status": "open",
-        "completedInSession": false
+        "status": "completed",
+        "completedInSession": true
       },
       {
         "id": "US-005",
@@ -94,6 +94,16 @@
       "durationMs": 200501,
       "startedAt": "2026-01-30T11:24:54.328Z",
       "endedAt": "2026-01-30T11:28:14.829Z"
+    },
+    {
+      "iteration": 4,
+      "status": "completed",
+      "taskId": "US-004",
+      "taskTitle": "Implement acestream:// URL rewriting",
+      "taskCompleted": true,
+      "durationMs": 170341,
+      "startedAt": "2026-01-30T11:28:16.202Z",
+      "endedAt": "2026-01-30T11:31:06.543Z"
     }
   ],
   "skippedTaskIds": [],
