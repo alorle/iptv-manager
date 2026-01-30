@@ -140,6 +140,43 @@ func main() {
 		w.Write(rewrittenContent)
 	})
 
+	// NewEra playlist endpoint
+	handler.HandleFunc("/playlists/newera.m3u", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+
+		sourceURL := "https://ipfs.io/ipns/k2k4r8oqlcjxsritt5mczkcn4mmvcmymbqw7113fz2flkrerfwfps004/data/listas/lista_fuera_iptv.m3u"
+
+		// Fetch with cache fallback
+		content, fromCache, stale, err := fetch.FetchWithCache(sourceURL)
+		if err != nil {
+			log.Printf("Failed to fetch newera playlist: %v", err)
+			http.Error(w, "Bad Gateway", http.StatusBadGateway)
+			return
+		}
+
+		// Log cache status
+		if fromCache {
+			if stale {
+				log.Printf("Serving stale cache for newera playlist")
+			} else {
+				log.Printf("Serving fresh cache for newera playlist")
+			}
+		} else {
+			log.Printf("Serving fresh content for newera playlist")
+		}
+
+		// Rewrite acestream:// URLs
+		rewrittenContent := rw.RewriteM3U(content)
+
+		// Set content type
+		w.Header().Set("Content-Type", "audio/x-mpegurl")
+		w.WriteHeader(http.StatusOK)
+		w.Write(rewrittenContent)
+	})
+
 	s := &http.Server{
 		Handler: handler,
 		Addr:    fmt.Sprintf("%s:%s", cfg.HTTPAddress, cfg.HTTPPort),
