@@ -2,31 +2,83 @@ package main
 
 import (
 	"fmt"
+	"log"
 	"net/http"
 	"os"
+	"path/filepath"
+	"time"
 )
 
-var (
-	httpAddress            = os.Getenv("HTTP_ADDRESS")
-	httpPort               = os.Getenv("HTTP_PORT")
-	acestreamPlayerBaseUrl = os.Getenv("ACESTREAM_PLAYER_BASE_URL")
-)
+type Config struct {
+	HTTPAddress            string
+	HTTPPort               string
+	AcestreamPlayerBaseURL string
+	CacheDir               string
+	CacheTTL               time.Duration
+}
+
+func loadConfig() (*Config, error) {
+	cfg := &Config{
+		HTTPAddress:            os.Getenv("HTTP_ADDRESS"),
+		HTTPPort:               os.Getenv("HTTP_PORT"),
+		AcestreamPlayerBaseURL: os.Getenv("ACESTREAM_PLAYER_BASE_URL"),
+		CacheDir:               os.Getenv("CACHE_DIR"),
+	}
+
+	// Set defaults
+	if cfg.HTTPAddress == "" {
+		cfg.HTTPAddress = "127.0.0.1"
+	}
+	if cfg.HTTPPort == "" {
+		cfg.HTTPPort = "8080"
+	}
+	if cfg.AcestreamPlayerBaseURL == "" {
+		cfg.AcestreamPlayerBaseURL = "http://127.0.0.1:6878/ace/getstream"
+	}
+
+	// Validate and set CACHE_DIR
+	if cfg.CacheDir == "" {
+		return nil, fmt.Errorf("CACHE_DIR environment variable is required")
+	}
+	// Ensure cache directory is an absolute path
+	if !filepath.IsAbs(cfg.CacheDir) {
+		absPath, err := filepath.Abs(cfg.CacheDir)
+		if err != nil {
+			return nil, fmt.Errorf("failed to resolve absolute path for CACHE_DIR: %w", err)
+		}
+		cfg.CacheDir = absPath
+	}
+
+	// Parse CACHE_TTL
+	cacheTTLStr := os.Getenv("CACHE_TTL")
+	if cacheTTLStr == "" {
+		return nil, fmt.Errorf("CACHE_TTL environment variable is required")
+	}
+	ttl, err := time.ParseDuration(cacheTTLStr)
+	if err != nil {
+		return nil, fmt.Errorf("invalid CACHE_TTL format (expected duration like '1h', '30m'): %w", err)
+	}
+	if ttl <= 0 {
+		return nil, fmt.Errorf("CACHE_TTL must be positive, got: %s", cacheTTLStr)
+	}
+	cfg.CacheTTL = ttl
+
+	return cfg, nil
+}
 
 func main() {
-	if httpAddress == "" {
-		httpAddress = "127.0.0.1"
+	// Load and validate configuration
+	cfg, err := loadConfig()
+	if err != nil {
+		log.Fatalf("Configuration error: %v", err)
 	}
-	fmt.Printf("httpAddress: %v\n", httpAddress)
 
-	if httpPort == "" {
-		httpPort = "8080"
-	}
-	fmt.Printf("httpPort: %v\n", httpPort)
-
-	if acestreamPlayerBaseUrl == "" {
-		acestreamPlayerBaseUrl = "http://127.0.0.1:6878/ace/getstream"
-	}
-	fmt.Printf("acestreamPlayerBaseUrl: %v\n", acestreamPlayerBaseUrl)
+	// Print configuration
+	fmt.Printf("httpAddress: %v\n", cfg.HTTPAddress)
+	fmt.Printf("httpPort: %v\n", cfg.HTTPPort)
+	fmt.Printf("acestreamPlayerBaseUrl: %v\n", cfg.AcestreamPlayerBaseURL)
+	fmt.Printf("cacheDir: %v\n", cfg.CacheDir)
+	fmt.Printf("cacheTTL: %v\n", cfg.CacheTTL)
 
 	handler := http.NewServeMux()
 
@@ -37,7 +89,7 @@ func main() {
 
 	s := &http.Server{
 		Handler: handler,
-		Addr:    fmt.Sprintf("%s:%s", httpAddress, httpPort),
+		Addr:    fmt.Sprintf("%s:%s", cfg.HTTPAddress, cfg.HTTPPort),
 	}
 
 	if err := s.ListenAndServe(); err != nil {
