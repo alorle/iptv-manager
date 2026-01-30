@@ -7,6 +7,10 @@ import (
 	"os"
 	"path/filepath"
 	"time"
+
+	"github.com/alorle/iptv-manager/cache"
+	"github.com/alorle/iptv-manager/fetcher"
+	"github.com/alorle/iptv-manager/rewriter"
 )
 
 type Config struct {
@@ -80,11 +84,60 @@ func main() {
 	fmt.Printf("cacheDir: %v\n", cfg.CacheDir)
 	fmt.Printf("cacheTTL: %v\n", cfg.CacheTTL)
 
+	// Initialize cache storage
+	storage, err := cache.NewFileStorage(cfg.CacheDir)
+	if err != nil {
+		log.Fatalf("Failed to initialize cache storage: %v", err)
+	}
+
+	// Initialize fetcher with 30 second timeout
+	fetch := fetcher.New(30*time.Second, storage, cfg.CacheTTL)
+
+	// Initialize rewriter
+	rw := rewriter.New(cfg.AcestreamPlayerBaseURL)
+
 	handler := http.NewServeMux()
 
 	handler.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 		w.Write([]byte("OK"))
+	})
+
+	// Elcano playlist endpoint
+	handler.HandleFunc("/playlists/elcano.m3u", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+
+		sourceURL := "https://ipfs.io/ipns/k51qzi5uqu5di462t7j4vu4akwfhvtjhy88qbupktvoacqfqe9uforjvhyi4wr/hashes_acestream.m3u"
+
+		// Fetch with cache fallback
+		content, fromCache, stale, err := fetch.FetchWithCache(sourceURL)
+		if err != nil {
+			log.Printf("Failed to fetch elcano playlist: %v", err)
+			http.Error(w, "Bad Gateway", http.StatusBadGateway)
+			return
+		}
+
+		// Log cache status
+		if fromCache {
+			if stale {
+				log.Printf("Serving stale cache for elcano playlist")
+			} else {
+				log.Printf("Serving fresh cache for elcano playlist")
+			}
+		} else {
+			log.Printf("Serving fresh content for elcano playlist")
+		}
+
+		// Rewrite acestream:// URLs
+		rewrittenContent := rw.RewriteM3U(content)
+
+		// Set content type
+		w.Header().Set("Content-Type", "audio/x-mpegurl")
+		w.WriteHeader(http.StatusOK)
+		w.Write(rewrittenContent)
 	})
 
 	s := &http.Server{
