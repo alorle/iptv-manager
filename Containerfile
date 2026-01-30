@@ -19,6 +19,9 @@ FROM scratch
 
 ENV HTTP_ADDRESS=0.0.0.0
 ENV HTTP_PORT=8080
+ENV CACHE_DIR=/cache
+
+VOLUME [ "/cache" ]
 
 COPY --from=builder /etc/passwd /etc/group /etc/
 COPY --from=builder /app /app
