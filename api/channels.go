@@ -159,7 +159,7 @@ func deduplicateChannels(channels []Channel) []Channel {
 	return result
 }
 
-// ServeHTTP handles the GET /api/channels request and PATCH /api/channels/{acestream_id}
+// ServeHTTP handles the GET /api/channels request, PATCH /api/channels/{acestream_id}, and DELETE /api/channels/{acestream_id}/override
 func (h *ChannelsHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if r.Method == http.MethodGet {
 		h.handleList(w, r)
@@ -168,6 +168,11 @@ func (h *ChannelsHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	if r.Method == http.MethodPatch {
 		h.handleToggle(w, r)
+		return
+	}
+
+	if r.Method == http.MethodDelete {
+		h.handleDelete(w, r)
 		return
 	}
 
@@ -400,6 +405,97 @@ func (h *ChannelsHandler) handleToggle(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 
 	if err := json.NewEncoder(w).Encode(updatedChannel); err != nil {
+		log.Printf("Failed to encode channel response: %v", err)
+	}
+}
+
+// handleDelete handles the DELETE /api/channels/{acestream_id}/override request
+func (h *ChannelsHandler) handleDelete(w http.ResponseWriter, r *http.Request) {
+	// Extract acestream_id from the URL path
+	// Expected format: /api/channels/{acestream_id}/override
+	path := strings.TrimPrefix(r.URL.Path, "/api/channels/")
+	path = strings.TrimSuffix(path, "/override")
+	acestreamID := strings.TrimSpace(path)
+
+	// Validate acestream ID format (40 hex characters)
+	if len(acestreamID) != 40 {
+		http.Error(w, "Invalid acestream_id: must be 40 characters", http.StatusBadRequest)
+		return
+	}
+
+	// Validate that it's hexadecimal
+	for _, c := range acestreamID {
+		if !((c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F')) {
+			http.Error(w, "Invalid acestream_id: must be hexadecimal", http.StatusBadRequest)
+			return
+		}
+	}
+
+	// Check if override exists for this acestream_id
+	existingOverride := h.overridesMgr.Get(acestreamID)
+	if existingOverride == nil {
+		http.Error(w, "No override found for this acestream_id", http.StatusNotFound)
+		return
+	}
+
+	// Check if the channel exists in any source
+	elcanoContent, _, _, elcanoErr := h.fetcher.FetchWithCache(h.elcanoURL)
+	neweraContent, _, _, neweraErr := h.fetcher.FetchWithCache(h.neweraURL)
+
+	// Check if both sources failed
+	if elcanoErr != nil && neweraErr != nil {
+		log.Printf("Failed to fetch channels - both sources failed: elcano=%v, newera=%v", elcanoErr, neweraErr)
+		http.Error(w, "Bad Gateway", http.StatusBadGateway)
+		return
+	}
+
+	// Check if the acestream_id exists in any source
+	channelFound := false
+	var originalChannel *Channel
+
+	if elcanoErr == nil {
+		elcanoChannels := parseM3UChannels(elcanoContent, "elcano")
+		for _, ch := range elcanoChannels {
+			if ch.AcestreamID == acestreamID {
+				channelFound = true
+				originalChannel = &ch
+				break
+			}
+		}
+	}
+
+	if !channelFound && neweraErr == nil {
+		neweraChannels := parseM3UChannels(neweraContent, "newera")
+		for _, ch := range neweraChannels {
+			if ch.AcestreamID == acestreamID {
+				channelFound = true
+				originalChannel = &ch
+				break
+			}
+		}
+	}
+
+	if !channelFound {
+		http.Error(w, "Channel not found", http.StatusNotFound)
+		return
+	}
+
+	// Delete the override
+	if err := h.overridesMgr.Delete(acestreamID); err != nil {
+		log.Printf("Failed to delete override for %s: %v", acestreamID, err)
+		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		return
+	}
+
+	log.Printf("Deleted override for channel %s", acestreamID)
+
+	// Return the channel in its original state (without override)
+	originalChannel.HasOverride = false
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+
+	if err := json.NewEncoder(w).Encode(originalChannel); err != nil {
 		log.Printf("Failed to encode channel response: %v", err)
 	}
 }
