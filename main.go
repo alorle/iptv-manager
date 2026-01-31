@@ -478,6 +478,30 @@ func main() {
 			log.Printf("Skipping newera source in unified playlist: %v", neweraErr)
 		}
 
+		// Clean up orphaned overrides if we have fresh data from at least one source (US-008)
+		hasFreshData := (elcanoErr == nil && !elcanoStale) || (neweraErr == nil && !neweraStale)
+		if hasFreshData {
+			// Collect all valid acestream IDs from both sources
+			var validIDs []string
+			if elcanoErr == nil {
+				elcanoIDs := rewriter.ExtractAcestreamIDs(elcanoContent)
+				validIDs = append(validIDs, elcanoIDs...)
+			}
+			if neweraErr == nil {
+				neweraIDs := rewriter.ExtractAcestreamIDs(neweraContent)
+				validIDs = append(validIDs, neweraIDs...)
+			}
+
+			// Clean orphaned overrides
+			if deletedCount, err := overridesMgr.CleanOrphans(validIDs); err != nil {
+				log.Printf("WARNING: Failed to clean orphaned overrides: %v", err)
+			} else if deletedCount > 0 {
+				log.Printf("Cleaned up %d orphaned override(s)", deletedCount)
+			}
+		} else {
+			log.Printf("Skipping orphan cleanup - using only stale cache data")
+		}
+
 		// Apply channel overrides BEFORE deduplication and sorting (US-007)
 		mergedBytes := []byte(mergedContent.String())
 		overriddenContent := rewriter.ApplyOverrides(mergedBytes, overridesMgr)

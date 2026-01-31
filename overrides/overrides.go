@@ -3,6 +3,7 @@ package overrides
 import (
 	"errors"
 	"fmt"
+	"log"
 	"os"
 	"path/filepath"
 	"sync"
@@ -179,4 +180,40 @@ func (m *Manager) List() map[string]ChannelOverride {
 	}
 
 	return result
+}
+
+// CleanOrphans removes overrides for acestream IDs that are not in the provided validIDs list.
+// This function should only be called when fresh data is available from upstream sources
+// to avoid accidentally deleting overrides during cache fallback scenarios.
+// Returns the number of orphaned overrides that were deleted, or an error if the operation fails.
+func (m *Manager) CleanOrphans(validIDs []string) (int, error) {
+	// Build a set of valid IDs for O(1) lookup
+	validSet := make(map[string]bool, len(validIDs))
+	for _, id := range validIDs {
+		validSet[id] = true
+	}
+
+	// Get all current overrides
+	allOverrides := m.List()
+
+	// Identify orphaned IDs
+	var orphanedIDs []string
+	for overrideID := range allOverrides {
+		if !validSet[overrideID] {
+			orphanedIDs = append(orphanedIDs, overrideID)
+		}
+	}
+
+	// Delete orphaned overrides one by one
+	deletedCount := 0
+	for _, id := range orphanedIDs {
+		if err := m.Delete(id); err != nil {
+			// Log error but continue with other deletions
+			return deletedCount, fmt.Errorf("failed to delete orphaned override %s: %w", id, err)
+		}
+		log.Printf("Cleaned up orphaned override for acestream ID: %s", id)
+		deletedCount++
+	}
+
+	return deletedCount, nil
 }

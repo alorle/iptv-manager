@@ -389,6 +389,31 @@ func ApplyOverrides(m3u []byte, manager *overrides.Manager) []byte {
 	return []byte(result.String())
 }
 
+// ExtractAcestreamIDs extracts all unique acestream IDs from M3U content.
+// This is useful for identifying which channels are present in the playlist
+// before applying overrides or deduplication.
+func ExtractAcestreamIDs(m3u []byte) []string {
+	lines := strings.Split(string(m3u), "\n")
+	seen := make(map[string]bool)
+	var ids []string
+
+	for _, line := range lines {
+		// Look for acestream:// URLs
+		if strings.HasPrefix(line, "acestream://") {
+			aceID := strings.TrimPrefix(line, "acestream://")
+			aceID = strings.TrimSpace(aceID)
+
+			// Only add unique IDs
+			if aceID != "" && !seen[aceID] {
+				seen[aceID] = true
+				ids = append(ids, aceID)
+			}
+		}
+	}
+
+	return ids
+}
+
 // applyMetadataOverrides replaces metadata attributes in an EXTINF line according to the override configuration.
 // It handles tvg-id, tvg-name, tvg-logo, group-title, and the display name.
 func applyMetadataOverrides(extinf string, override *overrides.ChannelOverride) string {

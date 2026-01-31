@@ -3,10 +3,10 @@
   "sessionId": "f7da1394-fd43-4cca-9673-0fbf0e9925bb",
   "status": "running",
   "startedAt": "2026-01-31T15:41:40.721Z",
-  "updatedAt": "2026-01-31T16:04:15.591Z",
-  "currentIteration": 6,
+  "updatedAt": "2026-01-31T16:04:16.798Z",
+  "currentIteration": 7,
   "maxIterations": 0,
-  "tasksCompleted": 6,
+  "tasksCompleted": 7,
   "isPaused": false,
   "agentPlugin": "claude",
   "trackerState": {
@@ -53,8 +53,8 @@
       {
         "id": "US-007",
         "title": "Integrar overrides en pipeline de rewriter",
-        "status": "open",
-        "completedInSession": false
+        "status": "completed",
+        "completedInSession": true
       },
       {
         "id": "US-008",
@@ -130,10 +130,22 @@
       "durationMs": 148922,
       "startedAt": "2026-01-31T15:57:00.547Z",
       "endedAt": "2026-01-31T15:59:29.469Z"
+    },
+    {
+      "iteration": 7,
+      "status": "completed",
+      "taskId": "US-007",
+      "taskTitle": "Integrar overrides en pipeline de rewriter",
+      "taskCompleted": true,
+      "durationMs": 284913,
+      "startedAt": "2026-01-31T15:59:30.674Z",
+      "endedAt": "2026-01-31T16:04:15.587Z"
     }
   ],
   "skippedTaskIds": [],
   "cwd": "/home/alorle/gh/alorle/iptv-manager",
-  "activeTaskIds": [],
+  "activeTaskIds": [
+    "US-008"
+  ],
   "subagentPanelVisible": true
 }
