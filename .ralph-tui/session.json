@@ -3,10 +3,10 @@
   "sessionId": "06116c4e-d873-4fe0-ba7a-53d2074f955e",
   "status": "running",
   "startedAt": "2026-01-31T13:25:36.812Z",
-  "updatedAt": "2026-01-31T13:42:03.631Z",
-  "currentIteration": 4,
+  "updatedAt": "2026-01-31T13:43:43.853Z",
+  "currentIteration": 5,
   "maxIterations": 0,
-  "tasksCompleted": 4,
+  "tasksCompleted": 5,
   "isPaused": false,
   "agentPlugin": "claude",
   "trackerState": {
@@ -41,8 +41,8 @@
       {
         "id": "US-005",
         "title": "Crear endpoint /stream",
-        "status": "open",
-        "completedInSession": false
+        "status": "completed",
+        "completedInSession": true
       },
       {
         "id": "US-006",
@@ -110,6 +110,16 @@
       "durationMs": 119997,
       "startedAt": "2026-01-31T13:37:31.766Z",
       "endedAt": "2026-01-31T13:39:31.763Z"
+    },
+    {
+      "iteration": 5,
+      "status": "completed",
+      "taskId": "US-005",
+      "taskTitle": "Crear endpoint /stream",
+      "taskCompleted": true,
+      "durationMs": 150505,
+      "startedAt": "2026-01-31T13:39:33.123Z",
+      "endedAt": "2026-01-31T13:42:03.628Z"
     }
   ],
   "skippedTaskIds": [],
