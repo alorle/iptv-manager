@@ -9,15 +9,11 @@ import (
 
 // Rewriter handles URL rewriting for M3U playlists
 type Rewriter struct {
-	streamBaseURL string
 }
 
 // New creates a new Rewriter with the specified stream base URL
-// If streamBaseURL is empty, uses relative URLs starting with /stream
-func New(streamBaseURL string) *Rewriter {
-	return &Rewriter{
-		streamBaseURL: streamBaseURL,
-	}
+func New() *Rewriter {
+	return &Rewriter{}
 }
 
 var logoRegex = regexp.MustCompile(`\s*tvg-logo="[^"]*"`)
@@ -217,7 +213,7 @@ func DeduplicateStreams(content []byte) []byte {
 // RewriteM3U processes M3U content line by line and rewrites acestream:// URLs
 // to internal server URLs in the format /stream?id={content_id}
 // Preserves transcode_audio parameter if present in original URL
-func (r *Rewriter) RewriteM3U(content []byte) []byte {
+func (r *Rewriter) RewriteM3U(content []byte, baseUrl string) []byte {
 	lines := strings.Split(string(content), "\n")
 	var result strings.Builder
 
@@ -236,12 +232,12 @@ func (r *Rewriter) RewriteM3U(content []byte) []byte {
 
 			// Build the rewritten URL
 			var rewrittenURL string
-			if r.streamBaseURL == "" {
+			if baseUrl == "" {
 				// Use relative URL if no base URL provided
 				rewrittenURL = fmt.Sprintf("/stream?id=%s", streamID)
 			} else {
 				// Use absolute URL with base URL
-				rewrittenURL = fmt.Sprintf("%s/stream?id=%s", r.streamBaseURL, streamID)
+				rewrittenURL = fmt.Sprintf("%s/stream?id=%s", baseUrl, streamID)
 			}
 			result.WriteString(rewrittenURL)
 		} else if strings.Contains(line, "?id=") && (strings.Contains(line, "/stream") || strings.Contains(line, "/ace/getstream")) {
@@ -280,10 +276,10 @@ func (r *Rewriter) RewriteM3U(content []byte) []byte {
 
 				// Build the new URL with transcode_audio preserved
 				var rewrittenURL string
-				if r.streamBaseURL == "" {
+				if baseUrl == "" {
 					rewrittenURL = fmt.Sprintf("/stream?id=%s&transcode_audio=%s", contentID, transcodeAudio)
 				} else {
-					rewrittenURL = fmt.Sprintf("%s/stream?id=%s&transcode_audio=%s", r.streamBaseURL, contentID, transcodeAudio)
+					rewrittenURL = fmt.Sprintf("%s/stream?id=%s&transcode_audio=%s", baseUrl, contentID, transcodeAudio)
 				}
 				result.WriteString(rewrittenURL)
 			} else {
@@ -305,10 +301,10 @@ func (r *Rewriter) RewriteM3U(content []byte) []byte {
 				}
 
 				var rewrittenURL string
-				if r.streamBaseURL == "" {
+				if baseUrl == "" {
 					rewrittenURL = fmt.Sprintf("/stream?id=%s", contentID)
 				} else {
-					rewrittenURL = fmt.Sprintf("%s/stream?id=%s", r.streamBaseURL, contentID)
+					rewrittenURL = fmt.Sprintf("%s/stream?id=%s", baseUrl, contentID)
 				}
 				result.WriteString(rewrittenURL)
 			}

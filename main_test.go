@@ -65,7 +65,7 @@ func TestIntegration_FreshFetchFromMockIPFS(t *testing.T) {
 	}
 
 	fetch := fetcher.New(5*time.Second, storage, 1*time.Hour)
-	rw := rewriter.New("http://127.0.0.1:8080")
+	rw := rewriter.New()
 
 	// Create test server
 	mux := http.NewServeMux()
@@ -88,7 +88,7 @@ func TestIntegration_FreshFetchFromMockIPFS(t *testing.T) {
 			t.Error("Expected fresh content, but got stale cache")
 		}
 
-		rewrittenContent := rw.RewriteM3U(content)
+		rewrittenContent := rw.RewriteM3U(content, "http://127.0.0.1:8080")
 		w.Header().Set("Content-Type", "audio/x-mpegurl")
 		w.WriteHeader(http.StatusOK)
 		w.Write(rewrittenContent)
@@ -158,7 +158,7 @@ func TestIntegration_CacheHit(t *testing.T) {
 	}
 
 	fetch := fetcher.New(5*time.Second, storage, 1*time.Hour)
-	rw := rewriter.New("http://127.0.0.1:8080")
+	rw := rewriter.New()
 
 	// Create test server
 	mux := http.NewServeMux()
@@ -174,7 +174,7 @@ func TestIntegration_CacheHit(t *testing.T) {
 			return
 		}
 
-		rewrittenContent := rw.RewriteM3U(content)
+		rewrittenContent := rw.RewriteM3U(content, "http://127.0.0.1:8080")
 		w.Header().Set("Content-Type", "audio/x-mpegurl")
 		w.WriteHeader(http.StatusOK)
 		w.Write(rewrittenContent)
@@ -260,7 +260,7 @@ func TestIntegration_ExpiredCacheRefresh(t *testing.T) {
 	}
 
 	fetch := fetcher.New(5*time.Second, storage, 100*time.Millisecond) // 100ms TTL
-	rw := rewriter.New("http://127.0.0.1:8080")
+	rw := rewriter.New()
 
 	// Create test server
 	mux := http.NewServeMux()
@@ -271,7 +271,7 @@ func TestIntegration_ExpiredCacheRefresh(t *testing.T) {
 			return
 		}
 
-		rewrittenContent := rw.RewriteM3U(content)
+		rewrittenContent := rw.RewriteM3U(content, "http://127.0.0.1:8080")
 		w.Header().Set("Content-Type", "audio/x-mpegurl")
 		w.WriteHeader(http.StatusOK)
 		w.Write(rewrittenContent)
@@ -362,7 +362,7 @@ func TestIntegration_IPFSFailureWithStaleCacheFallback(t *testing.T) {
 	}
 
 	fetch := fetcher.New(5*time.Second, storage, 100*time.Millisecond)
-	rw := rewriter.New("http://127.0.0.1:8080")
+	rw := rewriter.New()
 
 	// Create test server
 	mux := http.NewServeMux()
@@ -373,7 +373,7 @@ func TestIntegration_IPFSFailureWithStaleCacheFallback(t *testing.T) {
 			return
 		}
 
-		rewrittenContent := rw.RewriteM3U(content)
+		rewrittenContent := rw.RewriteM3U(content, "http://127.0.0.1:8080")
 		w.Header().Set("Content-Type", "audio/x-mpegurl")
 		w.Header().Set("X-From-Cache", fmt.Sprintf("%v", fromCache))
 		w.Header().Set("X-Stale", fmt.Sprintf("%v", stale))
@@ -446,7 +446,7 @@ func TestIntegration_URLRewritingOutput(t *testing.T) {
 	}
 
 	fetch := fetcher.New(5*time.Second, storage, 1*time.Hour)
-	rw := rewriter.New("http://127.0.0.1:8080")
+	rw := rewriter.New()
 
 	// Create test server
 	mux := http.NewServeMux()
@@ -457,7 +457,7 @@ func TestIntegration_URLRewritingOutput(t *testing.T) {
 			return
 		}
 
-		rewrittenContent := rw.RewriteM3U(content)
+		rewrittenContent := rw.RewriteM3U(content, "http://127.0.0.1:8080")
 		w.Header().Set("Content-Type", "audio/x-mpegurl")
 		w.WriteHeader(http.StatusOK)
 		w.Write(rewrittenContent)
@@ -545,7 +545,7 @@ func TestIntegration_ContentTypeHeaders(t *testing.T) {
 	}
 
 	fetch := fetcher.New(5*time.Second, storage, 1*time.Hour)
-	rw := rewriter.New("http://127.0.0.1:8080")
+	rw := rewriter.New()
 
 	// Create test server
 	mux := http.NewServeMux()
@@ -556,7 +556,7 @@ func TestIntegration_ContentTypeHeaders(t *testing.T) {
 			return
 		}
 
-		rewrittenContent := rw.RewriteM3U(content)
+		rewrittenContent := rw.RewriteM3U(content, "http://127.0.0.1:8080")
 		w.Header().Set("Content-Type", "audio/x-mpegurl")
 		w.WriteHeader(http.StatusOK)
 		w.Write(rewrittenContent)
@@ -648,7 +648,7 @@ func TestIntegration_HTTPStatusCodes(t *testing.T) {
 			}
 
 			fetch := fetcher.New(5*time.Second, storage, 1*time.Hour)
-			rw := rewriter.New("http://127.0.0.1:8080")
+			rw := rewriter.New()
 
 			// Create test server
 			mux := http.NewServeMux()
@@ -659,7 +659,7 @@ func TestIntegration_HTTPStatusCodes(t *testing.T) {
 					return
 				}
 
-				rewrittenContent := rw.RewriteM3U(content)
+				rewrittenContent := rw.RewriteM3U(content, "http://127.0.0.1:8080")
 				w.Header().Set("Content-Type", "audio/x-mpegurl")
 				w.WriteHeader(http.StatusOK)
 				w.Write(rewrittenContent)
@@ -698,7 +698,7 @@ func TestIntegration_MethodNotAllowed(t *testing.T) {
 	}
 
 	fetch := fetcher.New(5*time.Second, storage, 1*time.Hour)
-	rw := rewriter.New("http://127.0.0.1:8080")
+	rw := rewriter.New()
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("/playlists/test.m3u", func(w http.ResponseWriter, r *http.Request) {
@@ -713,7 +713,7 @@ func TestIntegration_MethodNotAllowed(t *testing.T) {
 			return
 		}
 
-		rewrittenContent := rw.RewriteM3U(content)
+		rewrittenContent := rw.RewriteM3U(content, "http://127.0.0.1:8080")
 		w.Header().Set("Content-Type", "audio/x-mpegurl")
 		w.WriteHeader(http.StatusOK)
 		w.Write(rewrittenContent)
@@ -772,7 +772,7 @@ func TestIntegration_RealEndpoints(t *testing.T) {
 	}
 
 	fetch := fetcher.New(30*time.Second, storage, cfg.CacheTTL)
-	rw := rewriter.New("http://127.0.0.1:8080")
+	rw := rewriter.New()
 
 	// Create mock IPFS server
 	mockServer := createMockIPFSServer(t, false, mockM3UContent)
@@ -800,7 +800,7 @@ func TestIntegration_RealEndpoints(t *testing.T) {
 			return
 		}
 
-		rewrittenContent := rw.RewriteM3U(content)
+		rewrittenContent := rw.RewriteM3U(content, "http://127.0.0.1:8080")
 		w.Header().Set("Content-Type", "audio/x-mpegurl")
 		w.WriteHeader(http.StatusOK)
 		w.Write(rewrittenContent)
@@ -819,7 +819,7 @@ func TestIntegration_RealEndpoints(t *testing.T) {
 			return
 		}
 
-		rewrittenContent := rw.RewriteM3U(content)
+		rewrittenContent := rw.RewriteM3U(content, "http://127.0.0.1:8080")
 		w.Header().Set("Content-Type", "audio/x-mpegurl")
 		w.WriteHeader(http.StatusOK)
 		w.Write(rewrittenContent)
@@ -936,7 +936,7 @@ acestream://4444444444444444444444444444444444444444
 	}
 
 	fetch := fetcher.New(5*time.Second, storage, 1*time.Hour)
-	rw := rewriter.New("http://127.0.0.1:8080")
+	rw := rewriter.New()
 
 	// Create test server with unified endpoint
 	mux := http.NewServeMux()
@@ -985,7 +985,7 @@ acestream://4444444444444444444444444444444444444444
 		mergedBytes := []byte(mergedContent.String())
 		deduplicatedContent := rewriter.DeduplicateStreams(mergedBytes)
 		sortedContent := rewriter.SortStreamsByName(deduplicatedContent)
-		rewrittenContent := rw.RewriteM3U(sortedContent)
+		rewrittenContent := rw.RewriteM3U(sortedContent, "http://127.0.0.1:8080")
 
 		w.Header().Set("Content-Type", "audio/x-mpegurl")
 		w.WriteHeader(http.StatusOK)
@@ -1065,7 +1065,7 @@ acestream://3333333333333333333333333333333333333333
 	}
 
 	fetch := fetcher.New(5*time.Second, storage, 1*time.Hour)
-	rw := rewriter.New("http://127.0.0.1:8080")
+	rw := rewriter.New()
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("/playlist.m3u", func(w http.ResponseWriter, r *http.Request) {
@@ -1109,7 +1109,7 @@ acestream://3333333333333333333333333333333333333333
 		mergedBytes := []byte(mergedContent.String())
 		deduplicatedContent := rewriter.DeduplicateStreams(mergedBytes)
 		sortedContent := rewriter.SortStreamsByName(deduplicatedContent)
-		rewrittenContent := rw.RewriteM3U(sortedContent)
+		rewrittenContent := rw.RewriteM3U(sortedContent, "http://127.0.0.1:8080")
 
 		w.Header().Set("Content-Type", "audio/x-mpegurl")
 		w.WriteHeader(http.StatusOK)
@@ -1186,7 +1186,7 @@ acestream://4444444444444444444444444444444444444444
 	}
 
 	fetch := fetcher.New(5*time.Second, storage, 1*time.Hour)
-	rw := rewriter.New("http://127.0.0.1:8080")
+	rw := rewriter.New()
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("/playlist.m3u", func(w http.ResponseWriter, r *http.Request) {
@@ -1230,7 +1230,7 @@ acestream://4444444444444444444444444444444444444444
 		mergedBytes := []byte(mergedContent.String())
 		deduplicatedContent := rewriter.DeduplicateStreams(mergedBytes)
 		sortedContent := rewriter.SortStreamsByName(deduplicatedContent)
-		rewrittenContent := rw.RewriteM3U(sortedContent)
+		rewrittenContent := rw.RewriteM3U(sortedContent, "http://127.0.0.1:8080")
 
 		w.Header().Set("Content-Type", "audio/x-mpegurl")
 		w.WriteHeader(http.StatusOK)
@@ -1294,7 +1294,7 @@ acestream://2222222222222222222222222222222222222222
 	}
 
 	fetch := fetcher.New(5*time.Second, storage, 1*time.Hour)
-	rw := rewriter.New("http://127.0.0.1:8080")
+	rw := rewriter.New()
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("/playlist.m3u", func(w http.ResponseWriter, r *http.Request) {
@@ -1338,7 +1338,7 @@ acestream://2222222222222222222222222222222222222222
 		mergedBytes := []byte(mergedContent.String())
 		deduplicatedContent := rewriter.DeduplicateStreams(mergedBytes)
 		sortedContent := rewriter.SortStreamsByName(deduplicatedContent)
-		rewrittenContent := rw.RewriteM3U(sortedContent)
+		rewrittenContent := rw.RewriteM3U(sortedContent, "http://127.0.0.1:8080")
 
 		w.Header().Set("Content-Type", "audio/x-mpegurl")
 		w.WriteHeader(http.StatusOK)
@@ -1400,7 +1400,7 @@ acestream://1111111111111111111111111111111111111111
 	}
 
 	fetch := fetcher.New(5*time.Second, storage, 1*time.Hour)
-	rw := rewriter.New("http://127.0.0.1:8080")
+	rw := rewriter.New()
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("/playlist.m3u", func(w http.ResponseWriter, r *http.Request) {
@@ -1432,7 +1432,7 @@ acestream://1111111111111111111111111111111111111111
 		mergedBytes := []byte(mergedContent.String())
 		deduplicatedContent := rewriter.DeduplicateStreams(mergedBytes)
 		sortedContent := rewriter.SortStreamsByName(deduplicatedContent)
-		rewrittenContent := rw.RewriteM3U(sortedContent)
+		rewrittenContent := rw.RewriteM3U(sortedContent, "http://127.0.0.1:8080")
 
 		w.Header().Set("Content-Type", "audio/x-mpegurl")
 		w.WriteHeader(http.StatusOK)
@@ -1490,7 +1490,7 @@ acestream://1111111111111111111111111111111111111111
 	}
 
 	fetch := fetcher.New(5*time.Second, storage, 100*time.Millisecond) // Short TTL
-	rw := rewriter.New("http://127.0.0.1:8080")
+	rw := rewriter.New()
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("/playlist.m3u", func(w http.ResponseWriter, r *http.Request) {
@@ -1522,7 +1522,7 @@ acestream://1111111111111111111111111111111111111111
 		mergedBytes := []byte(mergedContent.String())
 		deduplicatedContent := rewriter.DeduplicateStreams(mergedBytes)
 		sortedContent := rewriter.SortStreamsByName(deduplicatedContent)
-		rewrittenContent := rw.RewriteM3U(sortedContent)
+		rewrittenContent := rw.RewriteM3U(sortedContent, "http://127.0.0.1:8080")
 
 		w.Header().Set("Content-Type", "audio/x-mpegurl")
 		w.WriteHeader(http.StatusOK)

@@ -273,6 +273,7 @@ func TestStreamHandler_PIDReuse(t *testing.T) {
 	}
 
 	// After cleanup, new PID should be generated
+	pidMgr.ReleasePID(secondPID)
 	pidMgr.CleanupDisconnected()
 
 	thirdPID := pidMgr.GetOrCreatePID(contentID, clientID)

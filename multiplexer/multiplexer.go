@@ -303,6 +303,13 @@ func (m *Multiplexer) RemoveStream(contentID string) {
 
 // ServeStream handles a client connection for a stream
 func (m *Multiplexer) ServeStream(ctx context.Context, w http.ResponseWriter, contentID string, upstreamURL string, clientID string) error {
+	// Disable write deadline for streaming - this is essential for long-running video streams
+	// The http.Server.WriteTimeout would otherwise kill the connection
+	rc := http.NewResponseController(w)
+	if err := rc.SetWriteDeadline(time.Time{}); err != nil {
+		log.Printf("Warning: Failed to disable write deadline: %v", err)
+	}
+
 	// Get or create stream
 	stream, existed, err := m.GetOrCreateStream(ctx, contentID, upstreamURL)
 	if err != nil {
@@ -318,17 +325,18 @@ func (m *Multiplexer) ServeStream(ctx context.Context, w http.ResponseWriter, co
 		return fmt.Errorf("failed to create client: %w", err)
 	}
 
-	// Add client to stream
-	stream.AddClient(client)
-
-	// Set headers for streaming
+	// Set headers for streaming BEFORE adding client to stream
+	// This ensures we're ready to receive data
 	w.Header().Set("Content-Type", "video/mp2t")
 	w.Header().Set("Cache-Control", "no-cache")
 	w.Header().Set("Connection", "keep-alive")
 	w.WriteHeader(http.StatusOK)
 
-	// Start client writer goroutine
+	// Start client writer goroutine BEFORE adding client to stream
+	// This ensures the writer is ready to process data when it arrives
+	writerReady := make(chan struct{})
 	go func() {
+		close(writerReady) // Signal that the writer goroutine has started
 		for {
 			select {
 			case data, ok := <-client.buffer:
@@ -355,6 +363,12 @@ func (m *Multiplexer) ServeStream(ctx context.Context, w http.ResponseWriter, co
 			}
 		}
 	}()
+
+	// Wait for writer goroutine to be ready
+	<-writerReady
+
+	// Now add client to stream - it's ready to receive data
+	stream.AddClient(client)
 
 	// Wait for client to disconnect
 	select {

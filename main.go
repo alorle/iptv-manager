@@ -20,7 +20,6 @@ import (
 type Config struct {
 	HTTPAddress            string
 	HTTPPort               string
-	StreamBaseURL          string
 	AcestreamPlayerBaseURL string
 	AcestreamEngineURL     string
 	CacheDir               string
@@ -45,11 +44,22 @@ func isValidContentID(id string) bool {
 	return true
 }
 
+// getBaseURL returns the scheme and authority (scheme://host) from an HTTP request
+func getBaseURL(r *http.Request) string {
+	scheme := "http"
+	if r.TLS != nil {
+		scheme = "https"
+	}
+	if proto := r.Header.Get("X-Forwarded-Proto"); proto != "" {
+		scheme = proto
+	}
+	return fmt.Sprintf("%s://%s", scheme, r.Host)
+}
+
 func loadConfig() (*Config, error) {
 	cfg := &Config{
 		HTTPAddress:            os.Getenv("HTTP_ADDRESS"),
 		HTTPPort:               os.Getenv("HTTP_PORT"),
-		StreamBaseURL:          os.Getenv("STREAM_BASE_URL"),
 		AcestreamPlayerBaseURL: os.Getenv("ACESTREAM_PLAYER_BASE_URL"),
 		AcestreamEngineURL:     os.Getenv("ACESTREAM_ENGINE_URL"),
 		CacheDir:               os.Getenv("CACHE_DIR"),
@@ -179,7 +189,6 @@ func main() {
 	fmt.Printf("httpPort: %v\n", cfg.HTTPPort)
 	fmt.Printf("acestreamPlayerBaseUrl: %v\n", cfg.AcestreamPlayerBaseURL)
 	fmt.Printf("acestreamEngineUrl: %v\n", cfg.AcestreamEngineURL)
-	fmt.Printf("streamBaseURL: %v\n", cfg.StreamBaseURL)
 	fmt.Printf("cacheDir: %v\n", cfg.CacheDir)
 	fmt.Printf("cacheTTL: %v\n", cfg.CacheTTL)
 	fmt.Printf("streamBufferSize: %v bytes\n", cfg.StreamBufferSize)
@@ -197,9 +206,8 @@ func main() {
 	// Initialize fetcher with 30 second timeout
 	fetch := fetcher.New(30*time.Second, storage, cfg.CacheTTL)
 
-	// Initialize rewriter with STREAM_BASE_URL
-	// If not set, uses relative URLs (/stream?id=...)
-	rw := rewriter.New(cfg.StreamBaseURL)
+	// Initialize rewriter
+	rw := rewriter.New()
 
 	// Initialize multiplexer
 	muxCfg := multiplexer.Config{
@@ -221,7 +229,8 @@ func main() {
 
 	// Stream handler function - shared by /stream and /ace/getstream
 	streamHandler := func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodGet {
+		// Allow GET and HEAD requests (VLC sends HEAD to probe stream before playing)
+		if r.Method != http.MethodGet && r.Method != http.MethodHead {
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 			return
 		}
@@ -236,6 +245,15 @@ func main() {
 		// Validate content ID format (40 hex characters)
 		if !isValidContentID(contentID) {
 			http.Error(w, "Invalid id format: must be 40 hexadecimal characters", http.StatusBadRequest)
+			return
+		}
+
+		// For HEAD requests, just return headers without starting the stream
+		if r.Method == http.MethodHead {
+			w.Header().Set("Content-Type", "video/mp2t")
+			w.Header().Set("Cache-Control", "no-cache")
+			w.Header().Set("Connection", "keep-alive")
+			w.WriteHeader(http.StatusOK)
 			return
 		}
 
@@ -295,6 +313,8 @@ func main() {
 			return
 		}
 
+		baseUrl := getBaseURL(r)
+
 		sourceURL := "https://ipfs.io/ipns/k51qzi5uqu5di462t7j4vu4akwfhvtjhy88qbupktvoacqfqe9uforjvhyi4wr/hashes_acestream.m3u"
 
 		// Fetch with cache fallback
@@ -317,7 +337,7 @@ func main() {
 		}
 
 		// Rewrite acestream:// URLs
-		rewrittenContent := rw.RewriteM3U(content)
+		rewrittenContent := rw.RewriteM3U(content, baseUrl)
 
 		// Set content type
 		w.Header().Set("Content-Type", "audio/x-mpegurl")
@@ -331,6 +351,8 @@ func main() {
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 			return
 		}
+
+		baseUrl := getBaseURL(r)
 
 		sourceURL := "https://ipfs.io/ipns/k2k4r8oqlcjxsritt5mczkcn4mmvcmymbqw7113fz2flkrerfwfps004/data/listas/lista_fuera_iptv.m3u"
 
@@ -354,7 +376,7 @@ func main() {
 		}
 
 		// Rewrite acestream:// URLs
-		rewrittenContent := rw.RewriteM3U(content)
+		rewrittenContent := rw.RewriteM3U(content, baseUrl)
 
 		// Set content type
 		w.Header().Set("Content-Type", "audio/x-mpegurl")
@@ -368,6 +390,8 @@ func main() {
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 			return
 		}
+
+		baseUrl := getBaseURL(r)
 
 		elcanoURL := "https://ipfs.io/ipns/k51qzi5uqu5di462t7j4vu4akwfhvtjhy88qbupktvoacqfqe9uforjvhyi4wr/hashes_acestream.m3u"
 		neweraURL := "https://ipfs.io/ipns/k2k4r8oqlcjxsritt5mczkcn4mmvcmymbqw7113fz2flkrerfwfps004/data/listas/lista_fuera_iptv.m3u"
@@ -446,7 +470,7 @@ func main() {
 		sortedContent := rewriter.SortStreamsByName(deduplicatedContent)
 
 		// Rewrite acestream:// URLs and remove logos (US-005)
-		rewrittenContent := rw.RewriteM3U(sortedContent)
+		rewrittenContent := rw.RewriteM3U(sortedContent, baseUrl)
 
 		// Set content type
 		w.Header().Set("Content-Type", "audio/x-mpegurl")
