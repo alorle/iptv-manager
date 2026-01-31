@@ -3,6 +3,7 @@ package rewriter
 import (
 	"fmt"
 	"regexp"
+	"sort"
 	"strings"
 )
 
@@ -45,6 +46,92 @@ type Stream struct {
 	Metadata string
 	URL      string
 	AceID    string
+}
+
+// ExtractDisplayName extracts the display name from an EXTINF line.
+// Display name is the text after the comma in "#EXTINF:-1 tvg-id="..." tvg-name="...",Channel Name"
+// Returns empty string if the line is not an EXTINF line or has no comma.
+func ExtractDisplayName(extinf string) string {
+	if !strings.HasPrefix(extinf, "#EXTINF:") {
+		return ""
+	}
+
+	// Find the last comma, as that separates metadata from display name
+	commaIdx := strings.LastIndex(extinf, ",")
+	if commaIdx == -1 {
+		return ""
+	}
+
+	// Extract everything after the comma and trim whitespace
+	displayName := strings.TrimSpace(extinf[commaIdx+1:])
+	return displayName
+}
+
+// SortStreamsByName sorts streams alphabetically by display name (case-insensitive).
+// Header lines (lines without URLs) are kept at the top in their original order.
+// Stream entries (metadata + URL pairs) are sorted by the display name extracted from EXTINF.
+func SortStreamsByName(content []byte) []byte {
+	lines := strings.Split(string(content), "\n")
+	var headers []Stream
+	var streams []Stream
+
+	// Parse M3U into header lines and stream entries
+	for i := 0; i < len(lines); i++ {
+		line := lines[i]
+
+		// Look for EXTINF metadata lines
+		if strings.HasPrefix(line, "#EXTINF:") {
+			// Next line should be the URL
+			if i+1 < len(lines) {
+				metadata := line
+				url := lines[i+1]
+				i++ // Skip the URL line in the next iteration
+
+				streams = append(streams, Stream{
+					Metadata: metadata,
+					URL:      url,
+					AceID:    "", // Not needed for sorting
+				})
+			}
+		} else if line != "" {
+			// Preserve header lines (like #EXTM3U) and other non-URL lines
+			headers = append(headers, Stream{
+				Metadata: line,
+				URL:      "",
+				AceID:    "",
+			})
+		}
+	}
+
+	// Sort streams by display name (case-insensitive)
+	sort.SliceStable(streams, func(i, j int) bool {
+		nameI := strings.ToLower(ExtractDisplayName(streams[i].Metadata))
+		nameJ := strings.ToLower(ExtractDisplayName(streams[j].Metadata))
+		return nameI < nameJ
+	})
+
+	// Rebuild M3U content with headers first, then sorted streams
+	var result strings.Builder
+
+	// Write headers first
+	for i, header := range headers {
+		if i > 0 {
+			result.WriteString("\n")
+		}
+		result.WriteString(header.Metadata)
+	}
+
+	// Write sorted streams
+	for _, stream := range streams {
+		if len(headers) > 0 || result.Len() > 0 {
+			result.WriteString("\n")
+		}
+		result.WriteString(stream.Metadata)
+		result.WriteString("\n")
+		result.WriteString(stream.URL)
+	}
+
+	return []byte(result.String())
 }
 
 // DeduplicateStreams removes duplicate streams based on acestream ID.
