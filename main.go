@@ -346,6 +346,9 @@ func main() {
 			log.Printf("Serving fresh content for elcano playlist")
 		}
 
+		// Apply channel overrides (US-007)
+		content = rewriter.ApplyOverrides(content, overridesMgr)
+
 		// Rewrite acestream:// URLs
 		rewrittenContent := rw.RewriteM3U(content, baseUrl)
 
@@ -384,6 +387,9 @@ func main() {
 		} else {
 			log.Printf("Serving fresh content for newera playlist")
 		}
+
+		// Apply channel overrides (US-007)
+		content = rewriter.ApplyOverrides(content, overridesMgr)
 
 		// Rewrite acestream:// URLs
 		rewrittenContent := rw.RewriteM3U(content, baseUrl)
@@ -472,9 +478,12 @@ func main() {
 			log.Printf("Skipping newera source in unified playlist: %v", neweraErr)
 		}
 
-		// Apply deduplication by acestream ID (US-003)
+		// Apply channel overrides BEFORE deduplication and sorting (US-007)
 		mergedBytes := []byte(mergedContent.String())
-		deduplicatedContent := rewriter.DeduplicateStreams(mergedBytes)
+		overriddenContent := rewriter.ApplyOverrides(mergedBytes, overridesMgr)
+
+		// Apply deduplication by acestream ID (US-003)
+		deduplicatedContent := rewriter.DeduplicateStreams(overriddenContent)
 
 		// Apply alphabetical sorting by display name (US-004)
 		sortedContent := rewriter.SortStreamsByName(deduplicatedContent)

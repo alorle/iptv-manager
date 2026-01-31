@@ -3,10 +3,10 @@
   "sessionId": "f7da1394-fd43-4cca-9673-0fbf0e9925bb",
   "status": "running",
   "startedAt": "2026-01-31T15:41:40.721Z",
-  "updatedAt": "2026-01-31T15:59:29.472Z",
-  "currentIteration": 5,
+  "updatedAt": "2026-01-31T15:59:30.678Z",
+  "currentIteration": 6,
   "maxIterations": 0,
-  "tasksCompleted": 5,
+  "tasksCompleted": 6,
   "isPaused": false,
   "agentPlugin": "claude",
   "trackerState": {
@@ -47,8 +47,8 @@
       {
         "id": "US-006",
         "title": "API endpoint para editar metadatos",
-        "status": "open",
-        "completedInSession": false
+        "status": "completed",
+        "completedInSession": true
       },
       {
         "id": "US-007",
@@ -120,10 +120,22 @@
       "durationMs": 163976,
       "startedAt": "2026-01-31T15:54:15.384Z",
       "endedAt": "2026-01-31T15:56:59.360Z"
+    },
+    {
+      "iteration": 6,
+      "status": "completed",
+      "taskId": "US-006",
+      "taskTitle": "API endpoint para editar metadatos",
+      "taskCompleted": true,
+      "durationMs": 148922,
+      "startedAt": "2026-01-31T15:57:00.547Z",
+      "endedAt": "2026-01-31T15:59:29.469Z"
     }
   ],
   "skippedTaskIds": [],
   "cwd": "/home/alorle/gh/alorle/iptv-manager",
-  "activeTaskIds": [],
+  "activeTaskIds": [
+    "US-007"
+  ],
   "subagentPanelVisible": true
 }
