@@ -3,10 +3,10 @@
   "sessionId": "8599c8e2-3b7f-47e6-a1ab-4e6dd2b3d606",
   "status": "running",
   "startedAt": "2026-01-31T21:05:32.234Z",
-  "updatedAt": "2026-01-31T21:19:56.062Z",
-  "currentIteration": 2,
+  "updatedAt": "2026-01-31T21:26:08.196Z",
+  "currentIteration": 3,
   "maxIterations": 0,
-  "tasksCompleted": 2,
+  "tasksCompleted": 3,
   "isPaused": false,
   "agentPlugin": "claude",
   "trackerState": {
@@ -47,8 +47,8 @@
       {
         "id": "US-006",
         "title": "React project setup with Vite",
-        "status": "open",
-        "completedInSession": false
+        "status": "completed",
+        "completedInSession": true
       },
       {
         "id": "US-007",
@@ -108,6 +108,16 @@
       "durationMs": 217562,
       "startedAt": "2026-01-31T21:10:21.984Z",
       "endedAt": "2026-01-31T21:13:59.546Z"
+    },
+    {
+      "iteration": 3,
+      "status": "completed",
+      "taskId": "US-006",
+      "taskTitle": "React project setup with Vite",
+      "taskCompleted": true,
+      "durationMs": 295081,
+      "startedAt": "2026-01-31T21:15:00.979Z",
+      "endedAt": "2026-01-31T21:19:56.060Z"
     }
   ],
   "skippedTaskIds": [],

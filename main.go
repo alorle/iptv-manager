@@ -573,6 +573,11 @@ func main() {
 		handler.Handle("/api/validate/tvg-id", validateHandler)
 	}
 
+	// API endpoints for overrides CRUD
+	overridesHandler := api.NewOverridesHandler(overridesMgr, epgCache)
+	handler.Handle("/api/overrides", overridesHandler)
+	handler.Handle("/api/overrides/", overridesHandler)
+
 	s := &http.Server{
 		Handler:      handler,
 		Addr:         fmt.Sprintf("%s:%s", cfg.HTTPAddress, cfg.HTTPPort),
