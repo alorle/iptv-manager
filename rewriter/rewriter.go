@@ -36,8 +36,8 @@ func (r *Rewriter) RewriteM3U(content []byte) []byte {
 			// Remove any trailing whitespace or carriage return
 			streamID = strings.TrimSpace(streamID)
 
-			// Rewrite to player-compatible format
-			rewrittenURL := fmt.Sprintf("%s?id=%s", r.playerBaseURL, streamID)
+			// Rewrite to player-compatible format with network-caching parameter
+			rewrittenURL := fmt.Sprintf("%s?id=%s&network-caching=1000", r.playerBaseURL, streamID)
 			result.WriteString(rewrittenURL)
 		} else {
 			// Preserve all other lines unchanged

@@ -18,7 +18,7 @@ func TestRewriteM3U(t *testing.T) {
 acestream://1234567890abcdef1234567890abcdef12345678`,
 			expected: `#EXTM3U
 #EXTINF:-1,Example Channel
-http://127.0.0.1:6878/ace/getstream?id=1234567890abcdef1234567890abcdef12345678`,
+http://127.0.0.1:6878/ace/getstream?id=1234567890abcdef1234567890abcdef12345678&network-caching=1000`,
 		},
 		{
 			name: "multiple acestream URLs with metadata",
@@ -29,9 +29,9 @@ acestream://1111111111111111111111111111111111111111
 acestream://2222222222222222222222222222222222222222`,
 			expected: `#EXTM3U
 #EXTINF:-1 tvg-id="channel1" tvg-name="Channel 1",Channel 1
-http://127.0.0.1:6878/ace/getstream?id=1111111111111111111111111111111111111111
+http://127.0.0.1:6878/ace/getstream?id=1111111111111111111111111111111111111111&network-caching=1000
 #EXTINF:-1 tvg-id="channel2" tvg-name="Channel 2",Channel 2
-http://127.0.0.1:6878/ace/getstream?id=2222222222222222222222222222222222222222`,
+http://127.0.0.1:6878/ace/getstream?id=2222222222222222222222222222222222222222&network-caching=1000`,
 		},
 		{
 			name: "mixed acestream and regular URLs",
@@ -46,7 +46,7 @@ https://example.com/another.m3u8`,
 #EXTINF:-1,Regular HTTP Stream
 http://example.com/stream.m3u8
 #EXTINF:-1,Acestream Channel
-http://127.0.0.1:6878/ace/getstream?id=abcdef1234567890abcdef1234567890abcdef12
+http://127.0.0.1:6878/ace/getstream?id=abcdef1234567890abcdef1234567890abcdef12&network-caching=1000
 #EXTINF:-1,Another HTTP Stream
 https://example.com/another.m3u8`,
 		},
@@ -55,12 +55,12 @@ https://example.com/another.m3u8`,
 			input: `#EXTINF:-1,Test Channel
 acestream://1234567890abcdef1234567890abcdef12345678   `,
 			expected: `#EXTINF:-1,Test Channel
-http://127.0.0.1:6878/ace/getstream?id=1234567890abcdef1234567890abcdef12345678`,
+http://127.0.0.1:6878/ace/getstream?id=1234567890abcdef1234567890abcdef12345678&network-caching=1000`,
 		},
 		{
 			name:     "acestream URL with Windows line ending",
 			input:    "#EXTINF:-1,Test Channel\nacestream://1234567890abcdef1234567890abcdef12345678",
-			expected: "#EXTINF:-1,Test Channel\nhttp://127.0.0.1:6878/ace/getstream?id=1234567890abcdef1234567890abcdef12345678",
+			expected: "#EXTINF:-1,Test Channel\nhttp://127.0.0.1:6878/ace/getstream?id=1234567890abcdef1234567890abcdef12345678&network-caching=1000",
 		},
 		{
 			name:     "empty content",
@@ -78,7 +78,7 @@ acestream://1234567890abcdef1234567890abcdef12345678
 			expected: `#EXTM3U
 
 #EXTINF:-1,Channel
-http://127.0.0.1:6878/ace/getstream?id=1234567890abcdef1234567890abcdef12345678
+http://127.0.0.1:6878/ace/getstream?id=1234567890abcdef1234567890abcdef12345678&network-caching=1000
 
 `,
 		},
@@ -92,7 +92,7 @@ http://127.0.0.1:6878/ace/getstream?id=1234567890abcdef1234567890abcdef12345678
 			input: `#EXTINF:-1,Short ID
 acestream://abc`,
 			expected: `#EXTINF:-1,Short ID
-http://127.0.0.1:6878/ace/getstream?id=abc`,
+http://127.0.0.1:6878/ace/getstream?id=abc&network-caching=1000`,
 		},
 		{
 			name: "line that contains acestream:// but doesn't start with it",
@@ -106,7 +106,7 @@ http://example.com/stream.m3u8`,
 		{
 			name:     "malformed acestream URL (just the protocol)",
 			input:    "acestream://",
-			expected: "http://127.0.0.1:6878/ace/getstream?id=",
+			expected: "http://127.0.0.1:6878/ace/getstream?id=&network-caching=1000",
 		},
 	}
 
@@ -130,7 +130,7 @@ func TestRewriteM3U_CustomPlayerURL(t *testing.T) {
 acestream://1234567890abcdef1234567890abcdef12345678`
 
 	expected := `#EXTINF:-1,Test Channel
-http://custom-player.local:8080/stream?id=1234567890abcdef1234567890abcdef12345678`
+http://custom-player.local:8080/stream?id=1234567890abcdef1234567890abcdef12345678&network-caching=1000`
 
 	result := rewriter.RewriteM3U([]byte(input))
 	if string(result) != expected {
@@ -170,6 +170,11 @@ func TestRewriteM3U_LargePlaylist(t *testing.T) {
 	if count != 500 {
 		t.Errorf("Expected 500 rewritten URLs, got %d", count)
 	}
+
+	// Verify network-caching parameter is present
+	if !strings.Contains(resultStr, "&network-caching=1000") {
+		t.Error("Result should contain network-caching parameter")
+	}
 }
 
 func TestRewriteM3U_PreservesAllMetadata(t *testing.T) {
@@ -196,7 +201,7 @@ http://example.com/stream.m3u8`
 		t.Error("Regular URL not preserved correctly")
 	}
 
-	if !strings.Contains(result, "http://127.0.0.1:6878/ace/getstream?id=1234567890abcdef1234567890abcdef12345678") {
+	if !strings.Contains(result, "http://127.0.0.1:6878/ace/getstream?id=1234567890abcdef1234567890abcdef12345678&network-caching=1000") {
 		t.Error("Acestream URL not rewritten correctly")
 	}
 }
