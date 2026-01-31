@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/alorle/iptv-manager/logging"
+	"github.com/alorle/iptv-manager/metrics"
 )
 
 // State represents the current state of the circuit breaker
@@ -194,6 +195,16 @@ func (b *breaker) transitionTo(newState State) {
 	// Log state change
 	if b.logger != nil {
 		b.logger.LogCircuitBreakerChange(oldState.String(), newState.String(), b.contentID)
+	}
+
+	// Update metrics
+	if b.contentID != "" {
+		metrics.SetCircuitBreakerState(b.contentID, newState.String())
+
+		// Record trip when transitioning to OPEN
+		if newState == StateOpen {
+			metrics.RecordCircuitBreakerTrip(b.contentID)
+		}
 	}
 
 	switch newState {

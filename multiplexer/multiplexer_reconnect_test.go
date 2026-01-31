@@ -69,7 +69,7 @@ func TestStream_RingBufferDuringReconnection(t *testing.T) {
 	})
 
 	// Create stream with ring buffer
-	stream := NewStream("test-content", cb, &http.Client{}, cfg.ResilienceConfig.ReconnectBufferSize)
+	stream := NewStream("test-content", cb, &http.Client{}, cfg.ResilienceConfig.ReconnectBufferSize, nil)
 
 	// Verify ring buffer is created
 	if stream.ringBuffer == nil {
@@ -102,7 +102,7 @@ func TestStream_BufferWriteDuringNormalOperation(t *testing.T) {
 		HalfOpenRequests: 1,
 	})
 
-	stream := NewStream("test-content", cb, &http.Client{}, cfg.ResilienceConfig.ReconnectBufferSize)
+	stream := NewStream("test-content", cb, &http.Client{}, cfg.ResilienceConfig.ReconnectBufferSize, nil)
 
 	// Simulate data flow - ring buffer should be populated
 	testData := []byte("test stream data")
@@ -141,7 +141,7 @@ func TestStream_ReconnectionState(t *testing.T) {
 		HalfOpenRequests: 1,
 	})
 
-	stream := NewStream("test-content", cb, &http.Client{}, cfg.ResilienceConfig.ReconnectBufferSize)
+	stream := NewStream("test-content", cb, &http.Client{}, cfg.ResilienceConfig.ReconnectBufferSize, nil)
 
 	// Initially not reconnecting
 	if stream.IsReconnecting() {
@@ -182,7 +182,7 @@ func TestStream_SendBufferToClient(t *testing.T) {
 		HalfOpenRequests: 1,
 	})
 
-	stream := NewStream("test-content", cb, &http.Client{}, cfg.ResilienceConfig.ReconnectBufferSize)
+	stream := NewStream("test-content", cb, &http.Client{}, cfg.ResilienceConfig.ReconnectBufferSize, nil)
 
 	// Add some data to the buffer
 	testData := []byte("buffered stream data")
@@ -244,7 +244,7 @@ func TestStream_BufferOverflow(t *testing.T) {
 		HalfOpenRequests: 1,
 	})
 
-	stream := NewStream("test-content", cb, &http.Client{}, cfg.ResilienceConfig.ReconnectBufferSize)
+	stream := NewStream("test-content", cb, &http.Client{}, cfg.ResilienceConfig.ReconnectBufferSize, nil)
 
 	// Write more data than buffer size
 	largeData := make([]byte, bufferSize*2)
@@ -287,7 +287,7 @@ func TestRingBuffer_EmptyBuffer(t *testing.T) {
 		HalfOpenRequests: 1,
 	})
 
-	stream := NewStream("test-content", cb, &http.Client{}, cfg.ResilienceConfig.ReconnectBufferSize)
+	stream := NewStream("test-content", cb, &http.Client{}, cfg.ResilienceConfig.ReconnectBufferSize, nil)
 
 	// Create a test client
 	recorder := httptest.NewRecorder()
@@ -377,7 +377,7 @@ func TestStream_ConcurrentBufferAccess(t *testing.T) {
 		HalfOpenRequests: 1,
 	})
 
-	stream := NewStream("test-content", cb, &http.Client{}, cfg.ResilienceConfig.ReconnectBufferSize)
+	stream := NewStream("test-content", cb, &http.Client{}, cfg.ResilienceConfig.ReconnectBufferSize, nil)
 
 	// Concurrent writes
 	done := make(chan bool)

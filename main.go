@@ -15,10 +15,12 @@ import (
 	"github.com/alorle/iptv-manager/config"
 	"github.com/alorle/iptv-manager/fetcher"
 	"github.com/alorle/iptv-manager/logging"
+	"github.com/alorle/iptv-manager/metrics"
 	"github.com/alorle/iptv-manager/multiplexer"
 	"github.com/alorle/iptv-manager/overrides"
 	"github.com/alorle/iptv-manager/pidmanager"
 	"github.com/alorle/iptv-manager/rewriter"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
 
 type Config struct {
@@ -251,6 +253,13 @@ func main() {
 		w.WriteHeader(http.StatusOK)
 		w.Write([]byte("OK"))
 	})
+
+	// Prometheus metrics endpoint
+	handler.Handle("/metrics", promhttp.Handler())
+
+	// Initialize metrics to ensure they appear in /metrics output
+	metrics.SetStreamsActive(0)
+	metrics.SetClientsConnected(0)
 
 	// Stream handler function - shared by /stream and /ace/getstream
 	streamHandler := func(w http.ResponseWriter, r *http.Request) {

@@ -13,6 +13,7 @@ import (
 	"github.com/alorle/iptv-manager/circuitbreaker"
 	"github.com/alorle/iptv-manager/config"
 	"github.com/alorle/iptv-manager/logging"
+	"github.com/alorle/iptv-manager/metrics"
 )
 
 // Config holds multiplexer configuration
@@ -121,10 +122,11 @@ type Stream struct {
 	reconnectMu    sync.RWMutex
 	resLogger      *logging.Logger
 	reconnectStart time.Time
+	mux            *Multiplexer
 }
 
 // NewStream creates a new stream with ring buffer
-func NewStream(contentID string, cb circuitbreaker.CircuitBreaker, httpClient *http.Client, bufferSize int) *Stream {
+func NewStream(contentID string, cb circuitbreaker.CircuitBreaker, httpClient *http.Client, bufferSize int, mux *Multiplexer) *Stream {
 	return &Stream{
 		ContentID:      contentID,
 		Clients:        make(map[string]*Client),
@@ -133,29 +135,44 @@ func NewStream(contentID string, cb circuitbreaker.CircuitBreaker, httpClient *h
 		httpClient:     httpClient,
 		ringBuffer:     NewRingBuffer(bufferSize),
 		reconnecting:   false,
+		mux:            mux,
 	}
 }
 
 // AddClient adds a client to the stream
 func (s *Stream) AddClient(client *Client) {
 	s.mu.Lock()
-	defer s.mu.Unlock()
 	s.Clients[client.ID] = client
 	log.Printf("Stream %s: Added client %s (total clients: %d)", s.ContentID, client.ID, len(s.Clients))
+	s.mu.Unlock()
+
+	// Update metrics through multiplexer
+	if s.mux != nil {
+		s.mux.mu.RLock()
+		s.mux.updateGlobalMetrics()
+		s.mux.mu.RUnlock()
+	}
 }
 
 // RemoveClient removes a client from the stream
 func (s *Stream) RemoveClient(clientID string) int {
 	s.mu.Lock()
-	defer s.mu.Unlock()
-
 	if client, exists := s.Clients[clientID]; exists {
 		client.Close()
 		delete(s.Clients, clientID)
 		log.Printf("Stream %s: Removed client %s (remaining clients: %d)", s.ContentID, clientID, len(s.Clients))
 	}
+	remaining := len(s.Clients)
+	s.mu.Unlock()
 
-	return len(s.Clients)
+	// Update metrics through multiplexer
+	if s.mux != nil {
+		s.mux.mu.RLock()
+		s.mux.updateGlobalMetrics()
+		s.mux.mu.RUnlock()
+	}
+
+	return remaining
 }
 
 // ClientCount returns the number of connected clients
@@ -164,6 +181,7 @@ func (s *Stream) ClientCount() int {
 	defer s.mu.RUnlock()
 	return len(s.Clients)
 }
+
 
 // IsReconnecting returns true if the stream is currently reconnecting
 func (s *Stream) IsReconnecting() bool {
@@ -262,6 +280,9 @@ func (s *Stream) fanOut(ctx context.Context, cfg Config) {
 
 			// Attempt reconnection with exponential backoff
 			log.Printf("Stream %s: Upstream connection lost: %v", s.ContentID, err)
+
+			// Record upstream error
+			metrics.RecordUpstreamError(s.ContentID, "connection_lost")
 
 			// Mark as reconnecting
 			s.setReconnecting(true)
@@ -364,6 +385,10 @@ func (s *Stream) fanOut(ctx context.Context, cfg Config) {
 				if s.resLogger != nil {
 					s.resLogger.LogReconnectSuccess(s.ContentID, downtime)
 				}
+
+				// Record reconnection metric
+				metrics.RecordUpstreamReconnection(s.ContentID)
+
 				s.mu.Lock()
 				s.upstream = newUpstream
 				s.mu.Unlock()
@@ -425,6 +450,16 @@ type Multiplexer struct {
 	ctx     context.Context // Independent context for upstream connections
 }
 
+// updateGlobalMetrics updates global metrics based on all streams
+// Must be called with lock held
+func (m *Multiplexer) updateGlobalMetrics() {
+	totalClients := 0
+	for _, stream := range m.streams {
+		totalClients += len(stream.Clients)
+	}
+	metrics.SetClientsConnected(totalClients)
+}
+
 // New creates a new multiplexer
 func New(cfg Config) *Multiplexer {
 	return &Multiplexer{
@@ -459,7 +494,7 @@ func (m *Multiplexer) GetOrCreateStream(ctx context.Context, contentID string, u
 	cb := circuitbreaker.New(cbConfig)
 
 	// Create new stream with circuit breaker and ring buffer
-	stream := NewStream(contentID, cb, m.client, m.cfg.ResilienceConfig.ReconnectBufferSize)
+	stream := NewStream(contentID, cb, m.client, m.cfg.ResilienceConfig.ReconnectBufferSize, m)
 
 	// Start upstream connection using multiplexer's independent context
 	// This ensures upstream is not tied to any single client's request context
@@ -487,6 +522,9 @@ func (m *Multiplexer) GetOrCreateStream(ctx context.Context, contentID string, u
 	// Store the stream
 	m.streams[contentID] = stream
 
+	// Update metrics
+	metrics.SetStreamsActive(len(m.streams))
+
 	return stream, false, nil
 }
 
@@ -500,6 +538,9 @@ func (m *Multiplexer) RemoveStream(contentID string) {
 			log.Printf("Multiplexer: Removing stream %s (no clients)", contentID)
 			stream.Stop()
 			delete(m.streams, contentID)
+
+			// Update metrics
+			metrics.SetStreamsActive(len(m.streams))
 		}
 	}
 }

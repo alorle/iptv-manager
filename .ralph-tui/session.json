@@ -3,10 +3,10 @@
   "sessionId": "78f757b7-042c-43e5-817b-0f68938fa97e",
   "status": "running",
   "startedAt": "2026-01-31T18:08:24.828Z",
-  "updatedAt": "2026-01-31T18:47:03.029Z",
-  "currentIteration": 6,
+  "updatedAt": "2026-01-31T18:47:04.205Z",
+  "currentIteration": 7,
   "maxIterations": 0,
-  "tasksCompleted": 6,
+  "tasksCompleted": 7,
   "isPaused": false,
   "agentPlugin": "claude",
   "trackerState": {
@@ -53,8 +53,8 @@
       {
         "id": "US-007",
         "title": "Logging estructurado para eventos de resiliencia",
-        "status": "open",
-        "completedInSession": false
+        "status": "completed",
+        "completedInSession": true
       },
       {
         "id": "US-006",
@@ -124,10 +124,22 @@
       "durationMs": 302767,
       "startedAt": "2026-01-31T18:34:33.708Z",
       "endedAt": "2026-01-31T18:39:36.475Z"
+    },
+    {
+      "iteration": 7,
+      "status": "completed",
+      "taskId": "US-007",
+      "taskTitle": "Logging estructurado para eventos de resiliencia",
+      "taskCompleted": true,
+      "durationMs": 445400,
+      "startedAt": "2026-01-31T18:39:37.625Z",
+      "endedAt": "2026-01-31T18:47:03.025Z"
     }
   ],
   "skippedTaskIds": [],
   "cwd": "/home/alorle/gh/alorle/iptv-manager",
-  "activeTaskIds": [],
+  "activeTaskIds": [
+    "US-006"
+  ],
   "subagentPanelVisible": true
 }
