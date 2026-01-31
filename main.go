@@ -580,7 +580,7 @@ func main() {
 	handler.Handle("/api/overrides/", overridesHandler)
 
 	// Mount embedded UI at /ui/ path
-	handler.Handle("/ui/", ui.Handler("/ui/"))
+	handler.Handle("/", ui.Handler("/"))
 
 	s := &http.Server{
 		Handler:      handler,
