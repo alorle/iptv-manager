@@ -3,10 +3,10 @@
   "sessionId": "f7da1394-fd43-4cca-9673-0fbf0e9925bb",
   "status": "running",
   "startedAt": "2026-01-31T15:41:40.721Z",
-  "updatedAt": "2026-01-31T15:50:20.975Z",
-  "currentIteration": 2,
+  "updatedAt": "2026-01-31T15:54:14.197Z",
+  "currentIteration": 3,
   "maxIterations": 0,
-  "tasksCompleted": 2,
+  "tasksCompleted": 3,
   "isPaused": false,
   "agentPlugin": "claude",
   "trackerState": {
@@ -29,8 +29,8 @@
       {
         "id": "US-003",
         "title": "Gestión en memoria con hot-reload",
-        "status": "open",
-        "completedInSession": false
+        "status": "completed",
+        "completedInSession": true
       },
       {
         "id": "US-004",
@@ -90,10 +90,20 @@
       "durationMs": 187790,
       "startedAt": "2026-01-31T15:43:33.301Z",
       "endedAt": "2026-01-31T15:46:41.091Z"
+    },
+    {
+      "iteration": 3,
+      "status": "completed",
+      "taskId": "US-003",
+      "taskTitle": "Gestión en memoria con hot-reload",
+      "taskCompleted": true,
+      "durationMs": 218702,
+      "startedAt": "2026-01-31T15:46:42.270Z",
+      "endedAt": "2026-01-31T15:50:20.972Z"
     }
   ],
   "skippedTaskIds": [],
   "cwd": "/home/alorle/gh/alorle/iptv-manager",
   "activeTaskIds": [],
-  "subagentPanelVisible": false
+  "subagentPanelVisible": true
 }
