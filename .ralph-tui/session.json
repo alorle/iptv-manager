@@ -3,10 +3,10 @@
   "sessionId": "06116c4e-d873-4fe0-ba7a-53d2074f955e",
   "status": "running",
   "startedAt": "2026-01-31T13:25:36.812Z",
-  "updatedAt": "2026-01-31T13:51:15.774Z",
-  "currentIteration": 7,
+  "updatedAt": "2026-01-31T14:05:23.340Z",
+  "currentIteration": 8,
   "maxIterations": 0,
-  "tasksCompleted": 7,
+  "tasksCompleted": 8,
   "isPaused": false,
   "agentPlugin": "claude",
   "trackerState": {
@@ -59,8 +59,8 @@
       {
         "id": "US-008",
         "title": "Configuración del módulo aceproxy",
-        "status": "open",
-        "completedInSession": false
+        "status": "completed",
+        "completedInSession": true
       },
       {
         "id": "US-009",
@@ -140,6 +140,16 @@
       "durationMs": 310138,
       "startedAt": "2026-01-31T13:43:45.210Z",
       "endedAt": "2026-01-31T13:48:55.348Z"
+    },
+    {
+      "iteration": 8,
+      "status": "completed",
+      "taskId": "US-008",
+      "taskTitle": "Configuración del módulo aceproxy",
+      "taskCompleted": true,
+      "durationMs": 139071,
+      "startedAt": "2026-01-31T13:48:56.701Z",
+      "endedAt": "2026-01-31T13:51:15.772Z"
     }
   ],
   "skippedTaskIds": [],
