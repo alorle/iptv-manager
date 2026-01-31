@@ -30,6 +30,19 @@ type Config struct {
 	ProxyWriteTimeout      time.Duration
 }
 
+// isValidContentID validates that a content ID is exactly 40 hexadecimal characters
+func isValidContentID(id string) bool {
+	if len(id) != 40 {
+		return false
+	}
+	for _, c := range id {
+		if !((c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F')) {
+			return false
+		}
+	}
+	return true
+}
+
 func loadConfig() (*Config, error) {
 	cfg := &Config{
 		HTTPAddress:            os.Getenv("HTTP_ADDRESS"),
@@ -201,7 +214,13 @@ func main() {
 		// Get content ID from query parameter
 		contentID := r.URL.Query().Get("id")
 		if contentID == "" {
-			http.Error(w, "Missing content ID parameter", http.StatusBadRequest)
+			http.Error(w, "Missing id parameter", http.StatusBadRequest)
+			return
+		}
+
+		// Validate content ID format (40 hex characters)
+		if !isValidContentID(contentID) {
+			http.Error(w, "Invalid id format: must be 40 hexadecimal characters", http.StatusBadRequest)
 			return
 		}
 
@@ -212,13 +231,29 @@ func main() {
 
 		log.Printf("Stream request: contentID=%s, clientID=%s, pid=%d", contentID, clientID, pid)
 
-		// Build upstream URL with PID
+		// Build upstream URL with PID and optional transcode parameters
 		upstreamURL := fmt.Sprintf("%s/ace/getstream?id=%s&pid=%d", cfg.AcestreamEngineURL, contentID, pid)
 
+		// Add optional transcode parameters
+		if transcodeAudio := r.URL.Query().Get("transcode_audio"); transcodeAudio != "" {
+			upstreamURL += "&transcode_audio=" + transcodeAudio
+		}
+		if transcodeMp3 := r.URL.Query().Get("transcode_mp3"); transcodeMp3 != "" {
+			upstreamURL += "&transcode_mp3=" + transcodeMp3
+		}
+		if transcodeAc3 := r.URL.Query().Get("transcode_ac3"); transcodeAc3 != "" {
+			upstreamURL += "&transcode_ac3=" + transcodeAc3
+		}
+
 		// Serve the stream through multiplexer
+		// Note: multiplexer sets Content-Type to video/mp2t automatically
 		if err := mux.ServeStream(r.Context(), w, contentID, upstreamURL, clientID); err != nil {
 			log.Printf("Failed to serve stream for contentID=%s: %v", contentID, err)
-			// Don't write error response - connection may already be established
+			// Check if it's a connection error to Engine
+			if strings.Contains(err.Error(), "connect") || strings.Contains(err.Error(), "upstream") {
+				http.Error(w, "Bad Gateway: cannot connect to Engine", http.StatusBadGateway)
+				return
+			}
 		}
 
 		// Release PID when client disconnects
