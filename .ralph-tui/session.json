@@ -3,10 +3,10 @@
   "sessionId": "a04ca31d-d1d5-4a16-b083-f988ae3fb046",
   "status": "running",
   "startedAt": "2026-01-31T11:42:22.184Z",
-  "updatedAt": "2026-01-31T11:52:27.551Z",
-  "currentIteration": 2,
+  "updatedAt": "2026-01-31T11:55:19.675Z",
+  "currentIteration": 3,
   "maxIterations": 0,
-  "tasksCompleted": 2,
+  "tasksCompleted": 3,
   "isPaused": false,
   "agentPlugin": "claude",
   "trackerState": {
@@ -29,8 +29,8 @@
       {
         "id": "US-003",
         "title": "Deduplicate streams by acestream ID",
-        "status": "open",
-        "completedInSession": false
+        "status": "completed",
+        "completedInSession": true
       },
       {
         "id": "US-004",
@@ -78,6 +78,16 @@
       "durationMs": 191584,
       "startedAt": "2026-01-31T11:46:07.891Z",
       "endedAt": "2026-01-31T11:49:19.475Z"
+    },
+    {
+      "iteration": 3,
+      "status": "completed",
+      "taskId": "US-003",
+      "taskTitle": "Deduplicate streams by acestream ID",
+      "taskCompleted": true,
+      "durationMs": 186916,
+      "startedAt": "2026-01-31T11:49:20.632Z",
+      "endedAt": "2026-01-31T11:52:27.548Z"
     }
   ],
   "skippedTaskIds": [],
