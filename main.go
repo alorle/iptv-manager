@@ -21,6 +21,7 @@ import (
 	"github.com/alorle/iptv-manager/overrides"
 	"github.com/alorle/iptv-manager/pidmanager"
 	"github.com/alorle/iptv-manager/rewriter"
+	"github.com/alorle/iptv-manager/ui"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
 
@@ -577,6 +578,9 @@ func main() {
 	overridesHandler := api.NewOverridesHandler(overridesMgr, epgCache)
 	handler.Handle("/api/overrides", overridesHandler)
 	handler.Handle("/api/overrides/", overridesHandler)
+
+	// Mount embedded UI at /ui/ path
+	handler.Handle("/ui/", ui.Handler("/ui/"))
 
 	s := &http.Server{
 		Handler:      handler,
