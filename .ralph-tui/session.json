@@ -3,10 +3,10 @@
   "sessionId": "f7da1394-fd43-4cca-9673-0fbf0e9925bb",
   "status": "running",
   "startedAt": "2026-01-31T15:41:40.721Z",
-  "updatedAt": "2026-01-31T15:43:32.114Z",
-  "currentIteration": 0,
+  "updatedAt": "2026-01-31T15:43:33.306Z",
+  "currentIteration": 1,
   "maxIterations": 0,
-  "tasksCompleted": 0,
+  "tasksCompleted": 1,
   "isPaused": false,
   "agentPlugin": "claude",
   "trackerState": {
@@ -17,8 +17,8 @@
       {
         "id": "US-001",
         "title": "Definir estructura de datos para overrides",
-        "status": "open",
-        "completedInSession": false
+        "status": "completed",
+        "completedInSession": true
       },
       {
         "id": "US-002",
@@ -70,9 +70,22 @@
       }
     ]
   },
-  "iterations": [],
+  "iterations": [
+    {
+      "iteration": 1,
+      "status": "completed",
+      "taskId": "US-001",
+      "taskTitle": "Definir estructura de datos para overrides",
+      "taskCompleted": true,
+      "durationMs": 107779,
+      "startedAt": "2026-01-31T15:41:44.333Z",
+      "endedAt": "2026-01-31T15:43:32.112Z"
+    }
+  ],
   "skippedTaskIds": [],
   "cwd": "/home/alorle/gh/alorle/iptv-manager",
-  "activeTaskIds": [],
+  "activeTaskIds": [
+    "US-002"
+  ],
   "subagentPanelVisible": false
 }
