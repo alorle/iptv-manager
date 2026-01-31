@@ -3,10 +3,10 @@
   "sessionId": "f7da1394-fd43-4cca-9673-0fbf0e9925bb",
   "status": "running",
   "startedAt": "2026-01-31T15:41:40.721Z",
-  "updatedAt": "2026-01-31T15:46:41.094Z",
-  "currentIteration": 1,
+  "updatedAt": "2026-01-31T15:50:20.975Z",
+  "currentIteration": 2,
   "maxIterations": 0,
-  "tasksCompleted": 1,
+  "tasksCompleted": 2,
   "isPaused": false,
   "agentPlugin": "claude",
   "trackerState": {
@@ -23,8 +23,8 @@
       {
         "id": "US-002",
         "title": "Implementar almacenamiento persistente",
-        "status": "open",
-        "completedInSession": false
+        "status": "completed",
+        "completedInSession": true
       },
       {
         "id": "US-003",
@@ -80,6 +80,16 @@
       "durationMs": 107779,
       "startedAt": "2026-01-31T15:41:44.333Z",
       "endedAt": "2026-01-31T15:43:32.112Z"
+    },
+    {
+      "iteration": 2,
+      "status": "completed",
+      "taskId": "US-002",
+      "taskTitle": "Implementar almacenamiento persistente",
+      "taskCompleted": true,
+      "durationMs": 187790,
+      "startedAt": "2026-01-31T15:43:33.301Z",
+      "endedAt": "2026-01-31T15:46:41.091Z"
     }
   ],
   "skippedTaskIds": [],
