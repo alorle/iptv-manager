@@ -488,11 +488,13 @@ func main() {
 		w.Write(rewrittenContent)
 	})
 
-	// API endpoint to list all channels with override status
+	// API endpoints for channels
 	elcanoURL := "https://ipfs.io/ipns/k51qzi5uqu5di462t7j4vu4akwfhvtjhy88qbupktvoacqfqe9uforjvhyi4wr/hashes_acestream.m3u"
 	neweraURL := "https://ipfs.io/ipns/k2k4r8oqlcjxsritt5mczkcn4mmvcmymbqw7113fz2flkrerfwfps004/data/listas/lista_fuera_iptv.m3u"
 	channelsHandler := api.NewChannelsHandler(fetch, overridesMgr, elcanoURL, neweraURL)
+	// Handle both /api/channels and /api/channels/{id}
 	handler.Handle("/api/channels", channelsHandler)
+	handler.Handle("/api/channels/", channelsHandler)
 
 	s := &http.Server{
 		Handler:      handler,

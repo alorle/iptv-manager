@@ -155,12 +155,23 @@ func deduplicateChannels(channels []Channel) []Channel {
 	return result
 }
 
-// ServeHTTP handles the GET /api/channels request
+// ServeHTTP handles the GET /api/channels request and PATCH /api/channels/{acestream_id}
 func (h *ChannelsHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+	if r.Method == http.MethodGet {
+		h.handleList(w, r)
 		return
 	}
+
+	if r.Method == http.MethodPatch {
+		h.handleToggle(w, r)
+		return
+	}
+
+	http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+}
+
+// handleList handles the GET /api/channels request
+func (h *ChannelsHandler) handleList(w http.ResponseWriter, r *http.Request) {
 
 	// Fetch both sources
 	elcanoContent, _, _, elcanoErr := h.fetcher.FetchWithCache(h.elcanoURL)
@@ -207,5 +218,134 @@ func (h *ChannelsHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	if err := json.NewEncoder(w).Encode(allChannels); err != nil {
 		log.Printf("Failed to encode channels response: %v", err)
+	}
+}
+
+// ToggleRequest represents the request body for toggling a channel's enabled status
+type ToggleRequest struct {
+	Enabled bool `json:"enabled"`
+}
+
+// handleToggle handles the PATCH /api/channels/{acestream_id} request
+func (h *ChannelsHandler) handleToggle(w http.ResponseWriter, r *http.Request) {
+	// Extract acestream_id from the URL path
+	path := strings.TrimPrefix(r.URL.Path, "/api/channels/")
+	acestreamID := strings.TrimSpace(path)
+
+	// Validate acestream ID format (40 hex characters)
+	if len(acestreamID) != 40 {
+		http.Error(w, "Invalid acestream_id: must be 40 characters", http.StatusBadRequest)
+		return
+	}
+
+	// Validate that it's hexadecimal
+	for _, c := range acestreamID {
+		if !((c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F')) {
+			http.Error(w, "Invalid acestream_id: must be hexadecimal", http.StatusBadRequest)
+			return
+		}
+	}
+
+	// Parse request body
+	var req ToggleRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	// Check if the channel exists in any source
+	elcanoContent, _, _, elcanoErr := h.fetcher.FetchWithCache(h.elcanoURL)
+	neweraContent, _, _, neweraErr := h.fetcher.FetchWithCache(h.neweraURL)
+
+	// Check if both sources failed
+	if elcanoErr != nil && neweraErr != nil {
+		log.Printf("Failed to fetch channels - both sources failed: elcano=%v, newera=%v", elcanoErr, neweraErr)
+		http.Error(w, "Bad Gateway", http.StatusBadGateway)
+		return
+	}
+
+	// Check if the acestream_id exists in any source
+	channelFound := false
+
+	if elcanoErr == nil {
+		elcanoChannels := parseM3UChannels(elcanoContent, "elcano")
+		for _, ch := range elcanoChannels {
+			if ch.AcestreamID == acestreamID {
+				channelFound = true
+				break
+			}
+		}
+	}
+
+	if !channelFound && neweraErr == nil {
+		neweraChannels := parseM3UChannels(neweraContent, "newera")
+		for _, ch := range neweraChannels {
+			if ch.AcestreamID == acestreamID {
+				channelFound = true
+				break
+			}
+		}
+	}
+
+	if !channelFound {
+		http.Error(w, "Channel not found", http.StatusNotFound)
+		return
+	}
+
+	// Get existing override or create a new one
+	existingOverride := h.overridesMgr.Get(acestreamID)
+	var override overrides.ChannelOverride
+
+	if existingOverride != nil {
+		// Copy existing override
+		override = *existingOverride
+	}
+
+	// Update the enabled field
+	override.Enabled = &req.Enabled
+
+	// Save the override to disk
+	if err := h.overridesMgr.Set(acestreamID, override); err != nil {
+		log.Printf("Failed to save override for %s: %v", acestreamID, err)
+		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		return
+	}
+
+	log.Printf("Updated channel %s: enabled=%v", acestreamID, req.Enabled)
+
+	// Return the updated channel
+	// Fetch channels again to get the updated state
+	var updatedChannel *Channel
+
+	if elcanoErr == nil {
+		elcanoChannels := parseM3UChannels(elcanoContent, "elcano")
+		for _, ch := range elcanoChannels {
+			if ch.AcestreamID == acestreamID {
+				ch.HasOverride = true
+				ch.Enabled = req.Enabled
+				updatedChannel = &ch
+				break
+			}
+		}
+	}
+
+	if updatedChannel == nil && neweraErr == nil {
+		neweraChannels := parseM3UChannels(neweraContent, "newera")
+		for _, ch := range neweraChannels {
+			if ch.AcestreamID == acestreamID {
+				ch.HasOverride = true
+				ch.Enabled = req.Enabled
+				updatedChannel = &ch
+				break
+			}
+		}
+	}
+
+	// Return the updated channel as JSON
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+
+	if err := json.NewEncoder(w).Encode(updatedChannel); err != nil {
+		log.Printf("Failed to encode channel response: %v", err)
 	}
 }
