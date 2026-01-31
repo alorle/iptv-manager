@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/alorle/iptv-manager/api"
 	"github.com/alorle/iptv-manager/cache"
 	"github.com/alorle/iptv-manager/fetcher"
 	"github.com/alorle/iptv-manager/multiplexer"
@@ -486,6 +487,12 @@ func main() {
 		w.WriteHeader(http.StatusOK)
 		w.Write(rewrittenContent)
 	})
+
+	// API endpoint to list all channels with override status
+	elcanoURL := "https://ipfs.io/ipns/k51qzi5uqu5di462t7j4vu4akwfhvtjhy88qbupktvoacqfqe9uforjvhyi4wr/hashes_acestream.m3u"
+	neweraURL := "https://ipfs.io/ipns/k2k4r8oqlcjxsritt5mczkcn4mmvcmymbqw7113fz2flkrerfwfps004/data/listas/lista_fuera_iptv.m3u"
+	channelsHandler := api.NewChannelsHandler(fetch, overridesMgr, elcanoURL, neweraURL)
+	handler.Handle("/api/channels", channelsHandler)
 
 	s := &http.Server{
 		Handler:      handler,
