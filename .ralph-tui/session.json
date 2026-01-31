@@ -3,10 +3,10 @@
   "sessionId": "06116c4e-d873-4fe0-ba7a-53d2074f955e",
   "status": "running",
   "startedAt": "2026-01-31T13:25:36.812Z",
-  "updatedAt": "2026-01-31T13:37:30.398Z",
-  "currentIteration": 2,
+  "updatedAt": "2026-01-31T13:39:31.766Z",
+  "currentIteration": 3,
   "maxIterations": 0,
-  "tasksCompleted": 2,
+  "tasksCompleted": 3,
   "isPaused": false,
   "agentPlugin": "claude",
   "trackerState": {
@@ -29,8 +29,8 @@
       {
         "id": "US-003",
         "title": "Implementar multiplexación de streams",
-        "status": "open",
-        "completedInSession": false
+        "status": "completed",
+        "completedInSession": true
       },
       {
         "id": "US-004",
@@ -90,6 +90,16 @@
       "durationMs": 241416,
       "startedAt": "2026-01-31T13:28:03.666Z",
       "endedAt": "2026-01-31T13:32:05.082Z"
+    },
+    {
+      "iteration": 3,
+      "status": "completed",
+      "taskId": "US-003",
+      "taskTitle": "Implementar multiplexación de streams",
+      "taskCompleted": true,
+      "durationMs": 323906,
+      "startedAt": "2026-01-31T13:32:06.489Z",
+      "endedAt": "2026-01-31T13:37:30.395Z"
     }
   ],
   "skippedTaskIds": [],
