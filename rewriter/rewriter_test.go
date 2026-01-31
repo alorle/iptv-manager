@@ -658,6 +658,64 @@ func TestExtractDisplayName(t *testing.T) {
 	}
 }
 
+func TestExtractGroupTitle(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    string
+		expected string
+	}{
+		{
+			name:     "extract group-title from metadata",
+			input:    `#EXTINF:-1 tvg-id="ch1" group-title="Sports",Channel`,
+			expected: "Sports",
+		},
+		{
+			name:     "group-title at the end",
+			input:    `#EXTINF:-1 tvg-name="Name" group-title="Movies",Channel`,
+			expected: "Movies",
+		},
+		{
+			name:     "no group-title",
+			input:    `#EXTINF:-1 tvg-id="ch1",Channel`,
+			expected: "",
+		},
+		{
+			name:     "empty group-title",
+			input:    `#EXTINF:-1 group-title="",Channel`,
+			expected: "",
+		},
+		{
+			name:     "non-EXTINF line",
+			input:    `http://example.com/stream.m3u8`,
+			expected: "",
+		},
+		{
+			name:     "empty string",
+			input:    "",
+			expected: "",
+		},
+		{
+			name:     "group-title with special characters",
+			input:    `#EXTINF:-1 group-title="Sports (HD)",Channel`,
+			expected: "Sports (HD)",
+		},
+		{
+			name:     "group-title with spaces",
+			input:    `#EXTINF:-1 group-title="Live Events",Channel`,
+			expected: "Live Events",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := ExtractGroupTitle(tt.input)
+			if result != tt.expected {
+				t.Errorf("ExtractGroupTitle() failed\nInput:    %s\nExpected: %s\nGot:      %s", tt.input, tt.expected, result)
+			}
+		})
+	}
+}
+
 func TestSortStreamsByName(t *testing.T) {
 	tests := []struct {
 		name     string
@@ -810,6 +868,57 @@ acestream://1111111111111111111111111111111111111111`,
 			expected: `#EXTM3U
 #EXTINF:-1,Only Channel
 acestream://1111111111111111111111111111111111111111`,
+		},
+		{
+			name: "sort by group-title first then by name",
+			input: `#EXTM3U
+#EXTINF:-1 group-title="Sports",Zebra Sports
+acestream://3333333333333333333333333333333333333333
+#EXTINF:-1 group-title="Movies",Apple Movie
+acestream://1111111111111111111111111111111111111111
+#EXTINF:-1 group-title="Sports",Alpha Sports
+acestream://4444444444444444444444444444444444444444
+#EXTINF:-1 group-title="Movies",Banana Movie
+acestream://2222222222222222222222222222222222222222`,
+			expected: `#EXTM3U
+#EXTINF:-1 group-title="Movies",Apple Movie
+acestream://1111111111111111111111111111111111111111
+#EXTINF:-1 group-title="Movies",Banana Movie
+acestream://2222222222222222222222222222222222222222
+#EXTINF:-1 group-title="Sports",Alpha Sports
+acestream://4444444444444444444444444444444444444444
+#EXTINF:-1 group-title="Sports",Zebra Sports
+acestream://3333333333333333333333333333333333333333`,
+		},
+		{
+			name: "channels without group-title come last",
+			input: `#EXTM3U
+#EXTINF:-1,No Group Channel
+acestream://1111111111111111111111111111111111111111
+#EXTINF:-1 group-title="Sports",Sports Channel
+acestream://2222222222222222222222222222222222222222`,
+			expected: `#EXTM3U
+#EXTINF:-1 group-title="Sports",Sports Channel
+acestream://2222222222222222222222222222222222222222
+#EXTINF:-1,No Group Channel
+acestream://1111111111111111111111111111111111111111`,
+		},
+		{
+			name: "case-insensitive group-title sorting",
+			input: `#EXTM3U
+#EXTINF:-1 group-title="sports",Lowercase Sports
+acestream://1111111111111111111111111111111111111111
+#EXTINF:-1 group-title="SPORTS",Uppercase Sports
+acestream://2222222222222222222222222222222222222222
+#EXTINF:-1 group-title="Movies",Movie Channel
+acestream://3333333333333333333333333333333333333333`,
+			expected: `#EXTM3U
+#EXTINF:-1 group-title="Movies",Movie Channel
+acestream://3333333333333333333333333333333333333333
+#EXTINF:-1 group-title="sports",Lowercase Sports
+acestream://1111111111111111111111111111111111111111
+#EXTINF:-1 group-title="SPORTS",Uppercase Sports
+acestream://2222222222222222222222222222222222222222`,
 		},
 	}
 
