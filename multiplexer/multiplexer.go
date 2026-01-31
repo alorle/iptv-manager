@@ -233,6 +233,7 @@ type Multiplexer struct {
 	mu      sync.RWMutex
 	cfg     Config
 	client  *http.Client
+	ctx     context.Context // Independent context for upstream connections
 }
 
 // New creates a new multiplexer
@@ -243,6 +244,7 @@ func New(cfg Config) *Multiplexer {
 		client: &http.Client{
 			Timeout: 0, // No timeout for streaming
 		},
+		ctx: context.Background(), // Independent context for upstream connections
 	}
 }
 
@@ -260,8 +262,9 @@ func (m *Multiplexer) GetOrCreateStream(ctx context.Context, contentID string, u
 	// Create new stream
 	stream := NewStream(contentID)
 
-	// Start upstream connection
-	req, err := http.NewRequestWithContext(ctx, "GET", upstreamURL, nil)
+	// Start upstream connection using multiplexer's independent context
+	// This ensures upstream is not tied to any single client's request context
+	req, err := http.NewRequestWithContext(m.ctx, "GET", upstreamURL, nil)
 	if err != nil {
 		return nil, false, fmt.Errorf("failed to create request: %w", err)
 	}
@@ -278,8 +281,9 @@ func (m *Multiplexer) GetOrCreateStream(ctx context.Context, contentID string, u
 
 	log.Printf("Multiplexer: Created new stream for content ID %s", contentID)
 
-	// Start the stream
-	stream.Start(ctx, resp.Body, m.cfg)
+	// Start the stream with multiplexer's independent context
+	// This ensures the upstream reading loop is not cancelled when a client disconnects
+	stream.Start(m.ctx, resp.Body, m.cfg)
 
 	// Store the stream
 	m.streams[contentID] = stream

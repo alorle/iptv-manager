@@ -671,3 +671,213 @@ func TestStream_Stop(t *testing.T) {
 		t.Error("Stream stop timed out")
 	}
 }
+
+// TestClientDisconnectDoesNotAffectOtherClients verifies that when one client
+// disconnects from a stream, the other clients continue to receive data
+// without interruption. This tests that client contexts are isolated from
+// the upstream context.
+func TestClientDisconnectDoesNotAffectOtherClients(t *testing.T) {
+	// Create a pipe to simulate upstream
+	pr, pw := io.Pipe()
+
+	// Create stream with independent context
+	stream := NewStream("test-content")
+	w1 := newMockResponseWriter()
+	w2 := newMockResponseWriter()
+	client1, _ := NewClient("client-1", w1, 1024*1024)
+	client2, _ := NewClient("client-2", w2, 1024*1024)
+
+	stream.AddClient(client1)
+	stream.AddClient(client2)
+
+	// Start the stream with background context (simulating multiplexer's independent context)
+	ctx := context.Background()
+	stream.Start(ctx, pr, DefaultConfig())
+
+	// Give stream time to start
+	time.Sleep(50 * time.Millisecond)
+
+	// Send first chunk of data - both clients should receive it
+	testData1 := []byte("first chunk")
+	pw.Write(testData1)
+
+	// Verify both clients received first chunk
+	select {
+	case data := <-client1.buffer:
+		if string(data) != string(testData1) {
+			t.Errorf("Client 1 received wrong data: %s", string(data))
+		}
+	case <-time.After(1 * time.Second):
+		t.Fatal("Client 1 timeout receiving first chunk")
+	}
+
+	select {
+	case data := <-client2.buffer:
+		if string(data) != string(testData1) {
+			t.Errorf("Client 2 received wrong data: %s", string(data))
+		}
+	case <-time.After(1 * time.Second):
+		t.Fatal("Client 2 timeout receiving first chunk")
+	}
+
+	// Disconnect client 1
+	stream.RemoveClient("client-1")
+
+	// Verify client 1 is disconnected
+	if stream.ClientCount() != 1 {
+		t.Errorf("Expected 1 client after removing client-1, got %d", stream.ClientCount())
+	}
+
+	// Send second chunk - only client 2 should receive it
+	testData2 := []byte("second chunk after client1 disconnected")
+	pw.Write(testData2)
+
+	// Verify client 2 still receives data
+	select {
+	case data := <-client2.buffer:
+		if string(data) != string(testData2) {
+			t.Errorf("Client 2 received wrong data after client 1 disconnect: %s", string(data))
+		}
+	case <-time.After(1 * time.Second):
+		t.Fatal("Client 2 timeout receiving second chunk - upstream may have been cancelled")
+	}
+
+	// Verify client 1's buffer is closed (it was disconnected)
+	select {
+	case _, ok := <-client1.buffer:
+		if ok {
+			t.Error("Client 1 buffer should be closed after disconnect")
+		}
+	default:
+		// Buffer might be closed but not yet drained, this is acceptable
+	}
+
+	// Send third chunk to ensure stream continues working
+	testData3 := []byte("third chunk")
+	pw.Write(testData3)
+
+	select {
+	case data := <-client2.buffer:
+		if string(data) != string(testData3) {
+			t.Errorf("Client 2 received wrong data on third chunk: %s", string(data))
+		}
+	case <-time.After(1 * time.Second):
+		t.Fatal("Client 2 timeout receiving third chunk")
+	}
+
+	// Cleanup
+	pw.Close()
+	stream.Stop()
+}
+
+// TestMultiplexerIndependentContexts verifies that the multiplexer uses
+// an independent context for upstream connections, not tied to any client's
+// request context.
+func TestMultiplexerIndependentContexts(t *testing.T) {
+	// Create a test server that continuously streams data
+	// Use a channel to control when the server should stop
+	stopServer := make(chan struct{})
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "video/mp2t")
+		w.WriteHeader(http.StatusOK)
+
+		flusher, ok := w.(http.Flusher)
+		if !ok {
+			t.Fatal("ResponseWriter doesn't support flushing")
+		}
+
+		// Stream data continuously until told to stop
+		ticker := time.NewTicker(50 * time.Millisecond)
+		defer ticker.Stop()
+
+		for {
+			select {
+			case <-stopServer:
+				return
+			case <-ticker.C:
+				w.Write([]byte("chunk "))
+				flusher.Flush()
+			}
+		}
+	}))
+	defer func() {
+		close(stopServer)
+		server.Close()
+	}()
+
+	mux := New(DefaultConfig())
+
+	// Create first client with a cancellable context
+	ctx1, cancel1 := context.WithCancel(context.Background())
+
+	// Start serving stream to first client
+	w1 := newMockResponseWriter()
+	client1Done := make(chan error)
+	go func() {
+		client1Done <- mux.ServeStream(ctx1, w1, "test-content", server.URL, "client-1")
+	}()
+
+	// Wait for stream to be established and data to flow
+	time.Sleep(200 * time.Millisecond)
+
+	// Verify first client received some data
+	if len(w1.Body()) == 0 {
+		t.Fatal("Client 1 should have received some data")
+	}
+
+	// Add second client to the same stream
+	ctx2 := context.Background()
+	w2 := newMockResponseWriter()
+	client2Done := make(chan error)
+	go func() {
+		client2Done <- mux.ServeStream(ctx2, w2, "test-content", server.URL, "client-2")
+	}()
+
+	// Wait for second client to receive data
+	time.Sleep(200 * time.Millisecond)
+
+	// Verify second client received data
+	if len(w2.Body()) == 0 {
+		t.Fatal("Client 2 should have received some data")
+	}
+
+	client2DataBefore := len(w2.Body())
+
+	// Cancel first client's context (simulating disconnect)
+	cancel1()
+
+	// Wait for first client to disconnect
+	select {
+	case <-client1Done:
+		// Client 1 disconnected successfully
+	case <-time.After(2 * time.Second):
+		t.Fatal("Client 1 failed to disconnect")
+	}
+
+	// Give time for more data to stream to client 2
+	time.Sleep(300 * time.Millisecond)
+
+	// Verify second client continues to receive data after first client disconnected
+	client2DataAfter := len(w2.Body())
+	if client2DataAfter <= client2DataBefore {
+		t.Errorf("Client 2 should continue receiving data after client 1 disconnects. Before: %d, After: %d",
+			client2DataBefore, client2DataAfter)
+	}
+
+	// Verify the stream still exists in multiplexer
+	mux.mu.RLock()
+	stream, exists := mux.streams["test-content"]
+	mux.mu.RUnlock()
+
+	if !exists {
+		t.Fatal("Stream should still exist after one client disconnects")
+	}
+
+	if stream.ClientCount() != 1 {
+		t.Errorf("Expected 1 client after first disconnect, got %d", stream.ClientCount())
+	}
+
+	// Cleanup - stream.Stop() will be called by defer when server closes
+	// Note: stopServer is already closed in defer, don't close it again here
+	stream.Stop()
+}
