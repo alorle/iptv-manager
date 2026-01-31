@@ -1,0 +1,207 @@
+{
+  "name": "iptv-manager",
+  "description": "Gestión de overrides de canales IPTV: editar metadatos y deshabilitar canales individuales via API REST con persistencia en YAML",
+  "branchName": "ralph/channel-overrides",
+  "userStories": [
+    {
+      "id": "US-001",
+      "title": "Definir estructura de datos para overrides",
+      "description": "Como desarrollador, quiero definir la estructura de datos para los overrides de canales para tener un modelo claro y tipado.",
+      "acceptanceCriteria": [
+        "Crear paquete `overrides` en `/overrides/`",
+        "Definir struct `ChannelOverride` con campos: `Enabled *bool`, `TvgID *string`, `TvgName *string`, `TvgLogo *string`, `GroupTitle *string`",
+        "Usar punteros para distinguir 'no configurado' de 'valor vacío'",
+        "Definir struct `OverridesConfig` como mapa de acestream ID → `ChannelOverride`",
+        "Añadir tags YAML para serialización",
+        "go build ./... passes",
+        "go test ./... passes",
+        "go vet ./... passes"
+      ],
+      "priority": 1,
+      "passes": true,
+      "notes": "",
+      "dependsOn": [],
+      "completionNotes": "Completed by agent"
+    },
+    {
+      "id": "US-002",
+      "title": "Implementar almacenamiento persistente",
+      "description": "Como sistema, quiero cargar y guardar overrides en un archivo YAML para que persistan entre reinicios.",
+      "acceptanceCriteria": [
+        "Implementar función `Load(path string) (*OverridesConfig, error)`",
+        "Implementar función `Save(path string) error`",
+        "Si el archivo no existe, crear configuración vacía (no error)",
+        "El archivo se ubica en `$CACHE_DIR/overrides.yaml`",
+        "Manejar errores de permisos y formato inválido",
+        "Tests unitarios para Load/Save",
+        "go build ./... passes",
+        "go test ./... passes",
+        "go vet ./... passes"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "",
+      "dependsOn": [
+        "US-001"
+      ]
+    },
+    {
+      "id": "US-003",
+      "title": "Gestión en memoria con hot-reload",
+      "description": "Como operador, quiero que los cambios en overrides se apliquen inmediatamente sin reiniciar el servicio.",
+      "acceptanceCriteria": [
+        "Crear `OverridesManager` que mantiene la configuración en memoria",
+        "Implementar métodos thread-safe con `sync.RWMutex`",
+        "Método `Get(acestreamID string) *ChannelOverride`",
+        "Método `Set(acestreamID string, override ChannelOverride) error` que guarda a disco",
+        "Método `Delete(acestreamID string) error` que guarda a disco",
+        "Método `List() map[string]ChannelOverride`",
+        "Cargar configuración al iniciar el servicio",
+        "go build ./... passes",
+        "go test ./... passes",
+        "go vet ./... passes"
+      ],
+      "priority": 3,
+      "passes": false,
+      "notes": "",
+      "dependsOn": [
+        "US-002"
+      ]
+    },
+    {
+      "id": "US-004",
+      "title": "API endpoint para listar canales",
+      "description": "Como usuario, quiero obtener una lista de todos los canales con su estado actual para ver qué puedo editar.",
+      "acceptanceCriteria": [
+        "Endpoint `GET /api/channels`",
+        "Respuesta JSON con array de canales",
+        "Cada canal incluye: `acestream_id`, `name`, `tvg_id`, `tvg_logo`, `group_title`, `source` (elcano/newera), `enabled`, `has_override`",
+        "Combinar datos de ambas fuentes (elcano + newera)",
+        "Aplicar overrides existentes a los datos mostrados",
+        "Ordenar alfabéticamente por nombre",
+        "Content-Type: `application/json`",
+        "go build ./... passes",
+        "go test ./... passes",
+        "go vet ./... passes"
+      ],
+      "priority": 4,
+      "passes": false,
+      "notes": "",
+      "dependsOn": [
+        "US-003"
+      ]
+    },
+    {
+      "id": "US-005",
+      "title": "API endpoint para toggle enable/disable",
+      "description": "Como usuario, quiero poder habilitar o deshabilitar un canal específico para filtrar streams no deseados.",
+      "acceptanceCriteria": [
+        "Endpoint `PATCH /api/channels/{acestream_id}`",
+        "Body JSON: `{\"enabled\": true|false}`",
+        "Crear override si no existe, actualizar si existe",
+        "Guardar cambios a disco inmediatamente",
+        "Responder con el canal actualizado",
+        "Retornar 404 si el acestream_id no existe en ninguna fuente",
+        "Retornar 400 si el body es inválido",
+        "go build ./... passes",
+        "go test ./... passes",
+        "go vet ./... passes"
+      ],
+      "priority": 5,
+      "passes": false,
+      "notes": "",
+      "dependsOn": [
+        "US-003"
+      ]
+    },
+    {
+      "id": "US-006",
+      "title": "API endpoint para editar metadatos",
+      "description": "Como usuario, quiero poder editar los metadatos de un canal para corregir información errónea del EPG.",
+      "acceptanceCriteria": [
+        "Usar mismo endpoint `PATCH /api/channels/{acestream_id}`",
+        "Body JSON puede incluir: `tvg_id`, `tvg_name`, `tvg_logo`, `group_title`, `enabled`",
+        "Solo actualizar campos presentes en el body (merge parcial)",
+        "Validar que tvg_id y tvg_name no estén vacíos si se proporcionan",
+        "Guardar cambios a disco inmediatamente",
+        "Responder con el canal actualizado",
+        "go build ./... passes",
+        "go test ./... passes",
+        "go vet ./... passes"
+      ],
+      "priority": 6,
+      "passes": false,
+      "notes": "",
+      "dependsOn": [
+        "US-005"
+      ]
+    },
+    {
+      "id": "US-007",
+      "title": "Integrar overrides en pipeline de rewriter",
+      "description": "Como usuario, quiero que las playlists servidas reflejen mis overrides para ver los cambios en mi reproductor.",
+      "acceptanceCriteria": [
+        "Crear función `ApplyOverrides(m3u []byte, manager *OverridesManager) []byte`",
+        "Filtrar (eliminar) canales con `enabled: false`",
+        "Reemplazar metadatos según overrides configurados",
+        "Integrar en handlers de `/playlist.m3u`, `/playlists/elcano.m3u`, `/playlists/newera.m3u`",
+        "Aplicar overrides ANTES de deduplicación y ordenación",
+        "Tests unitarios para ApplyOverrides",
+        "go build ./... passes",
+        "go test ./... passes",
+        "go vet ./... passes"
+      ],
+      "priority": 7,
+      "passes": false,
+      "notes": "",
+      "dependsOn": [
+        "US-003"
+      ]
+    },
+    {
+      "id": "US-008",
+      "title": "Limpieza automática de overrides huérfanos",
+      "description": "Como sistema, quiero eliminar overrides de canales que ya no existen en las fuentes para mantener el archivo limpio.",
+      "acceptanceCriteria": [
+        "Implementar función `CleanOrphans(manager *OverridesManager, validIDs []string)`",
+        "Ejecutar limpieza al cargar las playlists desde upstream (no desde caché stale)",
+        "Eliminar overrides cuyo acestream_id no esté en ninguna fuente activa",
+        "Loguear los IDs eliminados a nivel INFO",
+        "No ejecutar limpieza si ambas fuentes fallaron (evitar borrado accidental)",
+        "go build ./... passes",
+        "go test ./... passes",
+        "go vet ./... passes"
+      ],
+      "priority": 8,
+      "passes": false,
+      "notes": "",
+      "dependsOn": [
+        "US-003"
+      ]
+    },
+    {
+      "id": "US-009",
+      "title": "Endpoint para eliminar override",
+      "description": "Como usuario, quiero poder eliminar un override para restaurar el canal a su estado original.",
+      "acceptanceCriteria": [
+        "Endpoint `DELETE /api/channels/{acestream_id}/override`",
+        "Eliminar el override del manager y del archivo",
+        "Responder con el canal en su estado original (sin override)",
+        "Retornar 404 si no existe override para ese ID",
+        "Retornar 404 si el acestream_id no existe en ninguna fuente",
+        "go build ./... passes",
+        "go test ./... passes",
+        "go vet ./... passes"
+      ],
+      "priority": 9,
+      "passes": false,
+      "notes": "",
+      "dependsOn": [
+        "US-003"
+      ]
+    }
+  ],
+  "metadata": {
+    "updatedAt": "2026-01-31T15:43:32.113Z"
+  }
+}

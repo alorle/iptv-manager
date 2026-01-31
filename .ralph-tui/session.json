@@ -1,159 +1,78 @@
 {
   "version": 1,
-  "sessionId": "06116c4e-d873-4fe0-ba7a-53d2074f955e",
+  "sessionId": "f7da1394-fd43-4cca-9673-0fbf0e9925bb",
   "status": "running",
-  "startedAt": "2026-01-31T13:25:36.812Z",
-  "updatedAt": "2026-01-31T14:05:23.340Z",
-  "currentIteration": 8,
+  "startedAt": "2026-01-31T15:41:40.721Z",
+  "updatedAt": "2026-01-31T15:43:32.114Z",
+  "currentIteration": 0,
   "maxIterations": 0,
-  "tasksCompleted": 8,
+  "tasksCompleted": 0,
   "isPaused": false,
   "agentPlugin": "claude",
   "trackerState": {
     "plugin": "json",
-    "prdPath": "./tasks/prd-acexy-integration.json",
+    "prdPath": "./tasks/prd-channel-overrides.json",
     "totalTasks": 9,
     "tasks": [
       {
         "id": "US-001",
-        "title": "Crear módulo de cliente Ace Stream Engine",
-        "status": "completed",
-        "completedInSession": true
+        "title": "Definir estructura de datos para overrides",
+        "status": "open",
+        "completedInSession": false
       },
       {
         "id": "US-002",
-        "title": "Implementar gestión de PIDs únicos",
-        "status": "completed",
-        "completedInSession": true
+        "title": "Implementar almacenamiento persistente",
+        "status": "open",
+        "completedInSession": false
       },
       {
         "id": "US-003",
-        "title": "Implementar multiplexación de streams",
-        "status": "completed",
-        "completedInSession": true
+        "title": "Gestión en memoria con hot-reload",
+        "status": "open",
+        "completedInSession": false
       },
       {
         "id": "US-004",
-        "title": "Implementar timeouts de producción (PR #46)",
-        "status": "completed",
-        "completedInSession": true
+        "title": "API endpoint para listar canales",
+        "status": "open",
+        "completedInSession": false
       },
       {
         "id": "US-005",
-        "title": "Crear endpoint /stream",
-        "status": "completed",
-        "completedInSession": true
+        "title": "API endpoint para toggle enable/disable",
+        "status": "open",
+        "completedInSession": false
       },
       {
         "id": "US-006",
-        "title": "Crear endpoint /ace/getstream (compatibilidad)",
-        "status": "completed",
-        "completedInSession": true
+        "title": "API endpoint para editar metadatos",
+        "status": "open",
+        "completedInSession": false
       },
       {
         "id": "US-007",
-        "title": "Actualizar rewriter para URLs internas",
-        "status": "completed",
-        "completedInSession": true
+        "title": "Integrar overrides en pipeline de rewriter",
+        "status": "open",
+        "completedInSession": false
       },
       {
         "id": "US-008",
-        "title": "Configuración del módulo aceproxy",
-        "status": "completed",
-        "completedInSession": true
+        "title": "Limpieza automática de overrides huérfanos",
+        "status": "open",
+        "completedInSession": false
       },
       {
         "id": "US-009",
-        "title": "Tests de integración del proxy",
+        "title": "Endpoint para eliminar override",
         "status": "open",
         "completedInSession": false
       }
     ]
   },
-  "iterations": [
-    {
-      "iteration": 1,
-      "status": "completed",
-      "taskId": "US-001",
-      "taskTitle": "Crear módulo de cliente Ace Stream Engine",
-      "taskCompleted": true,
-      "durationMs": 141799,
-      "startedAt": "2026-01-31T13:25:40.529Z",
-      "endedAt": "2026-01-31T13:28:02.328Z"
-    },
-    {
-      "iteration": 2,
-      "status": "completed",
-      "taskId": "US-002",
-      "taskTitle": "Implementar gestión de PIDs únicos",
-      "taskCompleted": true,
-      "durationMs": 241416,
-      "startedAt": "2026-01-31T13:28:03.666Z",
-      "endedAt": "2026-01-31T13:32:05.082Z"
-    },
-    {
-      "iteration": 3,
-      "status": "completed",
-      "taskId": "US-003",
-      "taskTitle": "Implementar multiplexación de streams",
-      "taskCompleted": true,
-      "durationMs": 323906,
-      "startedAt": "2026-01-31T13:32:06.489Z",
-      "endedAt": "2026-01-31T13:37:30.395Z"
-    },
-    {
-      "iteration": 4,
-      "status": "completed",
-      "taskId": "US-004",
-      "taskTitle": "Implementar timeouts de producción (PR #46)",
-      "taskCompleted": true,
-      "durationMs": 119997,
-      "startedAt": "2026-01-31T13:37:31.766Z",
-      "endedAt": "2026-01-31T13:39:31.763Z"
-    },
-    {
-      "iteration": 5,
-      "status": "completed",
-      "taskId": "US-005",
-      "taskTitle": "Crear endpoint /stream",
-      "taskCompleted": true,
-      "durationMs": 150505,
-      "startedAt": "2026-01-31T13:39:33.123Z",
-      "endedAt": "2026-01-31T13:42:03.628Z"
-    },
-    {
-      "iteration": 6,
-      "status": "completed",
-      "taskId": "US-006",
-      "taskTitle": "Crear endpoint /ace/getstream (compatibilidad)",
-      "taskCompleted": true,
-      "durationMs": 98876,
-      "startedAt": "2026-01-31T13:42:04.975Z",
-      "endedAt": "2026-01-31T13:43:43.851Z"
-    },
-    {
-      "iteration": 7,
-      "status": "completed",
-      "taskId": "US-007",
-      "taskTitle": "Actualizar rewriter para URLs internas",
-      "taskCompleted": true,
-      "durationMs": 310138,
-      "startedAt": "2026-01-31T13:43:45.210Z",
-      "endedAt": "2026-01-31T13:48:55.348Z"
-    },
-    {
-      "iteration": 8,
-      "status": "completed",
-      "taskId": "US-008",
-      "taskTitle": "Configuración del módulo aceproxy",
-      "taskCompleted": true,
-      "durationMs": 139071,
-      "startedAt": "2026-01-31T13:48:56.701Z",
-      "endedAt": "2026-01-31T13:51:15.772Z"
-    }
-  ],
+  "iterations": [],
   "skippedTaskIds": [],
   "cwd": "/home/alorle/gh/alorle/iptv-manager",
   "activeTaskIds": [],
-  "subagentPanelVisible": true
+  "subagentPanelVisible": false
 }
