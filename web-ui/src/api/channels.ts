@@ -2,6 +2,43 @@ import type { Channel, ChannelOverride } from '../types';
 
 const API_BASE = '/api';
 
+// Helper to handle fetch errors with better messages
+async function handleFetchError(response: Response): Promise<never> {
+  let errorMessage = response.statusText;
+
+  try {
+    const errorData = await response.json();
+    if (errorData.message) {
+      errorMessage = errorData.message;
+    } else if (errorData.error) {
+      errorMessage = typeof errorData.error === 'string'
+        ? errorData.error
+        : JSON.stringify(errorData.error);
+    }
+  } catch {
+    // If parsing JSON fails, use statusText
+  }
+
+  throw new Error(errorMessage);
+}
+
+// Wrapper for fetch with network error handling
+async function fetchWithErrorHandling(
+  url: string,
+  options?: RequestInit
+): Promise<Response> {
+  try {
+    const response = await fetch(url, options);
+    return response;
+  } catch (error) {
+    // Network errors (connection refused, DNS, etc.)
+    if (error instanceof TypeError) {
+      throw new Error('API server is unreachable. Please check your connection.');
+    }
+    throw error;
+  }
+}
+
 export interface ListChannelsParams {
   name?: string;
   group?: string;
@@ -19,10 +56,10 @@ export async function listChannels(
     url.searchParams.set('group', params.group);
   }
 
-  const response = await fetch(url.toString());
+  const response = await fetchWithErrorHandling(url.toString());
 
   if (!response.ok) {
-    throw new Error(`Failed to fetch channels: ${response.statusText}`);
+    await handleFetchError(response);
   }
 
   return response.json();
@@ -62,7 +99,7 @@ export async function updateOverride(
     url.searchParams.set('force', 'true');
   }
 
-  const response = await fetch(url.toString(), {
+  const response = await fetchWithErrorHandling(url.toString(), {
     method: 'PUT',
     headers: {
       'Content-Type': 'application/json',
@@ -75,7 +112,7 @@ export async function updateOverride(
     if (errorData && errorData.error === 'validation_error') {
       throw errorData as ValidationError;
     }
-    throw new Error(`Failed to update override: ${response.statusText}`);
+    await handleFetchError(response);
   }
 
   return response.json();
@@ -87,19 +124,19 @@ export async function deleteOverride(acestreamId: string): Promise<void> {
     window.location.origin
   );
 
-  const response = await fetch(url.toString(), {
+  const response = await fetchWithErrorHandling(url.toString(), {
     method: 'DELETE',
   });
 
   if (!response.ok) {
-    throw new Error(`Failed to delete override: ${response.statusText}`);
+    await handleFetchError(response);
   }
 }
 
 export async function validateTvgId(tvgId: string): Promise<ValidateResponse> {
   const url = new URL(`${API_BASE}/validate/tvg-id`, window.location.origin);
 
-  const response = await fetch(url.toString(), {
+  const response = await fetchWithErrorHandling(url.toString(), {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -108,7 +145,7 @@ export async function validateTvgId(tvgId: string): Promise<ValidateResponse> {
   });
 
   if (!response.ok) {
-    throw new Error(`Failed to validate TVG-ID: ${response.statusText}`);
+    await handleFetchError(response);
   }
 
   return response.json();
@@ -146,7 +183,7 @@ export async function bulkUpdateOverrides(
     url.searchParams.set('force', 'true');
   }
 
-  const response = await fetch(url.toString(), {
+  const response = await fetchWithErrorHandling(url.toString(), {
     method: 'PATCH',
     headers: {
       'Content-Type': 'application/json',
@@ -163,7 +200,7 @@ export async function bulkUpdateOverrides(
     if (errorData && errorData.error === 'validation_error') {
       throw errorData as ValidationError;
     }
-    throw new Error(`Failed to bulk update: ${response.statusText}`);
+    await handleFetchError(response);
   }
 
   return response.json();

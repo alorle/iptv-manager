@@ -6,12 +6,16 @@ import {
   validateTvgId,
   type ValidationError,
 } from '../api/channels';
+import { ConfirmDialog } from './ConfirmDialog';
+import { LoadingSpinner } from './LoadingSpinner';
+import type { useToast } from '../hooks/useToast';
 import './EditOverrideForm.css';
 
 interface EditOverrideFormProps {
   channel: Channel;
   onClose: () => void;
   onSave: () => void;
+  toast: ReturnType<typeof useToast>;
 }
 
 interface CustomAttribute {
@@ -23,6 +27,7 @@ export function EditOverrideForm({
   channel,
   onClose,
   onSave,
+  toast,
 }: EditOverrideFormProps) {
   const [enabled, setEnabled] = useState<boolean>(channel.enabled);
   const [tvgId, setTvgId] = useState<string>(channel.tvg_id);
@@ -40,8 +45,8 @@ export function EditOverrideForm({
   const [validating, setValidating] = useState(false);
   const [saving, setSaving] = useState(false);
   const [forceCheck, setForceCheck] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [deleteConfirm, setDeleteConfirm] = useState(false);
+  const [validationError, setValidationError] = useState<string | null>(null);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
   // Validation function
   const performValidation = async (value: string) => {
@@ -107,7 +112,7 @@ export function EditOverrideForm({
   };
 
   const handleSave = async () => {
-    setError(null);
+    setValidationError(null);
     setSaving(true);
 
     try {
@@ -149,11 +154,14 @@ export function EditOverrideForm({
       }
 
       await updateOverride(channel.acestream_id, override, forceCheck);
+      toast.success('Channel override saved successfully');
       onSave();
     } catch (err) {
       if (err && typeof err === 'object' && 'error' in err) {
         const validationErr = err as ValidationError;
-        setError(validationErr.message || 'Validation failed');
+        const errorMsg = validationErr.message || 'Validation failed';
+        setValidationError(errorMsg);
+        toast.error(errorMsg);
         if (validationErr.suggestions) {
           setTvgIdValidation({
             valid: false,
@@ -161,32 +169,30 @@ export function EditOverrideForm({
           });
         }
       } else {
-        setError(
-          err instanceof Error ? err.message : 'Failed to save override'
-        );
+        const errorMsg = err instanceof Error ? err.message : 'Failed to save override';
+        setValidationError(errorMsg);
+        toast.error(errorMsg);
       }
     } finally {
       setSaving(false);
     }
   };
 
-  const handleDelete = async () => {
-    if (!deleteConfirm) {
-      setDeleteConfirm(true);
-      return;
-    }
-
-    setError(null);
+  const handleDeleteConfirm = async () => {
+    setShowDeleteConfirm(false);
+    setValidationError(null);
     setSaving(true);
 
     try {
       await deleteOverride(channel.acestream_id);
+      toast.success('Channel override deleted successfully');
       onSave();
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to delete override');
+      const errorMsg = err instanceof Error ? err.message : 'Failed to delete override';
+      setValidationError(errorMsg);
+      toast.error(errorMsg);
     } finally {
       setSaving(false);
-      setDeleteConfirm(false);
     }
   };
 
@@ -217,7 +223,7 @@ export function EditOverrideForm({
             <p className="acestream-id">ID: {channel.acestream_id}</p>
           </div>
 
-          {error && <div className="error-message">{error}</div>}
+          {validationError && <div className="error-message">{validationError}</div>}
 
           <div className="form-field">
             <label>
@@ -373,22 +379,41 @@ export function EditOverrideForm({
             onClick={handleSave}
             disabled={saving || !canSave}
           >
-            {saving ? 'Saving...' : 'Save'}
+            {saving ? (
+              <>
+                Saving
+                <LoadingSpinner size="small" inline />
+              </>
+            ) : (
+              'Save'
+            )}
           </button>
           <button className="cancel-button" onClick={onClose} disabled={saving}>
             Cancel
           </button>
           {channel.has_override && (
             <button
-              className={`delete-button ${deleteConfirm ? 'confirm' : ''}`}
-              onClick={handleDelete}
+              className="delete-button"
+              onClick={() => setShowDeleteConfirm(true)}
               disabled={saving}
             >
-              {deleteConfirm ? 'Confirm Delete?' : 'Delete Override'}
+              Delete Override
             </button>
           )}
         </div>
       </div>
+
+      {showDeleteConfirm && (
+        <ConfirmDialog
+          title="Delete Channel Override"
+          message={`Are you sure you want to delete the override for "${channel.name}"? This action cannot be undone.`}
+          confirmText="Delete"
+          cancelText="Cancel"
+          confirmVariant="danger"
+          onConfirm={handleDeleteConfirm}
+          onCancel={() => setShowDeleteConfirm(false)}
+        />
+      )}
     </div>
   );
 }

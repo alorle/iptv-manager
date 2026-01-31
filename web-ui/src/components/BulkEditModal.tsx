@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { LoadingSpinner } from './LoadingSpinner';
 import './BulkEditModal.css';
 
 interface BulkEditModalProps {
@@ -122,7 +123,14 @@ export function BulkEditModal({ selectedCount, onClose, onSubmit }: BulkEditModa
               className="button button-primary"
               disabled={submitting}
             >
-              {submitting ? 'Updating...' : 'Update Channels'}
+              {submitting ? (
+                <>
+                  Updating
+                  <LoadingSpinner size="small" inline />
+                </>
+              ) : (
+                'Update Channels'
+              )}
             </button>
           </div>
         </form>

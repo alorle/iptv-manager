@@ -2,24 +2,24 @@ import { useState, useMemo } from 'react';
 import type { Channel } from '../types';
 import { useChannels } from '../hooks/useChannels';
 import { BulkEditModal } from './BulkEditModal';
+import { ErrorDisplay } from './ErrorDisplay';
+import { LoadingSpinner } from './LoadingSpinner';
 import { bulkUpdateOverrides } from '../api/channels';
+import type { useToast } from '../hooks/useToast';
 import './ChannelList.css';
 
 interface ChannelListProps {
   onChannelSelect?: (channel: Channel) => void;
   refreshTrigger?: number;
+  toast: ReturnType<typeof useToast>;
 }
 
-export function ChannelList({ onChannelSelect, refreshTrigger }: ChannelListProps) {
+export function ChannelList({ onChannelSelect, refreshTrigger, toast }: ChannelListProps) {
   const { channels, loading, error, refetch } = useChannels(refreshTrigger);
   const [searchText, setSearchText] = useState('');
   const [groupFilter, setGroupFilter] = useState('');
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [showBulkEditModal, setShowBulkEditModal] = useState(false);
-  const [bulkEditResult, setBulkEditResult] = useState<{
-    type: 'success' | 'error';
-    message: string;
-  } | null>(null);
 
   // Get unique group titles for the filter dropdown
   const uniqueGroups = useMemo(() => {
@@ -80,15 +80,12 @@ export function ChannelList({ onChannelSelect, refreshTrigger }: ChannelListProp
       );
 
       if (result.failed > 0) {
-        setBulkEditResult({
-          type: 'error',
-          message: `Updated ${result.updated} channel(s), but ${result.failed} failed`,
-        });
+        toast.warning(
+          `Updated ${result.updated} channel(s), but ${result.failed} failed`,
+          7000
+        );
       } else {
-        setBulkEditResult({
-          type: 'success',
-          message: `Successfully updated ${result.updated} channel(s)`,
-        });
+        toast.success(`Successfully updated ${result.updated} channel(s)`);
       }
 
       // Clear selection and close modal
@@ -97,10 +94,9 @@ export function ChannelList({ onChannelSelect, refreshTrigger }: ChannelListProp
 
       // Refresh channel list
       refetch();
-
-      // Clear result message after 5 seconds
-      setTimeout(() => setBulkEditResult(null), 5000);
     } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Failed to update channels';
+      toast.error(errorMessage);
       throw err;
     }
   };
@@ -108,7 +104,7 @@ export function ChannelList({ onChannelSelect, refreshTrigger }: ChannelListProp
   if (loading) {
     return (
       <div className="channel-list-container">
-        <div className="loading">Loading channels...</div>
+        <LoadingSpinner size="large" />
       </div>
     );
   }
@@ -116,7 +112,11 @@ export function ChannelList({ onChannelSelect, refreshTrigger }: ChannelListProp
   if (error) {
     return (
       <div className="channel-list-container">
-        <div className="error">Error loading channels: {error.message}</div>
+        <ErrorDisplay
+          error={error}
+          onRetry={refetch}
+          title="Failed to load channels"
+        />
       </div>
     );
   }
@@ -166,11 +166,6 @@ export function ChannelList({ onChannelSelect, refreshTrigger }: ChannelListProp
             >
               Bulk Edit
             </button>
-          </div>
-        )}
-        {bulkEditResult && (
-          <div className={`result-message ${bulkEditResult.type}`}>
-            {bulkEditResult.message}
           </div>
         )}
       </div>
