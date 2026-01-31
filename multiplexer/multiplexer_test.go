@@ -167,7 +167,8 @@ func TestClient_Close(t *testing.T) {
 func TestNewStream(t *testing.T) {
 	cb := &mockCircuitBreaker{}
 	httpClient := &http.Client{}
-	stream := NewStream("test-content-id", cb, httpClient)
+	bufferSize := 2 * 1024 * 1024 // 2MB
+	stream := NewStream("test-content-id", cb, httpClient, bufferSize)
 
 	if stream.ContentID != "test-content-id" {
 		t.Errorf("Expected ContentID 'test-content-id', got %s", stream.ContentID)
@@ -215,13 +216,15 @@ func (m *mockCircuitBreaker) Reset() {
 func newTestStream(contentID string) *Stream {
 	cb := &mockCircuitBreaker{state: circuitbreaker.StateClosed}
 	httpClient := &http.Client{}
-	return NewStream(contentID, cb, httpClient)
+	bufferSize := 2 * 1024 * 1024 // 2MB
+	return NewStream(contentID, cb, httpClient, bufferSize)
 }
 
 func TestStream_AddClient(t *testing.T) {
 	cb := &mockCircuitBreaker{}
 	httpClient := &http.Client{}
-	stream := NewStream("test-content", cb, httpClient)
+	bufferSize := 2 * 1024 * 1024 // 2MB
+	stream := NewStream("test-content", cb, httpClient, bufferSize)
 	w := newMockResponseWriter()
 	client, _ := NewClient("client-1", w, 1024*1024)
 
@@ -239,7 +242,8 @@ func TestStream_AddClient(t *testing.T) {
 func TestStream_RemoveClient(t *testing.T) {
 	cb := &mockCircuitBreaker{}
 	httpClient := &http.Client{}
-	stream := NewStream("test-content", cb, httpClient)
+	bufferSize := 2 * 1024 * 1024 // 2MB
+	stream := NewStream("test-content", cb, httpClient, bufferSize)
 	w := newMockResponseWriter()
 	client, _ := NewClient("client-1", w, 1024*1024)
 
@@ -258,7 +262,8 @@ func TestStream_RemoveClient(t *testing.T) {
 func TestStream_RemoveClient_NonExistent(t *testing.T) {
 	cb := &mockCircuitBreaker{}
 	httpClient := &http.Client{}
-	stream := NewStream("test-content", cb, httpClient)
+	bufferSize := 2 * 1024 * 1024 // 2MB
+	stream := NewStream("test-content", cb, httpClient, bufferSize)
 
 	remaining := stream.RemoveClient("non-existent")
 
@@ -270,7 +275,8 @@ func TestStream_RemoveClient_NonExistent(t *testing.T) {
 func TestStream_ClientCount(t *testing.T) {
 	cb := &mockCircuitBreaker{}
 	httpClient := &http.Client{}
-	stream := NewStream("test-content", cb, httpClient)
+	bufferSize := 2 * 1024 * 1024 // 2MB
+	stream := NewStream("test-content", cb, httpClient, bufferSize)
 	w1 := newMockResponseWriter()
 	w2 := newMockResponseWriter()
 

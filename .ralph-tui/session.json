@@ -3,10 +3,10 @@
   "sessionId": "78f757b7-042c-43e5-817b-0f68938fa97e",
   "status": "running",
   "startedAt": "2026-01-31T18:08:24.828Z",
-  "updatedAt": "2026-01-31T18:25:27.786Z",
-  "currentIteration": 3,
+  "updatedAt": "2026-01-31T18:25:28.965Z",
+  "currentIteration": 4,
   "maxIterations": 0,
-  "tasksCompleted": 3,
+  "tasksCompleted": 4,
   "isPaused": false,
   "agentPlugin": "claude",
   "trackerState": {
@@ -35,8 +35,8 @@
       {
         "id": "US-002",
         "title": "Implementar reconexión automática de upstream",
-        "status": "open",
-        "completedInSession": false
+        "status": "completed",
+        "completedInSession": true
       },
       {
         "id": "US-003",
@@ -94,10 +94,22 @@
       "durationMs": 188869,
       "startedAt": "2026-01-31T18:17:34.327Z",
       "endedAt": "2026-01-31T18:20:43.196Z"
+    },
+    {
+      "iteration": 4,
+      "status": "completed",
+      "taskId": "US-002",
+      "taskTitle": "Implementar reconexión automática de upstream",
+      "taskCompleted": true,
+      "durationMs": 283401,
+      "startedAt": "2026-01-31T18:20:44.382Z",
+      "endedAt": "2026-01-31T18:25:27.783Z"
     }
   ],
   "skippedTaskIds": [],
   "cwd": "/home/alorle/gh/alorle/iptv-manager",
-  "activeTaskIds": [],
+  "activeTaskIds": [
+    "US-003"
+  ],
   "subagentPanelVisible": true
 }

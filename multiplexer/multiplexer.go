@@ -113,16 +113,21 @@ type Stream struct {
 	upstreamURL    string
 	circuitBreaker circuitbreaker.CircuitBreaker
 	httpClient     *http.Client
+	ringBuffer     *RingBuffer
+	reconnecting   bool
+	reconnectMu    sync.RWMutex
 }
 
-// NewStream creates a new stream
-func NewStream(contentID string, cb circuitbreaker.CircuitBreaker, httpClient *http.Client) *Stream {
+// NewStream creates a new stream with ring buffer
+func NewStream(contentID string, cb circuitbreaker.CircuitBreaker, httpClient *http.Client, bufferSize int) *Stream {
 	return &Stream{
 		ContentID:      contentID,
 		Clients:        make(map[string]*Client),
 		done:           make(chan struct{}),
 		circuitBreaker: cb,
 		httpClient:     httpClient,
+		ringBuffer:     NewRingBuffer(bufferSize),
+		reconnecting:   false,
 	}
 }
 
@@ -153,6 +158,47 @@ func (s *Stream) ClientCount() int {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	return len(s.Clients)
+}
+
+// IsReconnecting returns true if the stream is currently reconnecting
+func (s *Stream) IsReconnecting() bool {
+	s.reconnectMu.RLock()
+	defer s.reconnectMu.RUnlock()
+	return s.reconnecting
+}
+
+// setReconnecting sets the reconnection state
+func (s *Stream) setReconnecting(state bool) {
+	s.reconnectMu.Lock()
+	defer s.reconnectMu.Unlock()
+	s.reconnecting = state
+}
+
+// sendBufferToClient sends buffered data to a client
+// Returns true if successful, false if client should be closed
+func (s *Stream) sendBufferToClient(client *Client, contentID string) bool {
+	bufferedData := s.ringBuffer.PeekAll()
+	if len(bufferedData) == 0 {
+		return true // No data to send, but client is still valid
+	}
+
+	// Send buffered data in chunks to avoid blocking
+	chunkSize := 32 * 1024 // 32KB chunks
+	for i := 0; i < len(bufferedData); i += chunkSize {
+		end := i + chunkSize
+		if end > len(bufferedData) {
+			end = len(bufferedData)
+		}
+		chunk := bufferedData[i:end]
+
+		if err := client.Send(chunk); err != nil {
+			log.Printf("Stream %s: Failed to send buffered data to client %s: %v", contentID, client.ID, err)
+			return false
+		}
+	}
+
+	log.Printf("Stream %s: Sent %d bytes of buffered data to new client %s", contentID, len(bufferedData), client.ID)
+	return true
 }
 
 // Start starts reading from upstream and fanning out to clients
@@ -211,6 +257,10 @@ func (s *Stream) fanOut(ctx context.Context, cfg Config) {
 			// Attempt reconnection with exponential backoff
 			log.Printf("Stream %s: Upstream connection lost: %v", s.ContentID, err)
 
+			// Mark as reconnecting
+			s.setReconnecting(true)
+			log.Printf("Stream %s: Entering reconnection mode - clients will use buffer", s.ContentID)
+
 			// Close current upstream connection
 			if s.upstream != nil {
 				s.upstream.Close()
@@ -225,6 +275,7 @@ func (s *Stream) fanOut(ctx context.Context, cfg Config) {
 				// Check if we should stop reconnecting
 				if ctx.Err() != nil || s.ClientCount() == 0 {
 					log.Printf("Stream %s: Stopping reconnection - no clients or context cancelled", s.ContentID)
+					s.setReconnecting(false)
 					return
 				}
 
@@ -238,17 +289,20 @@ func (s *Stream) fanOut(ctx context.Context, cfg Config) {
 					case <-time.After(cfg.ResilienceConfig.CBTimeout):
 						continue
 					case <-ctx.Done():
+						s.setReconnecting(false)
 						return
 					}
 				}
 
 				// Log reconnection attempt
-				log.Printf("Stream %s: Reconnection attempt #%d (backoff: %v)", s.ContentID, attemptNumber, backoff)
+				log.Printf("Stream %s: Reconnection attempt #%d (backoff: %v, buffer available: %d bytes)",
+					s.ContentID, attemptNumber, backoff, s.ringBuffer.Available())
 
 				// Wait for backoff duration
 				select {
 				case <-time.After(backoff):
 				case <-ctx.Done():
+					s.setReconnecting(false)
 					return
 				}
 
@@ -288,10 +342,13 @@ func (s *Stream) fanOut(ctx context.Context, cfg Config) {
 				}
 
 				// Reconnection successful
-				log.Printf("Stream %s: Reconnection attempt #%d succeeded", s.ContentID, attemptNumber)
+				log.Printf("Stream %s: Reconnection attempt #%d succeeded - resuming normal streaming", s.ContentID, attemptNumber)
 				s.mu.Lock()
 				s.upstream = newUpstream
 				s.mu.Unlock()
+
+				// Mark as no longer reconnecting
+				s.setReconnecting(false)
 
 				// Reset attempt counter and break out of reconnection loop
 				attemptNumber = 0
@@ -301,6 +358,9 @@ func (s *Stream) fanOut(ctx context.Context, cfg Config) {
 
 		if n > 0 {
 			data := buffer[:n]
+
+			// Write to ring buffer for resilience
+			s.ringBuffer.Write(data)
 
 			// Send to all clients
 			s.mu.RLock()
@@ -375,8 +435,8 @@ func (m *Multiplexer) GetOrCreateStream(ctx context.Context, contentID string, u
 	}
 	cb := circuitbreaker.New(cbConfig)
 
-	// Create new stream with circuit breaker
-	stream := NewStream(contentID, cb, m.client)
+	// Create new stream with circuit breaker and ring buffer
+	stream := NewStream(contentID, cb, m.client, m.cfg.ResilienceConfig.ReconnectBufferSize)
 
 	// Start upstream connection using multiplexer's independent context
 	// This ensures upstream is not tied to any single client's request context
@@ -489,6 +549,15 @@ func (m *Multiplexer) ServeStream(ctx context.Context, w http.ResponseWriter, co
 
 	// Now add client to stream - it's ready to receive data
 	stream.AddClient(client)
+
+	// If stream is reconnecting, send buffered data to new client
+	if stream.IsReconnecting() {
+		log.Printf("Stream %s: New client %s joining during reconnection - sending buffered data", contentID, clientID)
+		if !stream.sendBufferToClient(client, contentID) {
+			// Failed to send buffer, client will be removed below
+			log.Printf("Stream %s: Failed to send buffer to new client %s", contentID, clientID)
+		}
+	}
 
 	// Wait for client to disconnect
 	select {
