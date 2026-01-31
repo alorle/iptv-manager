@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/alorle/iptv-manager/cache"
@@ -170,6 +171,91 @@ func main() {
 
 		// Rewrite acestream:// URLs
 		rewrittenContent := rw.RewriteM3U(content)
+
+		// Set content type
+		w.Header().Set("Content-Type", "audio/x-mpegurl")
+		w.WriteHeader(http.StatusOK)
+		w.Write(rewrittenContent)
+	})
+
+	// Unified playlist endpoint - merges all sources
+	handler.HandleFunc("/playlist.m3u", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+
+		elcanoURL := "https://ipfs.io/ipns/k51qzi5uqu5di462t7j4vu4akwfhvtjhy88qbupktvoacqfqe9uforjvhyi4wr/hashes_acestream.m3u"
+		neweraURL := "https://ipfs.io/ipns/k2k4r8oqlcjxsritt5mczkcn4mmvcmymbqw7113fz2flkrerfwfps004/data/listas/lista_fuera_iptv.m3u"
+
+		// Fetch both sources
+		elcanoContent, elcanoFromCache, elcanoStale, elcanoErr := fetch.FetchWithCache(elcanoURL)
+		neweraContent, neweraFromCache, neweraStale, neweraErr := fetch.FetchWithCache(neweraURL)
+
+		// Check if both sources failed
+		if elcanoErr != nil && neweraErr != nil {
+			log.Printf("Failed to fetch unified playlist - both sources failed: elcano=%v, newera=%v", elcanoErr, neweraErr)
+			http.Error(w, "Bad Gateway", http.StatusBadGateway)
+			return
+		}
+
+		// Build merged content starting with M3U header
+		var mergedContent strings.Builder
+		mergedContent.WriteString("#EXTM3U\n")
+
+		// Add elcano content if available
+		if elcanoErr == nil {
+			// Log cache status for elcano
+			if elcanoFromCache {
+				if elcanoStale {
+					log.Printf("Using stale cache for elcano in unified playlist")
+				} else {
+					log.Printf("Using fresh cache for elcano in unified playlist")
+				}
+			} else {
+				log.Printf("Using fresh content for elcano in unified playlist")
+			}
+
+			// Parse and add elcano streams (skip header line)
+			elcanoStr := string(elcanoContent)
+			if strings.HasPrefix(elcanoStr, "#EXTM3U") {
+				elcanoStr = strings.TrimPrefix(elcanoStr, "#EXTM3U")
+				elcanoStr = strings.TrimLeft(elcanoStr, "\n")
+			}
+			mergedContent.WriteString(elcanoStr)
+		} else {
+			log.Printf("Skipping elcano source in unified playlist: %v", elcanoErr)
+		}
+
+		// Add newera content if available
+		if neweraErr == nil {
+			// Log cache status for newera
+			if neweraFromCache {
+				if neweraStale {
+					log.Printf("Using stale cache for newera in unified playlist")
+				} else {
+					log.Printf("Using fresh cache for newera in unified playlist")
+				}
+			} else {
+				log.Printf("Using fresh content for newera in unified playlist")
+			}
+
+			// Parse and add newera streams (skip header line)
+			neweraStr := string(neweraContent)
+			if strings.HasPrefix(neweraStr, "#EXTM3U") {
+				neweraStr = strings.TrimPrefix(neweraStr, "#EXTM3U")
+				neweraStr = strings.TrimLeft(neweraStr, "\n")
+			}
+			if mergedContent.Len() > len("#EXTM3U\n") {
+				mergedContent.WriteString("\n")
+			}
+			mergedContent.WriteString(neweraStr)
+		} else {
+			log.Printf("Skipping newera source in unified playlist: %v", neweraErr)
+		}
+
+		// Rewrite acestream:// URLs
+		rewrittenContent := rw.RewriteM3U([]byte(mergedContent.String()))
 
 		// Set content type
 		w.Header().Set("Content-Type", "audio/x-mpegurl")
