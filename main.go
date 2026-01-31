@@ -13,6 +13,7 @@ import (
 	"github.com/alorle/iptv-manager/api"
 	"github.com/alorle/iptv-manager/cache"
 	"github.com/alorle/iptv-manager/config"
+	"github.com/alorle/iptv-manager/epg"
 	"github.com/alorle/iptv-manager/fetcher"
 	"github.com/alorle/iptv-manager/logging"
 	"github.com/alorle/iptv-manager/metrics"
@@ -227,6 +228,19 @@ func main() {
 		log.Fatalf("Failed to initialize overrides manager: %v", err)
 	}
 	log.Printf("Loaded %d channel overrides from %s", len(overridesMgr.List()), overridesPath)
+
+	// Initialize EPG cache
+	epgURL := os.Getenv("EPG_URL")
+	if epgURL == "" {
+		epgURL = "https://raw.githubusercontent.com/davidmuma/EPG_dobleM/master/guiatv.xml"
+	}
+	epgCache, err := epg.New(epgURL, 30*time.Second)
+	if err != nil {
+		log.Printf("Warning: Failed to initialize EPG cache: %v", err)
+		log.Printf("TVG-ID validation will not be available")
+	} else {
+		log.Printf("EPG cache initialized with %d channels", epgCache.Count())
+	}
 
 	// Initialize fetcher with 30 second timeout
 	fetch := fetcher.New(30*time.Second, storage, cfg.CacheTTL)
@@ -552,6 +566,12 @@ func main() {
 	// Handle both /api/channels and /api/channels/{id}
 	handler.Handle("/api/channels", channelsHandler)
 	handler.Handle("/api/channels/", channelsHandler)
+
+	// API endpoint for TVG-ID validation
+	if epgCache != nil {
+		validateHandler := api.NewValidateHandler(epgCache)
+		handler.Handle("/api/validate/tvg-id", validateHandler)
+	}
 
 	s := &http.Server{
 		Handler:      handler,
