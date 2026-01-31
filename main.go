@@ -254,8 +254,15 @@ func main() {
 			log.Printf("Skipping newera source in unified playlist: %v", neweraErr)
 		}
 
-		// Rewrite acestream:// URLs
-		rewrittenContent := rw.RewriteM3U([]byte(mergedContent.String()))
+		// Apply deduplication by acestream ID (US-003)
+		mergedBytes := []byte(mergedContent.String())
+		deduplicatedContent := rewriter.DeduplicateStreams(mergedBytes)
+
+		// Apply alphabetical sorting by display name (US-004)
+		sortedContent := rewriter.SortStreamsByName(deduplicatedContent)
+
+		// Rewrite acestream:// URLs and remove logos (US-005)
+		rewrittenContent := rw.RewriteM3U(sortedContent)
 
 		// Set content type
 		w.Header().Set("Content-Type", "audio/x-mpegurl")
