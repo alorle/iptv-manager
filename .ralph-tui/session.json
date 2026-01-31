@@ -3,7 +3,7 @@
   "sessionId": "78f757b7-042c-43e5-817b-0f68938fa97e",
   "status": "running",
   "startedAt": "2026-01-31T18:08:24.828Z",
-  "updatedAt": "2026-01-31T18:47:04.205Z",
+  "updatedAt": "2026-01-31T18:52:22.690Z",
   "currentIteration": 7,
   "maxIterations": 0,
   "tasksCompleted": 7,
@@ -138,8 +138,6 @@
   ],
   "skippedTaskIds": [],
   "cwd": "/home/alorle/gh/alorle/iptv-manager",
-  "activeTaskIds": [
-    "US-006"
-  ],
+  "activeTaskIds": [],
   "subagentPanelVisible": true
 }
