@@ -3,10 +3,10 @@
   "sessionId": "06116c4e-d873-4fe0-ba7a-53d2074f955e",
   "status": "running",
   "startedAt": "2026-01-31T13:25:36.812Z",
-  "updatedAt": "2026-01-31T13:32:05.085Z",
-  "currentIteration": 1,
+  "updatedAt": "2026-01-31T13:37:30.398Z",
+  "currentIteration": 2,
   "maxIterations": 0,
-  "tasksCompleted": 1,
+  "tasksCompleted": 2,
   "isPaused": false,
   "agentPlugin": "claude",
   "trackerState": {
@@ -23,8 +23,8 @@
       {
         "id": "US-002",
         "title": "Implementar gestión de PIDs únicos",
-        "status": "open",
-        "completedInSession": false
+        "status": "completed",
+        "completedInSession": true
       },
       {
         "id": "US-003",
@@ -80,6 +80,16 @@
       "durationMs": 141799,
       "startedAt": "2026-01-31T13:25:40.529Z",
       "endedAt": "2026-01-31T13:28:02.328Z"
+    },
+    {
+      "iteration": 2,
+      "status": "completed",
+      "taskId": "US-002",
+      "taskTitle": "Implementar gestión de PIDs únicos",
+      "taskCompleted": true,
+      "durationMs": 241416,
+      "startedAt": "2026-01-31T13:28:03.666Z",
+      "endedAt": "2026-01-31T13:32:05.082Z"
     }
   ],
   "skippedTaskIds": [],
