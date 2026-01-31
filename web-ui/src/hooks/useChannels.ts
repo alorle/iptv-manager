@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import type { Channel } from '../types';
 import { listChannels } from '../api/channels';
 
-export function useChannels() {
+export function useChannels(refreshTrigger?: number) {
   const [channels, setChannels] = useState<Channel[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
@@ -22,7 +22,7 @@ export function useChannels() {
 
   useEffect(() => {
     fetchChannels();
-  }, []);
+  }, [refreshTrigger]);
 
   return { channels, loading, error, refetch: fetchChannels };
 }

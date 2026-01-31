@@ -3,10 +3,10 @@
   "sessionId": "8599c8e2-3b7f-47e6-a1ab-4e6dd2b3d606",
   "status": "running",
   "startedAt": "2026-01-31T21:05:32.234Z",
-  "updatedAt": "2026-01-31T21:42:33.493Z",
-  "currentIteration": 7,
+  "updatedAt": "2026-01-31T21:48:03.429Z",
+  "currentIteration": 8,
   "maxIterations": 0,
-  "tasksCompleted": 7,
+  "tasksCompleted": 8,
   "isPaused": false,
   "agentPlugin": "claude",
   "trackerState": {
@@ -59,8 +59,8 @@
       {
         "id": "US-008",
         "title": "Channel list view with filtering",
-        "status": "open",
-        "completedInSession": false
+        "status": "completed",
+        "completedInSession": true
       },
       {
         "id": "US-009",
@@ -158,12 +158,22 @@
       "durationMs": 275911,
       "startedAt": "2026-01-31T21:36:55.999Z",
       "endedAt": "2026-01-31T21:41:31.910Z"
+    },
+    {
+      "iteration": 8,
+      "status": "completed",
+      "taskId": "US-008",
+      "taskTitle": "Channel list view with filtering",
+      "taskCompleted": true,
+      "durationMs": 268347,
+      "startedAt": "2026-01-31T21:42:33.487Z",
+      "endedAt": "2026-01-31T21:47:01.834Z"
     }
   ],
   "skippedTaskIds": [],
   "cwd": "/home/alorle/gh/alorle/iptv-manager",
   "activeTaskIds": [
-    "US-008"
+    "US-009"
   ],
   "subagentPanelVisible": true
 }

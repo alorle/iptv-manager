@@ -5,10 +5,11 @@ import './ChannelList.css';
 
 interface ChannelListProps {
   onChannelSelect?: (channel: Channel) => void;
+  refreshTrigger?: number;
 }
 
-export function ChannelList({ onChannelSelect }: ChannelListProps) {
-  const { channels, loading, error } = useChannels();
+export function ChannelList({ onChannelSelect, refreshTrigger }: ChannelListProps) {
+  const { channels, loading, error } = useChannels(refreshTrigger);
   const [searchText, setSearchText] = useState('');
   const [groupFilter, setGroupFilter] = useState('');
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
