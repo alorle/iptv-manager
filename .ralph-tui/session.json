@@ -3,10 +3,10 @@
   "sessionId": "f7da1394-fd43-4cca-9673-0fbf0e9925bb",
   "status": "running",
   "startedAt": "2026-01-31T15:41:40.721Z",
-  "updatedAt": "2026-01-31T16:07:41.344Z",
-  "currentIteration": 7,
+  "updatedAt": "2026-01-31T16:11:41.432Z",
+  "currentIteration": 8,
   "maxIterations": 0,
-  "tasksCompleted": 7,
+  "tasksCompleted": 8,
   "isPaused": false,
   "agentPlugin": "claude",
   "trackerState": {
@@ -59,8 +59,8 @@
       {
         "id": "US-008",
         "title": "Limpieza automática de overrides huérfanos",
-        "status": "open",
-        "completedInSession": false
+        "status": "completed",
+        "completedInSession": true
       },
       {
         "id": "US-009",
@@ -140,6 +140,16 @@
       "durationMs": 284913,
       "startedAt": "2026-01-31T15:59:30.674Z",
       "endedAt": "2026-01-31T16:04:15.587Z"
+    },
+    {
+      "iteration": 8,
+      "status": "completed",
+      "taskId": "US-008",
+      "taskTitle": "Limpieza automática de overrides huérfanos",
+      "taskCompleted": true,
+      "durationMs": 204548,
+      "startedAt": "2026-01-31T16:04:16.793Z",
+      "endedAt": "2026-01-31T16:07:41.341Z"
     }
   ],
   "skippedTaskIds": [],
