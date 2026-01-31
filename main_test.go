@@ -899,3 +899,678 @@ func TestIntegration_RealEndpoints(t *testing.T) {
 		}
 	})
 }
+
+// TestIntegration_UnifiedPlaylist_SuccessfulFetchAndMerge tests unified playlist endpoint
+// with successful fetch and merge from both sources
+func TestIntegration_UnifiedPlaylist_SuccessfulFetchAndMerge(t *testing.T) {
+	cacheDir, cleanup := setupTestEnvironment(t)
+	defer cleanup()
+
+	// Create mock content for elcano source
+	elcanoContent := `#EXTM3U
+#EXTINF:-1 tvg-id="e1" tvg-name="Elcano One" tvg-logo="http://example.com/logo1.png" group-title="Sports",Elcano One
+acestream://1111111111111111111111111111111111111111
+#EXTINF:-1 tvg-id="e2" tvg-name="Elcano Two",Elcano Two
+acestream://2222222222222222222222222222222222222222
+`
+
+	// Create mock content for newera source
+	neweraContent := `#EXTM3U
+#EXTINF:-1 tvg-id="n1" tvg-name="NewEra One" tvg-logo="http://example.com/logo2.png",NewEra One
+acestream://3333333333333333333333333333333333333333
+#EXTINF:-1 tvg-id="n2" tvg-name="NewEra Two",NewEra Two
+acestream://4444444444444444444444444444444444444444
+`
+
+	// Create mock servers
+	elcanoServer := createMockIPFSServer(t, false, elcanoContent)
+	defer elcanoServer.Close()
+
+	neweraServer := createMockIPFSServer(t, false, neweraContent)
+	defer neweraServer.Close()
+
+	// Initialize components
+	storage, err := cache.NewFileStorage(cacheDir)
+	if err != nil {
+		t.Fatalf("Failed to create storage: %v", err)
+	}
+
+	fetch := fetcher.New(5*time.Second, storage, 1*time.Hour)
+	rw := rewriter.New("http://127.0.0.1:6878/ace/getstream")
+
+	// Create test server with unified endpoint
+	mux := http.NewServeMux()
+	mux.HandleFunc("/playlist.m3u", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+
+		// Fetch both sources
+		elcanoContentBytes, _, _, elcanoErr := fetch.FetchWithCache(elcanoServer.URL)
+		neweraContentBytes, _, _, neweraErr := fetch.FetchWithCache(neweraServer.URL)
+
+		// Check if both sources failed
+		if elcanoErr != nil && neweraErr != nil {
+			http.Error(w, "Bad Gateway", http.StatusBadGateway)
+			return
+		}
+
+		// Build merged content
+		var mergedContent strings.Builder
+		mergedContent.WriteString("#EXTM3U\n")
+
+		if elcanoErr == nil {
+			elcanoStr := string(elcanoContentBytes)
+			if strings.HasPrefix(elcanoStr, "#EXTM3U") {
+				elcanoStr = strings.TrimPrefix(elcanoStr, "#EXTM3U")
+				elcanoStr = strings.TrimLeft(elcanoStr, "\n")
+			}
+			mergedContent.WriteString(elcanoStr)
+		}
+
+		if neweraErr == nil {
+			neweraStr := string(neweraContentBytes)
+			if strings.HasPrefix(neweraStr, "#EXTM3U") {
+				neweraStr = strings.TrimPrefix(neweraStr, "#EXTM3U")
+				neweraStr = strings.TrimLeft(neweraStr, "\n")
+			}
+			if mergedContent.Len() > len("#EXTM3U\n") {
+				mergedContent.WriteString("\n")
+			}
+			mergedContent.WriteString(neweraStr)
+		}
+
+		// Apply deduplication, sorting, and rewriting
+		mergedBytes := []byte(mergedContent.String())
+		deduplicatedContent := rewriter.DeduplicateStreams(mergedBytes)
+		sortedContent := rewriter.SortStreamsByName(deduplicatedContent)
+		rewrittenContent := rw.RewriteM3U(sortedContent)
+
+		w.Header().Set("Content-Type", "audio/x-mpegurl")
+		w.WriteHeader(http.StatusOK)
+		w.Write(rewrittenContent)
+	})
+
+	testServer := httptest.NewServer(mux)
+	defer testServer.Close()
+
+	// Make request
+	resp, err := http.Get(testServer.URL + "/playlist.m3u")
+	if err != nil {
+		t.Fatalf("Failed to make request: %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		t.Errorf("Expected status code %d, got %d", http.StatusOK, resp.StatusCode)
+	}
+
+	body := make([]byte, 8192)
+	n, _ := resp.Body.Read(body)
+	bodyStr := string(body[:n])
+
+	// Verify all streams from both sources are present
+	if !strings.Contains(bodyStr, "Elcano One") {
+		t.Error("Expected 'Elcano One' from elcano source")
+	}
+	if !strings.Contains(bodyStr, "Elcano Two") {
+		t.Error("Expected 'Elcano Two' from elcano source")
+	}
+	if !strings.Contains(bodyStr, "NewEra One") {
+		t.Error("Expected 'NewEra One' from newera source")
+	}
+	if !strings.Contains(bodyStr, "NewEra Two") {
+		t.Error("Expected 'NewEra Two' from newera source")
+	}
+
+	// Verify URLs are rewritten
+	if !strings.Contains(bodyStr, "http://127.0.0.1:6878/ace/getstream?id=1111111111111111111111111111111111111111") {
+		t.Error("Expected rewritten URL for stream 1")
+	}
+	if !strings.Contains(bodyStr, "http://127.0.0.1:6878/ace/getstream?id=3333333333333333333333333333333333333333") {
+		t.Error("Expected rewritten URL for stream 3")
+	}
+}
+
+// TestIntegration_UnifiedPlaylist_Deduplication tests that duplicate streams are removed
+func TestIntegration_UnifiedPlaylist_Deduplication(t *testing.T) {
+	cacheDir, cleanup := setupTestEnvironment(t)
+	defer cleanup()
+
+	// Create mock content with duplicate acestream IDs
+	elcanoContent := `#EXTM3U
+#EXTINF:-1 tvg-id="e1" tvg-name="Channel A",Channel A
+acestream://1111111111111111111111111111111111111111
+#EXTINF:-1 tvg-id="e2" tvg-name="Channel B",Channel B
+acestream://2222222222222222222222222222222222222222
+`
+
+	neweraContent := `#EXTM3U
+#EXTINF:-1 tvg-id="n1" tvg-name="Channel A Duplicate",Channel A Duplicate
+acestream://1111111111111111111111111111111111111111
+#EXTINF:-1 tvg-id="n2" tvg-name="Channel C",Channel C
+acestream://3333333333333333333333333333333333333333
+`
+
+	elcanoServer := createMockIPFSServer(t, false, elcanoContent)
+	defer elcanoServer.Close()
+
+	neweraServer := createMockIPFSServer(t, false, neweraContent)
+	defer neweraServer.Close()
+
+	storage, err := cache.NewFileStorage(cacheDir)
+	if err != nil {
+		t.Fatalf("Failed to create storage: %v", err)
+	}
+
+	fetch := fetcher.New(5*time.Second, storage, 1*time.Hour)
+	rw := rewriter.New("http://127.0.0.1:6878/ace/getstream")
+
+	mux := http.NewServeMux()
+	mux.HandleFunc("/playlist.m3u", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+
+		elcanoContentBytes, _, _, elcanoErr := fetch.FetchWithCache(elcanoServer.URL)
+		neweraContentBytes, _, _, neweraErr := fetch.FetchWithCache(neweraServer.URL)
+
+		if elcanoErr != nil && neweraErr != nil {
+			http.Error(w, "Bad Gateway", http.StatusBadGateway)
+			return
+		}
+
+		var mergedContent strings.Builder
+		mergedContent.WriteString("#EXTM3U\n")
+
+		if elcanoErr == nil {
+			elcanoStr := string(elcanoContentBytes)
+			if strings.HasPrefix(elcanoStr, "#EXTM3U") {
+				elcanoStr = strings.TrimPrefix(elcanoStr, "#EXTM3U")
+				elcanoStr = strings.TrimLeft(elcanoStr, "\n")
+			}
+			mergedContent.WriteString(elcanoStr)
+		}
+
+		if neweraErr == nil {
+			neweraStr := string(neweraContentBytes)
+			if strings.HasPrefix(neweraStr, "#EXTM3U") {
+				neweraStr = strings.TrimPrefix(neweraStr, "#EXTM3U")
+				neweraStr = strings.TrimLeft(neweraStr, "\n")
+			}
+			if mergedContent.Len() > len("#EXTM3U\n") {
+				mergedContent.WriteString("\n")
+			}
+			mergedContent.WriteString(neweraStr)
+		}
+
+		mergedBytes := []byte(mergedContent.String())
+		deduplicatedContent := rewriter.DeduplicateStreams(mergedBytes)
+		sortedContent := rewriter.SortStreamsByName(deduplicatedContent)
+		rewrittenContent := rw.RewriteM3U(sortedContent)
+
+		w.Header().Set("Content-Type", "audio/x-mpegurl")
+		w.WriteHeader(http.StatusOK)
+		w.Write(rewrittenContent)
+	})
+
+	testServer := httptest.NewServer(mux)
+	defer testServer.Close()
+
+	resp, err := http.Get(testServer.URL + "/playlist.m3u")
+	if err != nil {
+		t.Fatalf("Failed to make request: %v", err)
+	}
+	defer resp.Body.Close()
+
+	body := make([]byte, 8192)
+	n, _ := resp.Body.Read(body)
+	bodyStr := string(body[:n])
+
+	// Count occurrences of the duplicate stream ID
+	duplicateCount := strings.Count(bodyStr, "id=1111111111111111111111111111111111111111")
+	if duplicateCount != 1 {
+		t.Errorf("Expected duplicate stream ID to appear once, but found %d occurrences", duplicateCount)
+	}
+
+	// Verify first occurrence is kept
+	if !strings.Contains(bodyStr, "Channel A") {
+		t.Error("Expected first occurrence 'Channel A' to be preserved")
+	}
+
+	// Verify duplicate is removed
+	if strings.Contains(bodyStr, "Channel A Duplicate") {
+		t.Error("Expected duplicate 'Channel A Duplicate' to be removed")
+	}
+
+	// Verify other unique streams are present
+	if !strings.Contains(bodyStr, "Channel B") {
+		t.Error("Expected 'Channel B' to be present")
+	}
+	if !strings.Contains(bodyStr, "Channel C") {
+		t.Error("Expected 'Channel C' to be present")
+	}
+}
+
+// TestIntegration_UnifiedPlaylist_AlphabeticalSorting tests alphabetical sorting by display name
+func TestIntegration_UnifiedPlaylist_AlphabeticalSorting(t *testing.T) {
+	cacheDir, cleanup := setupTestEnvironment(t)
+	defer cleanup()
+
+	// Create mock content with unsorted names
+	elcanoContent := `#EXTM3U
+#EXTINF:-1 tvg-id="e1",Zebra Channel
+acestream://1111111111111111111111111111111111111111
+#EXTINF:-1 tvg-id="e2",Alpha Channel
+acestream://2222222222222222222222222222222222222222
+`
+
+	neweraContent := `#EXTM3U
+#EXTINF:-1 tvg-id="n1",Beta Channel
+acestream://3333333333333333333333333333333333333333
+#EXTINF:-1 tvg-id="n2",Gamma Channel
+acestream://4444444444444444444444444444444444444444
+`
+
+	elcanoServer := createMockIPFSServer(t, false, elcanoContent)
+	defer elcanoServer.Close()
+
+	neweraServer := createMockIPFSServer(t, false, neweraContent)
+	defer neweraServer.Close()
+
+	storage, err := cache.NewFileStorage(cacheDir)
+	if err != nil {
+		t.Fatalf("Failed to create storage: %v", err)
+	}
+
+	fetch := fetcher.New(5*time.Second, storage, 1*time.Hour)
+	rw := rewriter.New("http://127.0.0.1:6878/ace/getstream")
+
+	mux := http.NewServeMux()
+	mux.HandleFunc("/playlist.m3u", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+
+		elcanoContentBytes, _, _, elcanoErr := fetch.FetchWithCache(elcanoServer.URL)
+		neweraContentBytes, _, _, neweraErr := fetch.FetchWithCache(neweraServer.URL)
+
+		if elcanoErr != nil && neweraErr != nil {
+			http.Error(w, "Bad Gateway", http.StatusBadGateway)
+			return
+		}
+
+		var mergedContent strings.Builder
+		mergedContent.WriteString("#EXTM3U\n")
+
+		if elcanoErr == nil {
+			elcanoStr := string(elcanoContentBytes)
+			if strings.HasPrefix(elcanoStr, "#EXTM3U") {
+				elcanoStr = strings.TrimPrefix(elcanoStr, "#EXTM3U")
+				elcanoStr = strings.TrimLeft(elcanoStr, "\n")
+			}
+			mergedContent.WriteString(elcanoStr)
+		}
+
+		if neweraErr == nil {
+			neweraStr := string(neweraContentBytes)
+			if strings.HasPrefix(neweraStr, "#EXTM3U") {
+				neweraStr = strings.TrimPrefix(neweraStr, "#EXTM3U")
+				neweraStr = strings.TrimLeft(neweraStr, "\n")
+			}
+			if mergedContent.Len() > len("#EXTM3U\n") {
+				mergedContent.WriteString("\n")
+			}
+			mergedContent.WriteString(neweraStr)
+		}
+
+		mergedBytes := []byte(mergedContent.String())
+		deduplicatedContent := rewriter.DeduplicateStreams(mergedBytes)
+		sortedContent := rewriter.SortStreamsByName(deduplicatedContent)
+		rewrittenContent := rw.RewriteM3U(sortedContent)
+
+		w.Header().Set("Content-Type", "audio/x-mpegurl")
+		w.WriteHeader(http.StatusOK)
+		w.Write(rewrittenContent)
+	})
+
+	testServer := httptest.NewServer(mux)
+	defer testServer.Close()
+
+	resp, err := http.Get(testServer.URL + "/playlist.m3u")
+	if err != nil {
+		t.Fatalf("Failed to make request: %v", err)
+	}
+	defer resp.Body.Close()
+
+	body := make([]byte, 8192)
+	n, _ := resp.Body.Read(body)
+	bodyStr := string(body[:n])
+
+	// Find positions of channel names
+	alphaPos := strings.Index(bodyStr, "Alpha Channel")
+	betaPos := strings.Index(bodyStr, "Beta Channel")
+	gammaPos := strings.Index(bodyStr, "Gamma Channel")
+	zebraPos := strings.Index(bodyStr, "Zebra Channel")
+
+	// Verify alphabetical order
+	if alphaPos == -1 || betaPos == -1 || gammaPos == -1 || zebraPos == -1 {
+		t.Fatal("Not all channels found in response")
+	}
+
+	if !(alphaPos < betaPos && betaPos < gammaPos && gammaPos < zebraPos) {
+		t.Errorf("Channels not in alphabetical order. Positions: Alpha=%d, Beta=%d, Gamma=%d, Zebra=%d",
+			alphaPos, betaPos, gammaPos, zebraPos)
+	}
+}
+
+// TestIntegration_UnifiedPlaylist_LogoRemoval tests that tvg-logo attributes are removed
+func TestIntegration_UnifiedPlaylist_LogoRemoval(t *testing.T) {
+	cacheDir, cleanup := setupTestEnvironment(t)
+	defer cleanup()
+
+	elcanoContent := `#EXTM3U
+#EXTINF:-1 tvg-id="e1" tvg-logo="http://example.com/logo1.png" tvg-name="Channel One",Channel One
+acestream://1111111111111111111111111111111111111111
+`
+
+	neweraContent := `#EXTM3U
+#EXTINF:-1 tvg-id="n1" tvg-name="Channel Two" tvg-logo="http://example.com/logo2.png",Channel Two
+acestream://2222222222222222222222222222222222222222
+`
+
+	elcanoServer := createMockIPFSServer(t, false, elcanoContent)
+	defer elcanoServer.Close()
+
+	neweraServer := createMockIPFSServer(t, false, neweraContent)
+	defer neweraServer.Close()
+
+	storage, err := cache.NewFileStorage(cacheDir)
+	if err != nil {
+		t.Fatalf("Failed to create storage: %v", err)
+	}
+
+	fetch := fetcher.New(5*time.Second, storage, 1*time.Hour)
+	rw := rewriter.New("http://127.0.0.1:6878/ace/getstream")
+
+	mux := http.NewServeMux()
+	mux.HandleFunc("/playlist.m3u", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+
+		elcanoContentBytes, _, _, elcanoErr := fetch.FetchWithCache(elcanoServer.URL)
+		neweraContentBytes, _, _, neweraErr := fetch.FetchWithCache(neweraServer.URL)
+
+		if elcanoErr != nil && neweraErr != nil {
+			http.Error(w, "Bad Gateway", http.StatusBadGateway)
+			return
+		}
+
+		var mergedContent strings.Builder
+		mergedContent.WriteString("#EXTM3U\n")
+
+		if elcanoErr == nil {
+			elcanoStr := string(elcanoContentBytes)
+			if strings.HasPrefix(elcanoStr, "#EXTM3U") {
+				elcanoStr = strings.TrimPrefix(elcanoStr, "#EXTM3U")
+				elcanoStr = strings.TrimLeft(elcanoStr, "\n")
+			}
+			mergedContent.WriteString(elcanoStr)
+		}
+
+		if neweraErr == nil {
+			neweraStr := string(neweraContentBytes)
+			if strings.HasPrefix(neweraStr, "#EXTM3U") {
+				neweraStr = strings.TrimPrefix(neweraStr, "#EXTM3U")
+				neweraStr = strings.TrimLeft(neweraStr, "\n")
+			}
+			if mergedContent.Len() > len("#EXTM3U\n") {
+				mergedContent.WriteString("\n")
+			}
+			mergedContent.WriteString(neweraStr)
+		}
+
+		mergedBytes := []byte(mergedContent.String())
+		deduplicatedContent := rewriter.DeduplicateStreams(mergedBytes)
+		sortedContent := rewriter.SortStreamsByName(deduplicatedContent)
+		rewrittenContent := rw.RewriteM3U(sortedContent)
+
+		w.Header().Set("Content-Type", "audio/x-mpegurl")
+		w.WriteHeader(http.StatusOK)
+		w.Write(rewrittenContent)
+	})
+
+	testServer := httptest.NewServer(mux)
+	defer testServer.Close()
+
+	resp, err := http.Get(testServer.URL + "/playlist.m3u")
+	if err != nil {
+		t.Fatalf("Failed to make request: %v", err)
+	}
+	defer resp.Body.Close()
+
+	body := make([]byte, 8192)
+	n, _ := resp.Body.Read(body)
+	bodyStr := string(body[:n])
+
+	// Verify logos are removed
+	if strings.Contains(bodyStr, "tvg-logo=") {
+		t.Error("Expected tvg-logo attributes to be removed")
+	}
+	if strings.Contains(bodyStr, "logo1.png") {
+		t.Error("Expected logo1.png to be removed")
+	}
+	if strings.Contains(bodyStr, "logo2.png") {
+		t.Error("Expected logo2.png to be removed")
+	}
+
+	// Verify other metadata is preserved
+	if !strings.Contains(bodyStr, "tvg-id=\"e1\"") {
+		t.Error("Expected tvg-id to be preserved")
+	}
+	if !strings.Contains(bodyStr, "tvg-name=\"Channel One\"") {
+		t.Error("Expected tvg-name to be preserved")
+	}
+}
+
+// TestIntegration_UnifiedPlaylist_NetworkCachingParameter tests network-caching parameter in URLs
+func TestIntegration_UnifiedPlaylist_NetworkCachingParameter(t *testing.T) {
+	cacheDir, cleanup := setupTestEnvironment(t)
+	defer cleanup()
+
+	elcanoContent := `#EXTM3U
+#EXTINF:-1,Test Channel
+acestream://1111111111111111111111111111111111111111
+`
+
+	elcanoServer := createMockIPFSServer(t, false, elcanoContent)
+	defer elcanoServer.Close()
+
+	neweraServer := createMockIPFSServer(t, true, "") // Failing server
+	defer neweraServer.Close()
+
+	storage, err := cache.NewFileStorage(cacheDir)
+	if err != nil {
+		t.Fatalf("Failed to create storage: %v", err)
+	}
+
+	fetch := fetcher.New(5*time.Second, storage, 1*time.Hour)
+	rw := rewriter.New("http://127.0.0.1:6878/ace/getstream")
+
+	mux := http.NewServeMux()
+	mux.HandleFunc("/playlist.m3u", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+
+		elcanoContentBytes, _, _, elcanoErr := fetch.FetchWithCache(elcanoServer.URL)
+		_, _, _, neweraErr := fetch.FetchWithCache(neweraServer.URL)
+
+		if elcanoErr != nil && neweraErr != nil {
+			http.Error(w, "Bad Gateway", http.StatusBadGateway)
+			return
+		}
+
+		var mergedContent strings.Builder
+		mergedContent.WriteString("#EXTM3U\n")
+
+		if elcanoErr == nil {
+			elcanoStr := string(elcanoContentBytes)
+			if strings.HasPrefix(elcanoStr, "#EXTM3U") {
+				elcanoStr = strings.TrimPrefix(elcanoStr, "#EXTM3U")
+				elcanoStr = strings.TrimLeft(elcanoStr, "\n")
+			}
+			mergedContent.WriteString(elcanoStr)
+		}
+
+		mergedBytes := []byte(mergedContent.String())
+		deduplicatedContent := rewriter.DeduplicateStreams(mergedBytes)
+		sortedContent := rewriter.SortStreamsByName(deduplicatedContent)
+		rewrittenContent := rw.RewriteM3U(sortedContent)
+
+		w.Header().Set("Content-Type", "audio/x-mpegurl")
+		w.WriteHeader(http.StatusOK)
+		w.Write(rewrittenContent)
+	})
+
+	testServer := httptest.NewServer(mux)
+	defer testServer.Close()
+
+	resp, err := http.Get(testServer.URL + "/playlist.m3u")
+	if err != nil {
+		t.Fatalf("Failed to make request: %v", err)
+	}
+	defer resp.Body.Close()
+
+	body := make([]byte, 8192)
+	n, _ := resp.Body.Read(body)
+	bodyStr := string(body[:n])
+
+	// Verify network-caching parameter is present
+	if !strings.Contains(bodyStr, "network-caching=1000") {
+		t.Error("Expected network-caching=1000 parameter in rewritten acestream URLs")
+	}
+
+	// Verify complete URL format
+	expectedURL := "http://127.0.0.1:6878/ace/getstream?id=1111111111111111111111111111111111111111&network-caching=1000"
+	if !strings.Contains(bodyStr, expectedURL) {
+		t.Errorf("Expected URL with network-caching parameter: %s", expectedURL)
+	}
+}
+
+// TestIntegration_UnifiedPlaylist_CacheFallback tests cache fallback when sources fail
+func TestIntegration_UnifiedPlaylist_CacheFallback(t *testing.T) {
+	cacheDir, cleanup := setupTestEnvironment(t)
+	defer cleanup()
+
+	elcanoContent := `#EXTM3U
+#EXTINF:-1,Cached Channel
+acestream://1111111111111111111111111111111111111111
+`
+
+	elcanoAvailable := true
+	elcanoServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if !elcanoAvailable {
+			w.WriteHeader(http.StatusServiceUnavailable)
+			return
+		}
+		w.Header().Set("Content-Type", "audio/x-mpegurl")
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte(elcanoContent))
+	}))
+	defer elcanoServer.Close()
+
+	neweraServer := createMockIPFSServer(t, true, "") // Always failing
+	defer neweraServer.Close()
+
+	storage, err := cache.NewFileStorage(cacheDir)
+	if err != nil {
+		t.Fatalf("Failed to create storage: %v", err)
+	}
+
+	fetch := fetcher.New(5*time.Second, storage, 100*time.Millisecond) // Short TTL
+	rw := rewriter.New("http://127.0.0.1:6878/ace/getstream")
+
+	mux := http.NewServeMux()
+	mux.HandleFunc("/playlist.m3u", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+
+		elcanoContentBytes, _, _, elcanoErr := fetch.FetchWithCache(elcanoServer.URL)
+		_, _, _, neweraErr := fetch.FetchWithCache(neweraServer.URL)
+
+		if elcanoErr != nil && neweraErr != nil {
+			http.Error(w, "Bad Gateway", http.StatusBadGateway)
+			return
+		}
+
+		var mergedContent strings.Builder
+		mergedContent.WriteString("#EXTM3U\n")
+
+		if elcanoErr == nil {
+			elcanoStr := string(elcanoContentBytes)
+			if strings.HasPrefix(elcanoStr, "#EXTM3U") {
+				elcanoStr = strings.TrimPrefix(elcanoStr, "#EXTM3U")
+				elcanoStr = strings.TrimLeft(elcanoStr, "\n")
+			}
+			mergedContent.WriteString(elcanoStr)
+		}
+
+		mergedBytes := []byte(mergedContent.String())
+		deduplicatedContent := rewriter.DeduplicateStreams(mergedBytes)
+		sortedContent := rewriter.SortStreamsByName(deduplicatedContent)
+		rewrittenContent := rw.RewriteM3U(sortedContent)
+
+		w.Header().Set("Content-Type", "audio/x-mpegurl")
+		w.WriteHeader(http.StatusOK)
+		w.Write(rewrittenContent)
+	})
+
+	testServer := httptest.NewServer(mux)
+	defer testServer.Close()
+
+	// First request - populate cache
+	resp1, err := http.Get(testServer.URL + "/playlist.m3u")
+	if err != nil {
+		t.Fatalf("Failed to make first request: %v", err)
+	}
+	resp1.Body.Close()
+
+	if resp1.StatusCode != http.StatusOK {
+		t.Errorf("Expected status code %d for first request, got %d", http.StatusOK, resp1.StatusCode)
+	}
+
+	// Wait for cache to expire
+	time.Sleep(150 * time.Millisecond)
+
+	// Make elcano unavailable
+	elcanoAvailable = false
+
+	// Second request - should serve stale cache
+	resp2, err := http.Get(testServer.URL + "/playlist.m3u")
+	if err != nil {
+		t.Fatalf("Failed to make second request: %v", err)
+	}
+	defer resp2.Body.Close()
+
+	if resp2.StatusCode != http.StatusOK {
+		t.Errorf("Expected status code %d when serving stale cache, got %d", http.StatusOK, resp2.StatusCode)
+	}
+
+	body := make([]byte, 8192)
+	n, _ := resp2.Body.Read(body)
+	bodyStr := string(body[:n])
+
+	// Verify stale cache content is served
+	if !strings.Contains(bodyStr, "Cached Channel") {
+		t.Error("Expected stale cache content to be served")
+	}
+}
