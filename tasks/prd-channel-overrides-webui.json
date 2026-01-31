@@ -1,0 +1,276 @@
+{
+  "name": "Channel Overrides Web UI",
+  "description": "Web UI for managing IPTV channel overrides with EPG validation. React frontend embedded in Go binary for single Docker image deployment.",
+  "branchName": "ralph/channel-overrides-webui",
+  "userStories": [
+    {
+      "id": "US-001",
+      "title": "EPG XML fetching and caching service",
+      "description": "As a system administrator, I want the EPG XML to be fetched and cached on startup so that TVG-ID validation is fast and doesn't require network calls for each validation.",
+      "acceptanceCriteria": [
+        "Create `epg` package with EPGCache struct",
+        "Fetch EPG XML from configurable URL (default: https://raw.githubusercontent.com/davidmuma/EPG_dobleM/master/guiatv.xml) on startup",
+        "Parse EPG XML and extract all valid channel IDs into a map for O(1) lookup",
+        "Store channel display names alongside IDs for suggestion feature",
+        "Expose method to check if a TVG-ID is valid",
+        "Expose method to search/suggest TVG-IDs by partial match",
+        "Log EPG cache initialization success/failure with channel count",
+        "go test ./... passes",
+        "go vet ./... passes"
+      ],
+      "priority": 1,
+      "passes": true,
+      "notes": "",
+      "dependsOn": [],
+      "completionNotes": "Completed by agent"
+    },
+    {
+      "id": "US-002",
+      "title": "API endpoint for listing channels with override status",
+      "description": "As an admin, I want to see all available channels with their current override status so that I can identify which channels need configuration.",
+      "acceptanceCriteria": [
+        "Create `GET /api/channels` endpoint that returns all channels from processed M3U",
+        "Include current values (original + any applied overrides) for each channel",
+        "Include `hasOverride` boolean flag for each channel",
+        "Include AcestreamID as the unique identifier",
+        "Support optional query parameter for filtering by name/group",
+        "Return JSON response with proper error handling",
+        "go test ./... passes",
+        "go vet ./... passes"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "",
+      "dependsOn": []
+    },
+    {
+      "id": "US-003",
+      "title": "API endpoint for validating TVG-ID",
+      "description": "As an admin, I want to validate a TVG-ID before saving so that I can ensure correct EPG mapping.",
+      "acceptanceCriteria": [
+        "Create `POST /api/validate/tvg-id` endpoint accepting `{\"tvg_id\": \"string\"}`",
+        "Return `{\"valid\": true}` if TVG-ID exists in EPG cache",
+        "Return `{\"valid\": false, \"suggestions\": [...]}` with up to 10 closest matches if invalid",
+        "Suggestions should be sorted by relevance (exact prefix match first, then fuzzy)",
+        "Handle empty/null TVG-ID as valid (means \"no EPG\")",
+        "go test ./... passes",
+        "go vet ./... passes"
+      ],
+      "priority": 3,
+      "passes": false,
+      "notes": "",
+      "dependsOn": [
+        "US-001"
+      ]
+    },
+    {
+      "id": "US-004",
+      "title": "API endpoints for CRUD operations on overrides",
+      "description": "As an admin, I want API endpoints to create, read, update, and delete channel overrides so that the web UI can manage overrides.",
+      "acceptanceCriteria": [
+        "`GET /api/overrides/:acestreamId` - Get override for specific channel",
+        "`PUT /api/overrides/:acestreamId` - Create or update override (supports all M3U attributes)",
+        "`DELETE /api/overrides/:acestreamId` - Delete override for channel",
+        "`GET /api/overrides` - List all overrides",
+        "Support `force` query parameter on PUT to skip TVG-ID validation",
+        "Return 400 with validation errors if TVG-ID is invalid and force=false",
+        "All endpoints use existing `overrides.Manager` for persistence",
+        "go test ./... passes",
+        "go vet ./... passes"
+      ],
+      "priority": 4,
+      "passes": false,
+      "notes": "",
+      "dependsOn": [
+        "US-003"
+      ]
+    },
+    {
+      "id": "US-005",
+      "title": "API endpoint for bulk override updates",
+      "description": "As an admin, I want to update a single field across multiple channels at once so that I can efficiently manage group changes.",
+      "acceptanceCriteria": [
+        "Create `PATCH /api/overrides/bulk` endpoint",
+        "Accept JSON body: `{\"acestream_ids\": [...], \"field\": \"group_title\", \"value\": \"Sports\"}`",
+        "Support all override fields: enabled, tvg_id, tvg_name, tvg_logo, group_title",
+        "Validate TVG-ID if that's the field being updated (unless force=true)",
+        "Return summary: `{\"updated\": 5, \"failed\": 1, \"errors\": [...]}`",
+        "Atomic operation: all updates succeed or none (with option for partial)",
+        "go test ./... passes",
+        "go vet ./... passes"
+      ],
+      "priority": 5,
+      "passes": false,
+      "notes": "",
+      "dependsOn": [
+        "US-004"
+      ]
+    },
+    {
+      "id": "US-006",
+      "title": "React project setup with Vite",
+      "description": "As a developer, I want a minimal React project setup so that I can build the web UI with modern tooling.",
+      "acceptanceCriteria": [
+        "Create `web-ui/` directory with Vite + React + TypeScript setup",
+        "Configure Vite to output build to `web-ui/dist/`",
+        "Add basic folder structure: components/, hooks/, api/, types/",
+        "Configure ESLint and Prettier for code quality",
+        "Add npm scripts: dev, build, test, lint",
+        "Create .gitignore for node_modules and dist",
+        "npm run build completes successfully",
+        "go test ./... passes",
+        "go vet ./... passes"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "",
+      "dependsOn": []
+    },
+    {
+      "id": "US-007",
+      "title": "Embed React build in Go binary",
+      "description": "As a system administrator, I want the web UI embedded in the Go binary so that deployment remains a single Docker image.",
+      "acceptanceCriteria": [
+        "Use Go 1.16+ `embed` directive to embed `web-ui/dist/`",
+        "Create HTTP handler that serves embedded static files",
+        "Mount UI at `/ui/` path (or configurable)",
+        "Serve `index.html` for all non-API routes under `/ui/` (SPA routing)",
+        "Set correct Content-Type headers for JS, CSS, and other assets",
+        "Update Dockerfile to build frontend before Go binary",
+        "go test ./... passes",
+        "go vet ./... passes"
+      ],
+      "priority": 6,
+      "passes": false,
+      "notes": "",
+      "dependsOn": [
+        "US-006"
+      ]
+    },
+    {
+      "id": "US-008",
+      "title": "Channel list view with filtering",
+      "description": "As an admin, I want to see all channels in a table with search/filter capabilities so that I can quickly find channels to configure.",
+      "acceptanceCriteria": [
+        "Create ChannelList component displaying channels in a table",
+        "Columns: checkbox (for bulk select), Name, Group, TVG-ID, Status (has override indicator)",
+        "Search input that filters by channel name (client-side)",
+        "Dropdown filter for group-title",
+        "Visual indicator for channels with existing overrides",
+        "Click row to open edit panel",
+        "Responsive layout for different screen sizes",
+        "npm run build completes successfully in web-ui/",
+        "go test ./... passes",
+        "go vet ./... passes"
+      ],
+      "priority": 7,
+      "passes": false,
+      "notes": "",
+      "dependsOn": [
+        "US-006",
+        "US-002"
+      ]
+    },
+    {
+      "id": "US-009",
+      "title": "Channel override edit form",
+      "description": "As an admin, I want a form to edit all M3U attributes for a channel so that I can configure overrides.",
+      "acceptanceCriteria": [
+        "Create EditOverrideForm component as a side panel or modal",
+        "Display current (original) values as placeholders",
+        "Input fields for: enabled (toggle), tvg_id, tvg_name, tvg_logo, group_title",
+        "Support custom attributes as key-value pairs (add/remove)",
+        "TVG-ID field shows validation status in real-time (debounced)",
+        "Show suggestions dropdown when TVG-ID is invalid",
+        "Save button with loading state",
+        "\"Force save\" checkbox when validation fails",
+        "Cancel button to close without saving",
+        "Delete override button (with confirmation)",
+        "npm run build completes successfully in web-ui/",
+        "go test ./... passes",
+        "go vet ./... passes"
+      ],
+      "priority": 8,
+      "passes": false,
+      "notes": "",
+      "dependsOn": [
+        "US-008",
+        "US-004"
+      ]
+    },
+    {
+      "id": "US-010",
+      "title": "TVG-ID autocomplete with EPG validation",
+      "description": "As an admin, I want TVG-ID input to show validation status and suggestions so that I can easily find the correct EPG mapping.",
+      "acceptanceCriteria": [
+        "TVG-ID input validates on blur and while typing (debounced 300ms)",
+        "Show green checkmark icon when valid",
+        "Show red X icon with warning message when invalid",
+        "Show dropdown with suggestions when invalid (clickable to select)",
+        "Allow typing to filter suggestions",
+        "Show \"Force save anyway\" option when invalid",
+        "Empty value is valid (means no EPG mapping)",
+        "npm run build completes successfully in web-ui/",
+        "go test ./... passes",
+        "go vet ./... passes"
+      ],
+      "priority": 9,
+      "passes": false,
+      "notes": "",
+      "dependsOn": [
+        "US-009",
+        "US-003"
+      ]
+    },
+    {
+      "id": "US-011",
+      "title": "Bulk edit functionality",
+      "description": "As an admin, I want to select multiple channels and update a single field for all of them so that I can efficiently manage group changes.",
+      "acceptanceCriteria": [
+        "Checkbox in table header selects/deselects all visible channels",
+        "\"Bulk Edit\" button appears when channels are selected",
+        "Bulk edit modal shows: field selector dropdown, value input",
+        "Field selector includes: enabled, tvg_id, tvg_name, tvg_logo, group_title",
+        "Preview shows number of channels to be updated",
+        "Submit calls bulk API endpoint",
+        "Show success/error summary after completion",
+        "Clear selection after successful bulk update",
+        "npm run build completes successfully in web-ui/",
+        "go test ./... passes",
+        "go vet ./... passes"
+      ],
+      "priority": 10,
+      "passes": false,
+      "notes": "",
+      "dependsOn": [
+        "US-008",
+        "US-005"
+      ]
+    },
+    {
+      "id": "US-012",
+      "title": "Error handling and user feedback",
+      "description": "As an admin, I want clear feedback on all operations so that I understand what succeeded or failed.",
+      "acceptanceCriteria": [
+        "Toast notifications for success/error on save operations",
+        "Loading spinners during API calls",
+        "Graceful error display when API is unreachable",
+        "Form validation errors displayed inline",
+        "Confirmation dialog before destructive actions (delete)",
+        "Retry option on failed operations",
+        "npm run build completes successfully in web-ui/",
+        "go test ./... passes",
+        "go vet ./... passes"
+      ],
+      "priority": 11,
+      "passes": false,
+      "notes": "",
+      "dependsOn": [
+        "US-009"
+      ]
+    }
+  ],
+  "metadata": {
+    "updatedAt": "2026-01-31T21:09:20.413Z"
+  }
+}

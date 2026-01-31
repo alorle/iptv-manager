@@ -159,6 +159,25 @@ func deduplicateChannels(channels []Channel) []Channel {
 	return result
 }
 
+// filterChannels filters channels by name and/or group (case-insensitive substring match)
+func filterChannels(channels []Channel, nameFilter, groupFilter string) []Channel {
+	var result []Channel
+
+	nameLower := strings.ToLower(nameFilter)
+	groupLower := strings.ToLower(groupFilter)
+
+	for _, ch := range channels {
+		nameMatches := nameFilter == "" || strings.Contains(strings.ToLower(ch.Name), nameLower)
+		groupMatches := groupFilter == "" || strings.Contains(strings.ToLower(ch.GroupTitle), groupLower)
+
+		if nameMatches && groupMatches {
+			result = append(result, ch)
+		}
+	}
+
+	return result
+}
+
 // ServeHTTP handles the GET /api/channels request, PATCH /api/channels/{acestream_id}, and DELETE /api/channels/{acestream_id}/override
 func (h *ChannelsHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if r.Method == http.MethodGet {
@@ -181,6 +200,9 @@ func (h *ChannelsHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 // handleList handles the GET /api/channels request
 func (h *ChannelsHandler) handleList(w http.ResponseWriter, r *http.Request) {
+	// Extract query parameters for filtering
+	nameFilter := r.URL.Query().Get("name")
+	groupFilter := r.URL.Query().Get("group")
 
 	// Fetch both sources
 	elcanoContent, _, _, elcanoErr := h.fetcher.FetchWithCache(h.elcanoURL)
@@ -215,6 +237,11 @@ func (h *ChannelsHandler) handleList(w http.ResponseWriter, r *http.Request) {
 
 	// Apply overrides
 	allChannels = applyOverrides(allChannels, h.overridesMgr)
+
+	// Apply filters if provided
+	if nameFilter != "" || groupFilter != "" {
+		allChannels = filterChannels(allChannels, nameFilter, groupFilter)
+	}
 
 	// Sort alphabetically by name (case-insensitive)
 	sort.SliceStable(allChannels, func(i, j int) bool {
