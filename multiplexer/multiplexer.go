@@ -9,6 +9,9 @@ import (
 	"net/http"
 	"sync"
 	"time"
+
+	"github.com/alorle/iptv-manager/circuitbreaker"
+	"github.com/alorle/iptv-manager/config"
 )
 
 // Config holds multiplexer configuration
@@ -19,14 +22,17 @@ type Config struct {
 	ReadTimeout time.Duration
 	// WriteTimeout for writing to clients
 	WriteTimeout time.Duration
+	// ResilienceConfig holds reconnection and circuit breaker settings
+	ResilienceConfig *config.ResilienceConfig
 }
 
 // DefaultConfig returns default multiplexer configuration
 func DefaultConfig() Config {
 	return Config{
-		BufferSize:   1024 * 1024, // 1MB per client
-		ReadTimeout:  30 * time.Second,
-		WriteTimeout: 10 * time.Second,
+		BufferSize:       1024 * 1024, // 1MB per client
+		ReadTimeout:      30 * time.Second,
+		WriteTimeout:     10 * time.Second,
+		ResilienceConfig: config.DefaultResilienceConfig(),
 	}
 }
 
@@ -96,22 +102,27 @@ func (c *Client) Close() {
 
 // Stream represents an active stream from upstream
 type Stream struct {
-	ContentID   string
-	Clients     map[string]*Client
-	mu          sync.RWMutex
-	cancel      context.CancelFunc
-	upstream    io.ReadCloser
-	done        chan struct{}
-	started     bool
-	startedOnce sync.Once
+	ContentID      string
+	Clients        map[string]*Client
+	mu             sync.RWMutex
+	cancel         context.CancelFunc
+	upstream       io.ReadCloser
+	done           chan struct{}
+	started        bool
+	startedOnce    sync.Once
+	upstreamURL    string
+	circuitBreaker circuitbreaker.CircuitBreaker
+	httpClient     *http.Client
 }
 
 // NewStream creates a new stream
-func NewStream(contentID string) *Stream {
+func NewStream(contentID string, cb circuitbreaker.CircuitBreaker, httpClient *http.Client) *Stream {
 	return &Stream{
-		ContentID: contentID,
-		Clients:   make(map[string]*Client),
-		done:      make(chan struct{}),
+		ContentID:      contentID,
+		Clients:        make(map[string]*Client),
+		done:           make(chan struct{}),
+		circuitBreaker: cb,
+		httpClient:     httpClient,
 	}
 }
 
@@ -145,9 +156,10 @@ func (s *Stream) ClientCount() int {
 }
 
 // Start starts reading from upstream and fanning out to clients
-func (s *Stream) Start(ctx context.Context, upstream io.ReadCloser, cfg Config) {
+func (s *Stream) Start(ctx context.Context, upstream io.ReadCloser, upstreamURL string, cfg Config) {
 	s.startedOnce.Do(func() {
 		s.upstream = upstream
+		s.upstreamURL = upstreamURL
 		ctx, cancel := context.WithCancel(ctx)
 		s.cancel = cancel
 		s.started = true
@@ -174,6 +186,7 @@ func (s *Stream) fanOut(ctx context.Context, cfg Config) {
 	}()
 
 	buffer := make([]byte, 32*1024) // 32KB read buffer
+	attemptNumber := 0
 
 	for {
 		select {
@@ -185,10 +198,105 @@ func (s *Stream) fanOut(ctx context.Context, cfg Config) {
 		// Read from upstream
 		n, err := s.upstream.Read(buffer)
 		if err != nil {
-			if err != io.EOF {
-				log.Printf("Stream %s: Error reading from upstream: %v", s.ContentID, err)
+			// Check if we should reconnect
+			shouldReconnect := err != io.EOF && ctx.Err() == nil && s.ClientCount() > 0
+
+			if !shouldReconnect {
+				if err != io.EOF {
+					log.Printf("Stream %s: Error reading from upstream: %v", s.ContentID, err)
+				}
+				return
 			}
-			return
+
+			// Attempt reconnection with exponential backoff
+			log.Printf("Stream %s: Upstream connection lost: %v", s.ContentID, err)
+
+			// Close current upstream connection
+			if s.upstream != nil {
+				s.upstream.Close()
+				s.upstream = nil
+			}
+
+			// Reconnection loop
+			backoff := cfg.ResilienceConfig.ReconnectInitialBackoff
+			attemptNumber = 1
+
+			for {
+				// Check if we should stop reconnecting
+				if ctx.Err() != nil || s.ClientCount() == 0 {
+					log.Printf("Stream %s: Stopping reconnection - no clients or context cancelled", s.ContentID)
+					return
+				}
+
+				// Check circuit breaker state before attempting reconnection
+				cbState := s.circuitBreaker.State()
+				if cbState == circuitbreaker.StateOpen {
+					log.Printf("Stream %s: Circuit breaker is OPEN, skipping reconnection attempt %d", s.ContentID, attemptNumber)
+
+					// Wait for circuit breaker timeout before checking again
+					select {
+					case <-time.After(cfg.ResilienceConfig.CBTimeout):
+						continue
+					case <-ctx.Done():
+						return
+					}
+				}
+
+				// Log reconnection attempt
+				log.Printf("Stream %s: Reconnection attempt #%d (backoff: %v)", s.ContentID, attemptNumber, backoff)
+
+				// Wait for backoff duration
+				select {
+				case <-time.After(backoff):
+				case <-ctx.Done():
+					return
+				}
+
+				// Attempt to reconnect through circuit breaker
+				var newUpstream io.ReadCloser
+				reconnectErr := s.circuitBreaker.Execute(func() error {
+					req, err := http.NewRequestWithContext(ctx, "GET", s.upstreamURL, nil)
+					if err != nil {
+						return fmt.Errorf("failed to create request: %w", err)
+					}
+
+					resp, err := s.httpClient.Do(req)
+					if err != nil {
+						return fmt.Errorf("failed to connect to upstream: %w", err)
+					}
+
+					if resp.StatusCode != http.StatusOK {
+						resp.Body.Close()
+						return fmt.Errorf("upstream returned status %d", resp.StatusCode)
+					}
+
+					newUpstream = resp.Body
+					return nil
+				})
+
+				if reconnectErr != nil {
+					log.Printf("Stream %s: Reconnection attempt #%d failed: %v", s.ContentID, attemptNumber, reconnectErr)
+
+					// Calculate next backoff (exponential)
+					backoff = backoff * 2
+					if backoff > cfg.ResilienceConfig.ReconnectMaxBackoff {
+						backoff = cfg.ResilienceConfig.ReconnectMaxBackoff
+					}
+
+					attemptNumber++
+					continue
+				}
+
+				// Reconnection successful
+				log.Printf("Stream %s: Reconnection attempt #%d succeeded", s.ContentID, attemptNumber)
+				s.mu.Lock()
+				s.upstream = newUpstream
+				s.mu.Unlock()
+
+				// Reset attempt counter and break out of reconnection loop
+				attemptNumber = 0
+				break
+			}
 		}
 
 		if n > 0 {
@@ -259,8 +367,16 @@ func (m *Multiplexer) GetOrCreateStream(ctx context.Context, contentID string, u
 		return stream, true, nil
 	}
 
-	// Create new stream
-	stream := NewStream(contentID)
+	// Create circuit breaker for this stream
+	cbConfig := circuitbreaker.Config{
+		FailureThreshold: m.cfg.ResilienceConfig.CBFailureThreshold,
+		Timeout:          m.cfg.ResilienceConfig.CBTimeout,
+		HalfOpenRequests: m.cfg.ResilienceConfig.CBHalfOpenRequests,
+	}
+	cb := circuitbreaker.New(cbConfig)
+
+	// Create new stream with circuit breaker
+	stream := NewStream(contentID, cb, m.client)
 
 	// Start upstream connection using multiplexer's independent context
 	// This ensures upstream is not tied to any single client's request context
@@ -283,7 +399,7 @@ func (m *Multiplexer) GetOrCreateStream(ctx context.Context, contentID string, u
 
 	// Start the stream with multiplexer's independent context
 	// This ensures the upstream reading loop is not cancelled when a client disconnects
-	stream.Start(m.ctx, resp.Body, m.cfg)
+	stream.Start(m.ctx, resp.Body, upstreamURL, m.cfg)
 
 	// Store the stream
 	m.streams[contentID] = stream

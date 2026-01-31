@@ -9,6 +9,8 @@ import (
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/alorle/iptv-manager/circuitbreaker"
 )
 
 // mockResponseWriter implements http.ResponseWriter and http.Flusher for testing
@@ -163,7 +165,9 @@ func TestClient_Close(t *testing.T) {
 }
 
 func TestNewStream(t *testing.T) {
-	stream := NewStream("test-content-id")
+	cb := &mockCircuitBreaker{}
+	httpClient := &http.Client{}
+	stream := NewStream("test-content-id", cb, httpClient)
 
 	if stream.ContentID != "test-content-id" {
 		t.Errorf("Expected ContentID 'test-content-id', got %s", stream.ContentID)
@@ -176,10 +180,48 @@ func TestNewStream(t *testing.T) {
 	if stream.done == nil {
 		t.Error("done channel not initialized")
 	}
+
+	if stream.circuitBreaker == nil {
+		t.Error("circuit breaker not initialized")
+	}
+
+	if stream.httpClient == nil {
+		t.Error("http client not initialized")
+	}
+}
+
+// mockCircuitBreaker is a mock implementation of CircuitBreaker for testing
+type mockCircuitBreaker struct {
+	executeFunc func(func() error) error
+	state       circuitbreaker.State
+}
+
+func (m *mockCircuitBreaker) Execute(fn func() error) error {
+	if m.executeFunc != nil {
+		return m.executeFunc(fn)
+	}
+	return fn()
+}
+
+func (m *mockCircuitBreaker) State() circuitbreaker.State {
+	return m.state
+}
+
+func (m *mockCircuitBreaker) Reset() {
+	m.state = circuitbreaker.StateClosed
+}
+
+// newTestStream creates a new stream for testing with default dependencies
+func newTestStream(contentID string) *Stream {
+	cb := &mockCircuitBreaker{state: circuitbreaker.StateClosed}
+	httpClient := &http.Client{}
+	return NewStream(contentID, cb, httpClient)
 }
 
 func TestStream_AddClient(t *testing.T) {
-	stream := NewStream("test-content")
+	cb := &mockCircuitBreaker{}
+	httpClient := &http.Client{}
+	stream := NewStream("test-content", cb, httpClient)
 	w := newMockResponseWriter()
 	client, _ := NewClient("client-1", w, 1024*1024)
 
@@ -195,7 +237,9 @@ func TestStream_AddClient(t *testing.T) {
 }
 
 func TestStream_RemoveClient(t *testing.T) {
-	stream := NewStream("test-content")
+	cb := &mockCircuitBreaker{}
+	httpClient := &http.Client{}
+	stream := NewStream("test-content", cb, httpClient)
 	w := newMockResponseWriter()
 	client, _ := NewClient("client-1", w, 1024*1024)
 
@@ -212,7 +256,9 @@ func TestStream_RemoveClient(t *testing.T) {
 }
 
 func TestStream_RemoveClient_NonExistent(t *testing.T) {
-	stream := NewStream("test-content")
+	cb := &mockCircuitBreaker{}
+	httpClient := &http.Client{}
+	stream := NewStream("test-content", cb, httpClient)
 
 	remaining := stream.RemoveClient("non-existent")
 
@@ -222,7 +268,9 @@ func TestStream_RemoveClient_NonExistent(t *testing.T) {
 }
 
 func TestStream_ClientCount(t *testing.T) {
-	stream := NewStream("test-content")
+	cb := &mockCircuitBreaker{}
+	httpClient := &http.Client{}
+	stream := NewStream("test-content", cb, httpClient)
 	w1 := newMockResponseWriter()
 	w2 := newMockResponseWriter()
 
@@ -511,7 +559,7 @@ func TestStream_FanOut(t *testing.T) {
 	pr, pw := io.Pipe()
 
 	// Create stream and clients
-	stream := NewStream("test-content")
+	stream := newTestStream("test-content")
 	w1 := newMockResponseWriter()
 	w2 := newMockResponseWriter()
 	client1, _ := NewClient("client-1", w1, 1024*1024)
@@ -522,7 +570,7 @@ func TestStream_FanOut(t *testing.T) {
 
 	// Start the stream
 	ctx := context.Background()
-	stream.Start(ctx, pr, DefaultConfig())
+	stream.Start(ctx, pr, "http://test-upstream", DefaultConfig())
 
 	// Give stream time to start
 	time.Sleep(50 * time.Millisecond)
@@ -558,13 +606,13 @@ func TestStream_FanOut_ClientRemovalDuringStream(t *testing.T) {
 	testData := []byte("test data")
 	pr, pw := io.Pipe()
 
-	stream := NewStream("test-content")
+	stream := newTestStream("test-content")
 	w := newMockResponseWriter()
 	client, _ := NewClient("client-1", w, 1024*1024)
 	stream.AddClient(client)
 
 	ctx := context.Background()
-	stream.Start(ctx, pr, DefaultConfig())
+	stream.Start(ctx, pr, "http://test-upstream", DefaultConfig())
 
 	time.Sleep(50 * time.Millisecond)
 
@@ -651,10 +699,10 @@ func TestClient_SendBufferFull(t *testing.T) {
 
 func TestStream_Stop(t *testing.T) {
 	pr, pw := io.Pipe()
-	stream := NewStream("test-content")
+	stream := newTestStream("test-content")
 
 	ctx := context.Background()
-	stream.Start(ctx, pr, DefaultConfig())
+	stream.Start(ctx, pr, "http://test-upstream", DefaultConfig())
 
 	// Stop should complete without hanging
 	done := make(chan bool)
@@ -681,7 +729,7 @@ func TestClientDisconnectDoesNotAffectOtherClients(t *testing.T) {
 	pr, pw := io.Pipe()
 
 	// Create stream with independent context
-	stream := NewStream("test-content")
+	stream := newTestStream("test-content")
 	w1 := newMockResponseWriter()
 	w2 := newMockResponseWriter()
 	client1, _ := NewClient("client-1", w1, 1024*1024)
@@ -692,7 +740,7 @@ func TestClientDisconnectDoesNotAffectOtherClients(t *testing.T) {
 
 	// Start the stream with background context (simulating multiplexer's independent context)
 	ctx := context.Background()
-	stream.Start(ctx, pr, DefaultConfig())
+	stream.Start(ctx, pr, "http://test-upstream", DefaultConfig())
 
 	// Give stream time to start
 	time.Sleep(50 * time.Millisecond)
