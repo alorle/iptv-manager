@@ -1,0 +1,258 @@
+.channel-list-container {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  padding: 1rem;
+  max-width: 1400px;
+  margin: 0 auto;
+}
+
+.channel-list-header {
+  margin-bottom: 1.5rem;
+}
+
+.channel-list-header h1 {
+  margin: 0 0 1rem 0;
+  font-size: 1.75rem;
+  font-weight: 600;
+  color: #1a1a1a;
+}
+
+.filters {
+  display: flex;
+  gap: 1rem;
+  margin-bottom: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.search-input,
+.group-filter {
+  padding: 0.5rem 0.75rem;
+  border: 1px solid #d1d5db;
+  border-radius: 0.375rem;
+  font-size: 0.875rem;
+  background: white;
+}
+
+.search-input {
+  flex: 1;
+  min-width: 200px;
+}
+
+.search-input:focus,
+.group-filter:focus {
+  outline: none;
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+
+.group-filter {
+  min-width: 150px;
+}
+
+.selection-info {
+  padding: 0.5rem 0.75rem;
+  background: #eff6ff;
+  border: 1px solid #bfdbfe;
+  border-radius: 0.375rem;
+  font-size: 0.875rem;
+  color: #1e40af;
+  margin-top: 0.5rem;
+}
+
+.table-container {
+  flex: 1;
+  overflow: auto;
+  border: 1px solid #e5e7eb;
+  border-radius: 0.5rem;
+  background: white;
+}
+
+.channel-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.channel-table thead {
+  position: sticky;
+  top: 0;
+  background: #f9fafb;
+  z-index: 10;
+}
+
+.channel-table th {
+  padding: 0.75rem 1rem;
+  text-align: left;
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #6b7280;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.channel-table td {
+  padding: 0.75rem 1rem;
+  border-bottom: 1px solid #f3f4f6;
+  font-size: 0.875rem;
+}
+
+.channel-row {
+  cursor: pointer;
+  transition: background-color 0.15s ease;
+}
+
+.channel-row:hover {
+  background-color: #f9fafb;
+}
+
+.channel-row:active {
+  background-color: #f3f4f6;
+}
+
+.checkbox-column {
+  width: 40px;
+  text-align: center;
+}
+
+.status-column {
+  width: 60px;
+  text-align: center;
+}
+
+.channel-name {
+  font-weight: 500;
+  color: #1a1a1a;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.disabled-badge {
+  display: inline-block;
+  padding: 0.125rem 0.5rem;
+  background: #fee2e2;
+  color: #991b1b;
+  border-radius: 0.25rem;
+  font-size: 0.75rem;
+  font-weight: 500;
+}
+
+.channel-group {
+  color: #6b7280;
+}
+
+.channel-tvg-id {
+  font-family: monospace;
+  font-size: 0.8125rem;
+  color: #4b5563;
+}
+
+.override-indicator {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  background: #dbeafe;
+  color: #1e40af;
+  border-radius: 50%;
+  font-size: 0.875rem;
+  cursor: help;
+}
+
+.empty-state {
+  text-align: center;
+  padding: 3rem 1rem;
+  color: #9ca3af;
+}
+
+.channel-list-footer {
+  margin-top: 1rem;
+  padding-top: 1rem;
+  border-top: 1px solid #e5e7eb;
+}
+
+.footer-info {
+  font-size: 0.875rem;
+  color: #6b7280;
+}
+
+.loading,
+.error {
+  padding: 2rem;
+  text-align: center;
+  font-size: 0.875rem;
+}
+
+.loading {
+  color: #6b7280;
+}
+
+.error {
+  color: #dc2626;
+  background: #fee2e2;
+  border: 1px solid #fecaca;
+  border-radius: 0.5rem;
+}
+
+/* Responsive design for smaller screens */
+@media (max-width: 768px) {
+  .channel-list-container {
+    padding: 0.75rem;
+  }
+
+  .channel-list-header h1 {
+    font-size: 1.5rem;
+  }
+
+  .filters {
+    flex-direction: column;
+  }
+
+  .search-input,
+  .group-filter {
+    width: 100%;
+  }
+
+  .channel-table th,
+  .channel-table td {
+    padding: 0.5rem 0.75rem;
+    font-size: 0.8125rem;
+  }
+
+  .channel-table th {
+    font-size: 0.6875rem;
+  }
+
+  /* Hide less important columns on mobile */
+  .channel-group,
+  .channel-tvg-id {
+    display: none;
+  }
+
+  .channel-table th:nth-child(3),
+  .channel-table th:nth-child(4) {
+    display: none;
+  }
+}
+
+@media (max-width: 480px) {
+  .channel-list-container {
+    padding: 0.5rem;
+  }
+
+  .channel-list-header h1 {
+    font-size: 1.25rem;
+  }
+
+  .channel-table th,
+  .channel-table td {
+    padding: 0.5rem;
+  }
+
+  .channel-name {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+}
