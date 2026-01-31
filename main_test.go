@@ -65,7 +65,7 @@ func TestIntegration_FreshFetchFromMockIPFS(t *testing.T) {
 	}
 
 	fetch := fetcher.New(5*time.Second, storage, 1*time.Hour)
-	rw := rewriter.New("http://127.0.0.1:6878/ace/getstream")
+	rw := rewriter.New("http://127.0.0.1:8080")
 
 	// Create test server
 	mux := http.NewServeMux()
@@ -121,10 +121,10 @@ func TestIntegration_FreshFetchFromMockIPFS(t *testing.T) {
 	bodyStr := string(body[:n])
 
 	// Verify URL rewriting occurred
-	if !strings.Contains(bodyStr, "http://127.0.0.1:6878/ace/getstream?id=0000111122223333444455556666777788889999") {
+	if !strings.Contains(bodyStr, "http://127.0.0.1:8080/stream?id=0000111122223333444455556666777788889999") {
 		t.Error("Expected first acestream URL to be rewritten")
 	}
-	if !strings.Contains(bodyStr, "http://127.0.0.1:6878/ace/getstream?id=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa") {
+	if !strings.Contains(bodyStr, "http://127.0.0.1:8080/stream?id=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa") {
 		t.Error("Expected second acestream URL to be rewritten")
 	}
 	if !strings.Contains(bodyStr, "http://example.com/stream.m3u8") {
@@ -158,7 +158,7 @@ func TestIntegration_CacheHit(t *testing.T) {
 	}
 
 	fetch := fetcher.New(5*time.Second, storage, 1*time.Hour)
-	rw := rewriter.New("http://127.0.0.1:6878/ace/getstream")
+	rw := rewriter.New("http://127.0.0.1:8080")
 
 	// Create test server
 	mux := http.NewServeMux()
@@ -227,7 +227,7 @@ func TestIntegration_CacheHit(t *testing.T) {
 	bodyStr := string(body[:n])
 
 	// Verify URL rewriting still works
-	if !strings.Contains(bodyStr, "http://127.0.0.1:6878/ace/getstream?id=0000111122223333444455556666777788889999") {
+	if !strings.Contains(bodyStr, "http://127.0.0.1:8080/stream?id=0000111122223333444455556666777788889999") {
 		t.Error("Expected acestream URL to be rewritten from cache")
 	}
 }
@@ -260,7 +260,7 @@ func TestIntegration_ExpiredCacheRefresh(t *testing.T) {
 	}
 
 	fetch := fetcher.New(5*time.Second, storage, 100*time.Millisecond) // 100ms TTL
-	rw := rewriter.New("http://127.0.0.1:6878/ace/getstream")
+	rw := rewriter.New("http://127.0.0.1:8080")
 
 	// Create test server
 	mux := http.NewServeMux()
@@ -327,7 +327,7 @@ func TestIntegration_ExpiredCacheRefresh(t *testing.T) {
 	if !strings.Contains(bodyStr2, "Updated Channel") {
 		t.Error("Expected refreshed content with 'Updated Channel'")
 	}
-	if !strings.Contains(bodyStr2, "http://127.0.0.1:6878/ace/getstream?id=bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb") {
+	if !strings.Contains(bodyStr2, "http://127.0.0.1:8080/stream?id=bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb") {
 		t.Error("Expected refreshed content with rewritten URL")
 	}
 	if bodyStr1 == bodyStr2 {
@@ -362,7 +362,7 @@ func TestIntegration_IPFSFailureWithStaleCacheFallback(t *testing.T) {
 	}
 
 	fetch := fetcher.New(5*time.Second, storage, 100*time.Millisecond)
-	rw := rewriter.New("http://127.0.0.1:6878/ace/getstream")
+	rw := rewriter.New("http://127.0.0.1:8080")
 
 	// Create test server
 	mux := http.NewServeMux()
@@ -421,7 +421,7 @@ func TestIntegration_IPFSFailureWithStaleCacheFallback(t *testing.T) {
 	bodyStr := string(body[:n])
 
 	// Verify we got stale cache content (original content should be present)
-	if !strings.Contains(bodyStr, "http://127.0.0.1:6878/ace/getstream?id=0000111122223333444455556666777788889999") {
+	if !strings.Contains(bodyStr, "http://127.0.0.1:8080/stream?id=0000111122223333444455556666777788889999") {
 		t.Error("Expected stale cache content with rewritten URL")
 	}
 	if !strings.Contains(bodyStr, "Test Channel 1") {
@@ -446,7 +446,7 @@ func TestIntegration_URLRewritingOutput(t *testing.T) {
 	}
 
 	fetch := fetcher.New(5*time.Second, storage, 1*time.Hour)
-	rw := rewriter.New("http://127.0.0.1:6878/ace/getstream")
+	rw := rewriter.New("http://127.0.0.1:8080")
 
 	// Create test server
 	mux := http.NewServeMux()
@@ -485,11 +485,11 @@ func TestIntegration_URLRewritingOutput(t *testing.T) {
 	}{
 		{
 			original:  "acestream://0000111122223333444455556666777788889999",
-			rewritten: "http://127.0.0.1:6878/ace/getstream?id=0000111122223333444455556666777788889999",
+			rewritten: "http://127.0.0.1:8080/stream?id=0000111122223333444455556666777788889999",
 		},
 		{
 			original:  "acestream://aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-			rewritten: "http://127.0.0.1:6878/ace/getstream?id=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+			rewritten: "http://127.0.0.1:8080/stream?id=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
 		},
 	}
 
@@ -545,7 +545,7 @@ func TestIntegration_ContentTypeHeaders(t *testing.T) {
 	}
 
 	fetch := fetcher.New(5*time.Second, storage, 1*time.Hour)
-	rw := rewriter.New("http://127.0.0.1:6878/ace/getstream")
+	rw := rewriter.New("http://127.0.0.1:8080")
 
 	// Create test server
 	mux := http.NewServeMux()
@@ -648,7 +648,7 @@ func TestIntegration_HTTPStatusCodes(t *testing.T) {
 			}
 
 			fetch := fetcher.New(5*time.Second, storage, 1*time.Hour)
-			rw := rewriter.New("http://127.0.0.1:6878/ace/getstream")
+			rw := rewriter.New("http://127.0.0.1:8080")
 
 			// Create test server
 			mux := http.NewServeMux()
@@ -698,7 +698,7 @@ func TestIntegration_MethodNotAllowed(t *testing.T) {
 	}
 
 	fetch := fetcher.New(5*time.Second, storage, 1*time.Hour)
-	rw := rewriter.New("http://127.0.0.1:6878/ace/getstream")
+	rw := rewriter.New("http://127.0.0.1:8080")
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("/playlists/test.m3u", func(w http.ResponseWriter, r *http.Request) {
@@ -772,7 +772,7 @@ func TestIntegration_RealEndpoints(t *testing.T) {
 	}
 
 	fetch := fetcher.New(30*time.Second, storage, cfg.CacheTTL)
-	rw := rewriter.New(cfg.AcestreamPlayerBaseURL)
+	rw := rewriter.New("http://127.0.0.1:8080")
 
 	// Create mock IPFS server
 	mockServer := createMockIPFSServer(t, false, mockM3UContent)
@@ -868,7 +868,7 @@ func TestIntegration_RealEndpoints(t *testing.T) {
 		n, _ := resp.Body.Read(body)
 		bodyStr := string(body[:n])
 
-		if !strings.Contains(bodyStr, "http://127.0.0.1:6878/ace/getstream?id=") {
+		if !strings.Contains(bodyStr, "http://127.0.0.1:8080/stream?id=") {
 			t.Error("Expected rewritten acestream URLs")
 		}
 	})
@@ -894,7 +894,7 @@ func TestIntegration_RealEndpoints(t *testing.T) {
 		n, _ := resp.Body.Read(body)
 		bodyStr := string(body[:n])
 
-		if !strings.Contains(bodyStr, "http://127.0.0.1:6878/ace/getstream?id=") {
+		if !strings.Contains(bodyStr, "http://127.0.0.1:8080/stream?id=") {
 			t.Error("Expected rewritten acestream URLs")
 		}
 	})
@@ -936,7 +936,7 @@ acestream://4444444444444444444444444444444444444444
 	}
 
 	fetch := fetcher.New(5*time.Second, storage, 1*time.Hour)
-	rw := rewriter.New("http://127.0.0.1:6878/ace/getstream")
+	rw := rewriter.New("http://127.0.0.1:8080")
 
 	// Create test server with unified endpoint
 	mux := http.NewServeMux()
@@ -1025,10 +1025,10 @@ acestream://4444444444444444444444444444444444444444
 	}
 
 	// Verify URLs are rewritten
-	if !strings.Contains(bodyStr, "http://127.0.0.1:6878/ace/getstream?id=1111111111111111111111111111111111111111") {
+	if !strings.Contains(bodyStr, "http://127.0.0.1:8080/stream?id=1111111111111111111111111111111111111111") {
 		t.Error("Expected rewritten URL for stream 1")
 	}
-	if !strings.Contains(bodyStr, "http://127.0.0.1:6878/ace/getstream?id=3333333333333333333333333333333333333333") {
+	if !strings.Contains(bodyStr, "http://127.0.0.1:8080/stream?id=3333333333333333333333333333333333333333") {
 		t.Error("Expected rewritten URL for stream 3")
 	}
 }
@@ -1065,7 +1065,7 @@ acestream://3333333333333333333333333333333333333333
 	}
 
 	fetch := fetcher.New(5*time.Second, storage, 1*time.Hour)
-	rw := rewriter.New("http://127.0.0.1:6878/ace/getstream")
+	rw := rewriter.New("http://127.0.0.1:8080")
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("/playlist.m3u", func(w http.ResponseWriter, r *http.Request) {
@@ -1186,7 +1186,7 @@ acestream://4444444444444444444444444444444444444444
 	}
 
 	fetch := fetcher.New(5*time.Second, storage, 1*time.Hour)
-	rw := rewriter.New("http://127.0.0.1:6878/ace/getstream")
+	rw := rewriter.New("http://127.0.0.1:8080")
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("/playlist.m3u", func(w http.ResponseWriter, r *http.Request) {
@@ -1294,7 +1294,7 @@ acestream://2222222222222222222222222222222222222222
 	}
 
 	fetch := fetcher.New(5*time.Second, storage, 1*time.Hour)
-	rw := rewriter.New("http://127.0.0.1:6878/ace/getstream")
+	rw := rewriter.New("http://127.0.0.1:8080")
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("/playlist.m3u", func(w http.ResponseWriter, r *http.Request) {
@@ -1378,8 +1378,8 @@ acestream://2222222222222222222222222222222222222222
 	}
 }
 
-// TestIntegration_UnifiedPlaylist_NetworkCachingParameter tests network-caching parameter in URLs
-func TestIntegration_UnifiedPlaylist_NetworkCachingParameter(t *testing.T) {
+// TestIntegration_UnifiedPlaylist_InternalURLFormat tests internal URL format
+func TestIntegration_UnifiedPlaylist_InternalURLFormat(t *testing.T) {
 	cacheDir, cleanup := setupTestEnvironment(t)
 	defer cleanup()
 
@@ -1400,7 +1400,7 @@ acestream://1111111111111111111111111111111111111111
 	}
 
 	fetch := fetcher.New(5*time.Second, storage, 1*time.Hour)
-	rw := rewriter.New("http://127.0.0.1:6878/ace/getstream")
+	rw := rewriter.New("http://127.0.0.1:8080")
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("/playlist.m3u", func(w http.ResponseWriter, r *http.Request) {
@@ -1452,15 +1452,10 @@ acestream://1111111111111111111111111111111111111111
 	n, _ := resp.Body.Read(body)
 	bodyStr := string(body[:n])
 
-	// Verify network-caching parameter is present
-	if !strings.Contains(bodyStr, "network-caching=1000") {
-		t.Error("Expected network-caching=1000 parameter in rewritten acestream URLs")
-	}
-
-	// Verify complete URL format
-	expectedURL := "http://127.0.0.1:6878/ace/getstream?id=1111111111111111111111111111111111111111&network-caching=1000"
+	// Verify complete URL format (no network-caching parameter in new format)
+	expectedURL := "http://127.0.0.1:8080/stream?id=1111111111111111111111111111111111111111"
 	if !strings.Contains(bodyStr, expectedURL) {
-		t.Errorf("Expected URL with network-caching parameter: %s", expectedURL)
+		t.Errorf("Expected URL format: %s", expectedURL)
 	}
 }
 
@@ -1495,7 +1490,7 @@ acestream://1111111111111111111111111111111111111111
 	}
 
 	fetch := fetcher.New(5*time.Second, storage, 100*time.Millisecond) // Short TTL
-	rw := rewriter.New("http://127.0.0.1:6878/ace/getstream")
+	rw := rewriter.New("http://127.0.0.1:8080")
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("/playlist.m3u", func(w http.ResponseWriter, r *http.Request) {

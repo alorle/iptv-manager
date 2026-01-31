@@ -20,6 +20,7 @@ import (
 type Config struct {
 	HTTPAddress            string
 	HTTPPort               string
+	StreamBaseURL          string
 	AcestreamPlayerBaseURL string
 	AcestreamEngineURL     string
 	CacheDir               string
@@ -47,6 +48,7 @@ func loadConfig() (*Config, error) {
 	cfg := &Config{
 		HTTPAddress:            os.Getenv("HTTP_ADDRESS"),
 		HTTPPort:               os.Getenv("HTTP_PORT"),
+		StreamBaseURL:          os.Getenv("STREAM_BASE_URL"),
 		AcestreamPlayerBaseURL: os.Getenv("ACESTREAM_PLAYER_BASE_URL"),
 		AcestreamEngineURL:     os.Getenv("ACESTREAM_ENGINE_URL"),
 		CacheDir:               os.Getenv("CACHE_DIR"),
@@ -177,14 +179,9 @@ func main() {
 	// Initialize fetcher with 30 second timeout
 	fetch := fetcher.New(30*time.Second, storage, cfg.CacheTTL)
 
-	// Initialize rewriter - use local stream endpoint if multiplexing is enabled
-	var playerURL string
-	if cfg.UseMultiplexing {
-		playerURL = fmt.Sprintf("http://%s:%s/stream", cfg.HTTPAddress, cfg.HTTPPort)
-	} else {
-		playerURL = cfg.AcestreamPlayerBaseURL
-	}
-	rw := rewriter.New(playerURL)
+	// Initialize rewriter with STREAM_BASE_URL
+	// If not set, uses relative URLs (/stream?id=...)
+	rw := rewriter.New(cfg.StreamBaseURL)
 
 	// Initialize multiplexer
 	muxCfg := multiplexer.Config{
