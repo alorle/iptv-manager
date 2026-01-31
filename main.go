@@ -13,6 +13,7 @@ import (
 	"github.com/alorle/iptv-manager/cache"
 	"github.com/alorle/iptv-manager/fetcher"
 	"github.com/alorle/iptv-manager/multiplexer"
+	"github.com/alorle/iptv-manager/overrides"
 	"github.com/alorle/iptv-manager/pidmanager"
 	"github.com/alorle/iptv-manager/rewriter"
 )
@@ -202,6 +203,14 @@ func main() {
 	if err != nil {
 		log.Fatalf("Failed to initialize cache storage: %v", err)
 	}
+
+	// Initialize overrides manager
+	overridesPath := filepath.Join(cfg.CacheDir, "overrides.yaml")
+	overridesMgr, err := overrides.NewManager(overridesPath)
+	if err != nil {
+		log.Fatalf("Failed to initialize overrides manager: %v", err)
+	}
+	log.Printf("Loaded %d channel overrides from %s", len(overridesMgr.List()), overridesPath)
 
 	// Initialize fetcher with 30 second timeout
 	fetch := fetcher.New(30*time.Second, storage, cfg.CacheTTL)

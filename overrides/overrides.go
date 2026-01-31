@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sync"
 
 	"gopkg.in/yaml.v3"
 )
@@ -94,4 +95,88 @@ func (c *OverridesConfig) Save(path string) error {
 	}
 
 	return nil
+}
+
+// Manager provides thread-safe in-memory management of channel overrides
+// with automatic persistence to disk.
+type Manager struct {
+	mu     sync.RWMutex
+	config OverridesConfig
+	path   string
+}
+
+// NewManager creates a new OverridesManager and loads the configuration
+// from the specified path. If the file doesn't exist, it starts with an
+// empty configuration.
+func NewManager(path string) (*Manager, error) {
+	config, err := Load(path)
+	if err != nil {
+		return nil, fmt.Errorf("failed to load overrides: %w", err)
+	}
+
+	return &Manager{
+		config: *config,
+		path:   path,
+	}, nil
+}
+
+// Get retrieves the override configuration for a specific acestream ID.
+// Returns nil if no override exists for the given ID.
+func (m *Manager) Get(acestreamID string) *ChannelOverride {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	override, exists := m.config[acestreamID]
+	if !exists {
+		return nil
+	}
+
+	// Return a copy to prevent external modifications
+	return &override
+}
+
+// Set updates or creates an override for a specific acestream ID
+// and immediately persists the changes to disk.
+func (m *Manager) Set(acestreamID string, override ChannelOverride) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	m.config[acestreamID] = override
+
+	if err := m.config.Save(m.path); err != nil {
+		return fmt.Errorf("failed to save overrides: %w", err)
+	}
+
+	return nil
+}
+
+// Delete removes an override for a specific acestream ID
+// and immediately persists the changes to disk.
+func (m *Manager) Delete(acestreamID string) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	delete(m.config, acestreamID)
+
+	if err := m.config.Save(m.path); err != nil {
+		return fmt.Errorf("failed to save overrides: %w", err)
+	}
+
+	return nil
+}
+
+// List returns a copy of all current overrides.
+// The returned map is a snapshot and modifications won't affect
+// the manager's internal state.
+func (m *Manager) List() map[string]ChannelOverride {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	// Create a copy to prevent external modifications
+	result := make(map[string]ChannelOverride, len(m.config))
+	for id, override := range m.config {
+		result[id] = override
+	}
+
+	return result
 }

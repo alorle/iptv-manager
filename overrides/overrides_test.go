@@ -360,3 +360,359 @@ func stringPtrEqual(a, b *string) bool {
 	}
 	return *a == *b
 }
+
+// Manager tests
+
+func TestNewManager_NonExistentFile(t *testing.T) {
+	tmpDir := t.TempDir()
+	tmpFile := filepath.Join(tmpDir, "nonexistent.yaml")
+
+	manager, err := NewManager(tmpFile)
+	if err != nil {
+		t.Fatalf("NewManager() should not fail for non-existent file: %v", err)
+	}
+	if manager == nil {
+		t.Fatal("NewManager() returned nil manager")
+	}
+
+	// Should start with empty config
+	list := manager.List()
+	if len(list) != 0 {
+		t.Errorf("Expected empty config, got %d items", len(list))
+	}
+}
+
+func TestNewManager_ExistingFile(t *testing.T) {
+	tmpDir := t.TempDir()
+	tmpFile := filepath.Join(tmpDir, "existing.yaml")
+
+	// Create a config file
+	enabled := true
+	tvgID := "test-channel"
+	config := OverridesConfig{
+		"abc123": {
+			Enabled: &enabled,
+			TvgID:   &tvgID,
+		},
+	}
+	if err := config.Save(tmpFile); err != nil {
+		t.Fatalf("Failed to create test file: %v", err)
+	}
+
+	// Load manager
+	manager, err := NewManager(tmpFile)
+	if err != nil {
+		t.Fatalf("NewManager() failed: %v", err)
+	}
+
+	// Verify loaded config
+	list := manager.List()
+	if len(list) != 1 {
+		t.Errorf("Expected 1 item, got %d", len(list))
+	}
+
+	override := manager.Get("abc123")
+	if override == nil {
+		t.Fatal("Expected override for 'abc123', got nil")
+	}
+	if override.Enabled == nil || *override.Enabled != enabled {
+		t.Errorf("Expected Enabled=true, got %v", override.Enabled)
+	}
+	if override.TvgID == nil || *override.TvgID != tvgID {
+		t.Errorf("Expected TvgID='test-channel', got %v", override.TvgID)
+	}
+}
+
+func TestManager_Get_NonExistent(t *testing.T) {
+	tmpDir := t.TempDir()
+	tmpFile := filepath.Join(tmpDir, "test.yaml")
+
+	manager, err := NewManager(tmpFile)
+	if err != nil {
+		t.Fatalf("NewManager() failed: %v", err)
+	}
+
+	override := manager.Get("nonexistent")
+	if override != nil {
+		t.Errorf("Expected nil for non-existent ID, got %v", override)
+	}
+}
+
+func TestManager_Set_NewOverride(t *testing.T) {
+	tmpDir := t.TempDir()
+	tmpFile := filepath.Join(tmpDir, "test.yaml")
+
+	manager, err := NewManager(tmpFile)
+	if err != nil {
+		t.Fatalf("NewManager() failed: %v", err)
+	}
+
+	// Set new override
+	enabled := true
+	tvgID := "new-channel"
+	override := ChannelOverride{
+		Enabled: &enabled,
+		TvgID:   &tvgID,
+	}
+
+	if err := manager.Set("abc123", override); err != nil {
+		t.Fatalf("Set() failed: %v", err)
+	}
+
+	// Verify it was set
+	retrieved := manager.Get("abc123")
+	if retrieved == nil {
+		t.Fatal("Expected override, got nil")
+	}
+	if retrieved.Enabled == nil || *retrieved.Enabled != enabled {
+		t.Errorf("Expected Enabled=true, got %v", retrieved.Enabled)
+	}
+	if retrieved.TvgID == nil || *retrieved.TvgID != tvgID {
+		t.Errorf("Expected TvgID='new-channel', got %v", retrieved.TvgID)
+	}
+
+	// Verify it was persisted
+	reloaded, err := NewManager(tmpFile)
+	if err != nil {
+		t.Fatalf("Failed to reload manager: %v", err)
+	}
+
+	retrieved = reloaded.Get("abc123")
+	if retrieved == nil {
+		t.Fatal("Expected persisted override, got nil")
+	}
+	if retrieved.Enabled == nil || *retrieved.Enabled != enabled {
+		t.Errorf("Expected persisted Enabled=true, got %v", retrieved.Enabled)
+	}
+}
+
+func TestManager_Set_UpdateExisting(t *testing.T) {
+	tmpDir := t.TempDir()
+	tmpFile := filepath.Join(tmpDir, "test.yaml")
+
+	manager, err := NewManager(tmpFile)
+	if err != nil {
+		t.Fatalf("NewManager() failed: %v", err)
+	}
+
+	// Set initial override
+	enabled := true
+	tvgID := "initial"
+	override1 := ChannelOverride{
+		Enabled: &enabled,
+		TvgID:   &tvgID,
+	}
+	if err := manager.Set("abc123", override1); err != nil {
+		t.Fatalf("Initial Set() failed: %v", err)
+	}
+
+	// Update override
+	disabled := false
+	tvgID2 := "updated"
+	override2 := ChannelOverride{
+		Enabled: &disabled,
+		TvgID:   &tvgID2,
+	}
+	if err := manager.Set("abc123", override2); err != nil {
+		t.Fatalf("Update Set() failed: %v", err)
+	}
+
+	// Verify update
+	retrieved := manager.Get("abc123")
+	if retrieved == nil {
+		t.Fatal("Expected override, got nil")
+	}
+	if retrieved.Enabled == nil || *retrieved.Enabled != disabled {
+		t.Errorf("Expected Enabled=false, got %v", retrieved.Enabled)
+	}
+	if retrieved.TvgID == nil || *retrieved.TvgID != tvgID2 {
+		t.Errorf("Expected TvgID='updated', got %v", retrieved.TvgID)
+	}
+}
+
+func TestManager_Delete(t *testing.T) {
+	tmpDir := t.TempDir()
+	tmpFile := filepath.Join(tmpDir, "test.yaml")
+
+	manager, err := NewManager(tmpFile)
+	if err != nil {
+		t.Fatalf("NewManager() failed: %v", err)
+	}
+
+	// Set override
+	enabled := true
+	override := ChannelOverride{
+		Enabled: &enabled,
+	}
+	if err := manager.Set("abc123", override); err != nil {
+		t.Fatalf("Set() failed: %v", err)
+	}
+
+	// Verify it exists
+	if manager.Get("abc123") == nil {
+		t.Fatal("Expected override before delete")
+	}
+
+	// Delete it
+	if err := manager.Delete("abc123"); err != nil {
+		t.Fatalf("Delete() failed: %v", err)
+	}
+
+	// Verify it's gone
+	if manager.Get("abc123") != nil {
+		t.Error("Expected nil after delete")
+	}
+
+	// Verify deletion was persisted
+	reloaded, err := NewManager(tmpFile)
+	if err != nil {
+		t.Fatalf("Failed to reload manager: %v", err)
+	}
+	if reloaded.Get("abc123") != nil {
+		t.Error("Expected deletion to be persisted")
+	}
+}
+
+func TestManager_Delete_NonExistent(t *testing.T) {
+	tmpDir := t.TempDir()
+	tmpFile := filepath.Join(tmpDir, "test.yaml")
+
+	manager, err := NewManager(tmpFile)
+	if err != nil {
+		t.Fatalf("NewManager() failed: %v", err)
+	}
+
+	// Delete non-existent should not error
+	if err := manager.Delete("nonexistent"); err != nil {
+		t.Errorf("Delete() of non-existent should not fail: %v", err)
+	}
+}
+
+func TestManager_List(t *testing.T) {
+	tmpDir := t.TempDir()
+	tmpFile := filepath.Join(tmpDir, "test.yaml")
+
+	manager, err := NewManager(tmpFile)
+	if err != nil {
+		t.Fatalf("NewManager() failed: %v", err)
+	}
+
+	// Add multiple overrides
+	enabled := true
+	disabled := false
+	tvgID1 := "channel1"
+	tvgID2 := "channel2"
+
+	if err := manager.Set("abc123", ChannelOverride{Enabled: &enabled, TvgID: &tvgID1}); err != nil {
+		t.Fatalf("Set() failed: %v", err)
+	}
+	if err := manager.Set("xyz789", ChannelOverride{Enabled: &disabled, TvgID: &tvgID2}); err != nil {
+		t.Fatalf("Set() failed: %v", err)
+	}
+
+	// Get list
+	list := manager.List()
+	if len(list) != 2 {
+		t.Fatalf("Expected 2 items, got %d", len(list))
+	}
+
+	// Verify items
+	override1, ok := list["abc123"]
+	if !ok {
+		t.Error("Expected 'abc123' in list")
+	}
+	if override1.Enabled == nil || *override1.Enabled != enabled {
+		t.Errorf("Expected Enabled=true for abc123, got %v", override1.Enabled)
+	}
+
+	override2, ok := list["xyz789"]
+	if !ok {
+		t.Error("Expected 'xyz789' in list")
+	}
+	if override2.Enabled == nil || *override2.Enabled != disabled {
+		t.Errorf("Expected Enabled=false for xyz789, got %v", override2.Enabled)
+	}
+}
+
+func TestManager_List_EmptyReturnsEmpty(t *testing.T) {
+	tmpDir := t.TempDir()
+	tmpFile := filepath.Join(tmpDir, "test.yaml")
+
+	manager, err := NewManager(tmpFile)
+	if err != nil {
+		t.Fatalf("NewManager() failed: %v", err)
+	}
+
+	list := manager.List()
+	if len(list) != 0 {
+		t.Errorf("Expected empty list, got %d items", len(list))
+	}
+}
+
+func TestManager_List_IsolationCopy(t *testing.T) {
+	tmpDir := t.TempDir()
+	tmpFile := filepath.Join(tmpDir, "test.yaml")
+
+	manager, err := NewManager(tmpFile)
+	if err != nil {
+		t.Fatalf("NewManager() failed: %v", err)
+	}
+
+	// Add override
+	enabled := true
+	if err := manager.Set("abc123", ChannelOverride{Enabled: &enabled}); err != nil {
+		t.Fatalf("Set() failed: %v", err)
+	}
+
+	// Get list and modify it
+	list := manager.List()
+	delete(list, "abc123")
+	disabled := false
+	list["new"] = ChannelOverride{Enabled: &disabled}
+
+	// Verify original is unchanged
+	if manager.Get("abc123") == nil {
+		t.Error("Original should still contain abc123")
+	}
+	if manager.Get("new") != nil {
+		t.Error("Original should not contain new")
+	}
+}
+
+func TestManager_Get_IsolationCopy(t *testing.T) {
+	tmpDir := t.TempDir()
+	tmpFile := filepath.Join(tmpDir, "test.yaml")
+
+	manager, err := NewManager(tmpFile)
+	if err != nil {
+		t.Fatalf("NewManager() failed: %v", err)
+	}
+
+	// Add override
+	enabled := true
+	tvgID := "original"
+	if err := manager.Set("abc123", ChannelOverride{Enabled: &enabled, TvgID: &tvgID}); err != nil {
+		t.Fatalf("Set() failed: %v", err)
+	}
+
+	// Get and try to modify
+	override := manager.Get("abc123")
+	if override == nil {
+		t.Fatal("Expected override")
+	}
+
+	// Modify the returned copy
+	modified := "modified"
+	override.TvgID = &modified
+	disabled := false
+	override.Enabled = &disabled
+
+	// Verify original is unchanged
+	original := manager.Get("abc123")
+	if original.TvgID == nil || *original.TvgID != tvgID {
+		t.Errorf("Original TvgID should be unchanged, got %v", original.TvgID)
+	}
+	if original.Enabled == nil || *original.Enabled != enabled {
+		t.Errorf("Original Enabled should be unchanged, got %v", original.Enabled)
+	}
+}
