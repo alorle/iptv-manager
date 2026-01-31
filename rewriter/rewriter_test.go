@@ -188,9 +188,13 @@ http://example.com/stream.m3u8`
 
 	result := string(rewriter.RewriteM3U([]byte(input)))
 
-	// Check that all metadata lines are preserved exactly
-	if !strings.Contains(result, `#EXTINF:-1 tvg-id="channel.id" tvg-name="Channel Name" tvg-logo="http://logo.png" group-title="Sports",Channel Name`) {
-		t.Error("First metadata line not preserved correctly")
+	// Check that logo metadata is removed but other metadata is preserved
+	if strings.Contains(result, `tvg-logo="http://logo.png"`) {
+		t.Error("Logo metadata should be removed")
+	}
+
+	if !strings.Contains(result, `#EXTINF:-1 tvg-id="channel.id" tvg-name="Channel Name" group-title="Sports",Channel Name`) {
+		t.Error("First metadata line not preserved correctly (without logo)")
 	}
 
 	if !strings.Contains(result, `#EXTINF:-1 tvg-shift="2" catchup="default",Another Channel`) {
@@ -203,5 +207,114 @@ http://example.com/stream.m3u8`
 
 	if !strings.Contains(result, "http://127.0.0.1:6878/ace/getstream?id=1234567890abcdef1234567890abcdef12345678&network-caching=1000") {
 		t.Error("Acestream URL not rewritten correctly")
+	}
+}
+
+func TestRemoveLogoMetadata(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    string
+		expected string
+	}{
+		{
+			name:     "logo at the beginning",
+			input:    `#EXTINF:-1 tvg-logo="http://logo.png" tvg-id="channel.id" tvg-name="Channel Name" group-title="Sports",Channel Name`,
+			expected: `#EXTINF:-1 tvg-id="channel.id" tvg-name="Channel Name" group-title="Sports",Channel Name`,
+		},
+		{
+			name:     "logo in the middle",
+			input:    `#EXTINF:-1 tvg-id="channel.id" tvg-logo="http://logo.png" tvg-name="Channel Name" group-title="Sports",Channel Name`,
+			expected: `#EXTINF:-1 tvg-id="channel.id" tvg-name="Channel Name" group-title="Sports",Channel Name`,
+		},
+		{
+			name:     "logo at the end",
+			input:    `#EXTINF:-1 tvg-id="channel.id" tvg-name="Channel Name" group-title="Sports" tvg-logo="http://logo.png",Channel Name`,
+			expected: `#EXTINF:-1 tvg-id="channel.id" tvg-name="Channel Name" group-title="Sports",Channel Name`,
+		},
+		{
+			name:     "no logo attribute",
+			input:    `#EXTINF:-1 tvg-id="channel.id" tvg-name="Channel Name" group-title="Sports",Channel Name`,
+			expected: `#EXTINF:-1 tvg-id="channel.id" tvg-name="Channel Name" group-title="Sports",Channel Name`,
+		},
+		{
+			name:     "logo with https URL",
+			input:    `#EXTINF:-1 tvg-logo="https://example.com/logos/channel.jpg" tvg-name="Channel",Channel`,
+			expected: `#EXTINF:-1 tvg-name="Channel",Channel`,
+		},
+		{
+			name:     "logo with complex URL",
+			input:    `#EXTINF:-1 tvg-logo="https://example.com/path/to/logo?size=large&format=png" group-title="Sports",Channel`,
+			expected: `#EXTINF:-1 group-title="Sports",Channel`,
+		},
+		{
+			name:     "only logo attribute",
+			input:    `#EXTINF:-1 tvg-logo="http://logo.png",Channel Name`,
+			expected: `#EXTINF:-1,Channel Name`,
+		},
+		{
+			name:     "empty logo value",
+			input:    `#EXTINF:-1 tvg-logo="" tvg-name="Channel",Channel`,
+			expected: `#EXTINF:-1 tvg-name="Channel",Channel`,
+		},
+		{
+			name:     "non-EXTINF line",
+			input:    `http://example.com/stream.m3u8`,
+			expected: `http://example.com/stream.m3u8`,
+		},
+		{
+			name:     "EXTM3U header",
+			input:    `#EXTM3U`,
+			expected: `#EXTM3U`,
+		},
+		{
+			name:     "logo with data URI",
+			input:    `#EXTINF:-1 tvg-logo="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAUA" tvg-id="ch1",Channel`,
+			expected: `#EXTINF:-1 tvg-id="ch1",Channel`,
+		},
+		{
+			name:     "multiple spaces after attribute removal",
+			input:    `#EXTINF:-1 tvg-id="ch1"  tvg-logo="http://logo.png"  tvg-name="Channel",Channel Name`,
+			expected: `#EXTINF:-1 tvg-id="ch1" tvg-name="Channel",Channel Name`,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := RemoveLogoMetadata(tt.input)
+			if result != tt.expected {
+				t.Errorf("RemoveLogoMetadata() failed\nInput:    %s\nExpected: %s\nGot:      %s", tt.input, tt.expected, result)
+			}
+		})
+	}
+}
+
+func TestRewriteM3U_RemovesLogos(t *testing.T) {
+	rewriter := New("http://127.0.0.1:6878/ace/getstream")
+
+	input := `#EXTM3U
+#EXTINF:-1 tvg-id="channel1" tvg-logo="http://example.com/logo1.png" tvg-name="Channel 1" group-title="Sports",Channel 1
+acestream://1111111111111111111111111111111111111111
+#EXTINF:-1 tvg-logo="https://example.com/logo2.jpg" tvg-id="channel2" tvg-name="Channel 2",Channel 2
+acestream://2222222222222222222222222222222222222222
+#EXTINF:-1 tvg-id="channel3" tvg-name="Channel 3",Channel 3
+http://example.com/stream.m3u8`
+
+	expected := `#EXTM3U
+#EXTINF:-1 tvg-id="channel1" tvg-name="Channel 1" group-title="Sports",Channel 1
+http://127.0.0.1:6878/ace/getstream?id=1111111111111111111111111111111111111111&network-caching=1000
+#EXTINF:-1 tvg-id="channel2" tvg-name="Channel 2",Channel 2
+http://127.0.0.1:6878/ace/getstream?id=2222222222222222222222222222222222222222&network-caching=1000
+#EXTINF:-1 tvg-id="channel3" tvg-name="Channel 3",Channel 3
+http://example.com/stream.m3u8`
+
+	result := string(rewriter.RewriteM3U([]byte(input)))
+
+	if result != expected {
+		t.Errorf("RewriteM3U() failed to remove logos\nExpected:\n%s\n\nGot:\n%s", expected, result)
+	}
+
+	// Verify no logo attributes remain
+	if strings.Contains(result, "tvg-logo=") {
+		t.Error("Result should not contain any tvg-logo attributes")
 	}
 }

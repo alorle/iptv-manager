@@ -507,12 +507,11 @@ func TestIntegration_URLRewritingOutput(t *testing.T) {
 		t.Error("Expected HTTP URL to be preserved unchanged")
 	}
 
-	// Verify metadata is preserved
+	// Verify metadata is preserved (except logos which should be removed)
 	metadataChecks := []string{
 		"#EXTM3U",
 		"#EXTINF:-1 tvg-id=\"test1\"",
 		"tvg-name=\"Test Channel 1\"",
-		"tvg-logo=\"http://example.com/logo1.png\"",
 		"group-title=\"Sports\"",
 		"Test Channel 1",
 	}
@@ -521,6 +520,11 @@ func TestIntegration_URLRewritingOutput(t *testing.T) {
 		if !strings.Contains(bodyStr, check) {
 			t.Errorf("Expected metadata '%s' to be preserved", check)
 		}
+	}
+
+	// Verify logos are removed
+	if strings.Contains(bodyStr, "tvg-logo=") {
+		t.Error("Expected tvg-logo metadata to be removed")
 	}
 }
 
