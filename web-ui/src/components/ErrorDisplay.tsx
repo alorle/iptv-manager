@@ -1,19 +1,16 @@
-import './ErrorDisplay.css';
+import './ErrorDisplay.css'
 
 interface ErrorDisplayProps {
-  error: Error;
-  onRetry?: () => void;
-  title?: string;
+  error: Error
+  onRetry?: () => void
+  title?: string
 }
 
-export function ErrorDisplay({
-  error,
-  onRetry,
-  title = 'Error',
-}: ErrorDisplayProps) {
-  const isNetworkError = error.message.includes('Failed to fetch') ||
-                         error.message.includes('NetworkError') ||
-                         error.message.includes('network');
+export function ErrorDisplay({ error, onRetry, title = 'Error' }: ErrorDisplayProps) {
+  const isNetworkError =
+    error.message.includes('Failed to fetch') ||
+    error.message.includes('NetworkError') ||
+    error.message.includes('network')
 
   return (
     <div className="error-display">
@@ -31,5 +28,5 @@ export function ErrorDisplay({
         </button>
       )}
     </div>
-  );
+  )
 }

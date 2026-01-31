@@ -1,49 +1,49 @@
-import { useState } from 'react';
-import { LoadingSpinner } from './LoadingSpinner';
-import './BulkEditModal.css';
+import { useState } from 'react'
+import { LoadingSpinner } from './LoadingSpinner'
+import './BulkEditModal.css'
 
 interface BulkEditModalProps {
-  selectedCount: number;
-  onClose: () => void;
-  onSubmit: (field: string, value: string | boolean) => Promise<void>;
+  selectedCount: number
+  onClose: () => void
+  onSubmit: (field: string, value: string | boolean) => Promise<void>
 }
 
-type BulkEditField = 'enabled' | 'tvg_id' | 'tvg_name' | 'tvg_logo' | 'group_title';
+type BulkEditField = 'enabled' | 'tvg_id' | 'tvg_name' | 'tvg_logo' | 'group_title'
 
 export function BulkEditModal({ selectedCount, onClose, onSubmit }: BulkEditModalProps) {
-  const [field, setField] = useState<BulkEditField>('enabled');
-  const [value, setValue] = useState<string>('true');
-  const [submitting, setSubmitting] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [field, setField] = useState<BulkEditField>('enabled')
+  const [value, setValue] = useState<string>('true')
+  const [submitting, setSubmitting] = useState(false)
+  const [error, setError] = useState<string | null>(null)
 
   const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setSubmitting(true);
-    setError(null);
+    e.preventDefault()
+    setSubmitting(true)
+    setError(null)
 
     try {
-      let processedValue: string | boolean = value;
+      let processedValue: string | boolean = value
 
       // Convert enabled field to boolean
       if (field === 'enabled') {
-        processedValue = value === 'true';
+        processedValue = value === 'true'
       }
 
-      await onSubmit(field, processedValue);
-      onClose();
+      await onSubmit(field, processedValue)
+      onClose()
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to update channels');
+      setError(err instanceof Error ? err.message : 'Failed to update channels')
     } finally {
-      setSubmitting(false);
+      setSubmitting(false)
     }
-  };
+  }
 
   // Reset value when field changes
   const handleFieldChange = (newField: BulkEditField) => {
-    setField(newField);
+    setField(newField)
     // Set default value based on field type
-    setValue(newField === 'enabled' ? 'true' : '');
-  };
+    setValue(newField === 'enabled' ? 'true' : '')
+  }
 
   return (
     <div className="modal-overlay" onClick={onClose}>
@@ -102,7 +102,8 @@ export function BulkEditModal({ selectedCount, onClose, onSubmit }: BulkEditModa
 
             <div className="preview-section">
               <p className="preview-text">
-                This will update <strong>{selectedCount}</strong> channel{selectedCount !== 1 ? 's' : ''}
+                This will update <strong>{selectedCount}</strong> channel
+                {selectedCount !== 1 ? 's' : ''}
               </p>
             </div>
 
@@ -118,11 +119,7 @@ export function BulkEditModal({ selectedCount, onClose, onSubmit }: BulkEditModa
             >
               Cancel
             </button>
-            <button
-              type="submit"
-              className="button button-primary"
-              disabled={submitting}
-            >
+            <button type="submit" className="button button-primary" disabled={submitting}>
               {submitting ? (
                 <>
                   Updating
@@ -136,5 +133,5 @@ export function BulkEditModal({ selectedCount, onClose, onSubmit }: BulkEditModa
         </form>
       </div>
     </div>
-  );
+  )
 }

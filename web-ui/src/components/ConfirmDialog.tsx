@@ -1,13 +1,13 @@
-import './ConfirmDialog.css';
+import './ConfirmDialog.css'
 
 interface ConfirmDialogProps {
-  title: string;
-  message: string;
-  confirmText?: string;
-  cancelText?: string;
-  confirmVariant?: 'danger' | 'primary';
-  onConfirm: () => void;
-  onCancel: () => void;
+  title: string
+  message: string
+  confirmText?: string
+  cancelText?: string
+  confirmVariant?: 'danger' | 'primary'
+  onConfirm: () => void
+  onCancel: () => void
 }
 
 export function ConfirmDialog({
@@ -32,14 +32,11 @@ export function ConfirmDialog({
           <button className="button button-secondary" onClick={onCancel}>
             {cancelText}
           </button>
-          <button
-            className={`button button-${confirmVariant}`}
-            onClick={onConfirm}
-          >
+          <button className={`button button-${confirmVariant}`} onClick={onConfirm}>
             {confirmText}
           </button>
         </div>
       </div>
     </div>
-  );
+  )
 }

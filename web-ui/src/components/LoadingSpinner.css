@@ -1,83 +1,93 @@
+/* ═══════════════════════════════════════════════════════════════════════════
+   Loading Spinner - Broadcast Control Theme
+   ═══════════════════════════════════════════════════════════════════════════ */
+
 .loading-spinner-wrapper {
   display: flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
-  padding: 20px;
+  padding: var(--space-8);
+  gap: var(--space-4);
 }
 
 .loading-spinner-wrapper.inline {
   display: inline-flex;
+  flex-direction: row;
   padding: 0;
-  margin-left: 8px;
+  margin-left: var(--space-2);
+  gap: var(--space-2);
 }
 
 .loading-spinner {
-  display: inline-block;
   position: relative;
 }
 
+/* Size variants */
 .loading-spinner-small {
-  width: 16px;
-  height: 16px;
+  width: 18px;
+  height: 18px;
 }
 
 .loading-spinner-medium {
-  width: 32px;
-  height: 32px;
+  width: 36px;
+  height: 36px;
 }
 
 .loading-spinner-large {
-  width: 48px;
-  height: 48px;
+  width: 56px;
+  height: 56px;
 }
 
+/* Spinner rings */
 .loading-spinner div {
   box-sizing: border-box;
   display: block;
   position: absolute;
-  border: 2px solid #3b82f6;
-  border-radius: 50%;
+  border-radius: var(--radius-full);
   animation: spinner-ring 1.2s cubic-bezier(0.5, 0, 0.5, 1) infinite;
-  border-color: #3b82f6 transparent transparent transparent;
 }
 
-.loading-spinner-small div {
-  border-width: 2px;
-}
-
-.loading-spinner-medium div {
-  border-width: 3px;
-}
-
-.loading-spinner-large div {
-  border-width: 4px;
-}
-
+/* Ring colors with gradient effect */
 .loading-spinner div:nth-child(1) {
+  border-color: var(--color-accent) transparent transparent transparent;
   animation-delay: -0.45s;
 }
 
 .loading-spinner div:nth-child(2) {
+  border-color: var(--color-accent) transparent transparent transparent;
+  opacity: 0.8;
   animation-delay: -0.3s;
 }
 
 .loading-spinner div:nth-child(3) {
+  border-color: var(--color-accent) transparent transparent transparent;
+  opacity: 0.6;
   animation-delay: -0.15s;
 }
 
+.loading-spinner div:nth-child(4) {
+  border-color: var(--color-accent) transparent transparent transparent;
+  opacity: 0.4;
+}
+
+/* Size-specific ring styles */
 .loading-spinner-small div {
-  width: 16px;
-  height: 16px;
+  width: 18px;
+  height: 18px;
+  border-width: 2px;
 }
 
 .loading-spinner-medium div {
-  width: 32px;
-  height: 32px;
+  width: 36px;
+  height: 36px;
+  border-width: 3px;
 }
 
 .loading-spinner-large div {
-  width: 48px;
-  height: 48px;
+  width: 56px;
+  height: 56px;
+  border-width: 4px;
 }
 
 @keyframes spinner-ring {
@@ -86,5 +96,88 @@
   }
   100% {
     transform: rotate(360deg);
+  }
+}
+
+/* Loading text */
+.loading-text {
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+  font-weight: var(--font-medium);
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.loading-spinner-wrapper.inline .loading-text {
+  text-transform: none;
+  letter-spacing: normal;
+}
+
+/* Shimmer effect for skeleton loading */
+.loading-skeleton {
+  background: linear-gradient(
+    90deg,
+    var(--color-bg-surface) 0%,
+    var(--color-bg-hover) 50%,
+    var(--color-bg-surface) 100%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.5s ease-in-out infinite;
+  border-radius: var(--radius-md);
+}
+
+/* Pulsing dot variant */
+.loading-dots {
+  display: flex;
+  gap: var(--space-2);
+  align-items: center;
+}
+
+.loading-dots span {
+  width: 8px;
+  height: 8px;
+  background: var(--color-accent);
+  border-radius: var(--radius-full);
+  animation: dotPulse 1.4s ease-in-out infinite both;
+}
+
+.loading-dots span:nth-child(1) {
+  animation-delay: -0.32s;
+}
+
+.loading-dots span:nth-child(2) {
+  animation-delay: -0.16s;
+}
+
+@keyframes dotPulse {
+  0%,
+  80%,
+  100% {
+    transform: scale(0.6);
+    opacity: 0.4;
+  }
+  40% {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+/* Reduced motion */
+@media (prefers-reduced-motion: reduce) {
+  .loading-spinner div {
+    animation: none;
+    opacity: 0.5;
+  }
+
+  .loading-spinner div:first-child {
+    opacity: 1;
+  }
+
+  .loading-skeleton {
+    animation: pulse 2s ease-in-out infinite;
+  }
+
+  .loading-dots span {
+    animation: none;
   }
 }

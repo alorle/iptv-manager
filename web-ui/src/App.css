@@ -1,6 +1,15 @@
+/* ═══════════════════════════════════════════════════════════════════════════
+   App Layout
+   ═══════════════════════════════════════════════════════════════════════════ */
+
 .app {
   display: flex;
   flex-direction: column;
-  height: 100vh;
-  background-color: #f9fafb;
+  min-height: 100vh;
+  background: var(--color-bg-base);
+}
+
+/* Main content area with ID for skip link target */
+.app > *:first-child {
+  flex: 1;
 }

@@ -1,8 +1,8 @@
-import './LoadingSpinner.css';
+import './LoadingSpinner.css'
 
 interface LoadingSpinnerProps {
-  size?: 'small' | 'medium' | 'large';
-  inline?: boolean;
+  size?: 'small' | 'medium' | 'large'
+  inline?: boolean
 }
 
 export function LoadingSpinner({ size = 'medium', inline = false }: LoadingSpinnerProps) {
@@ -15,5 +15,5 @@ export function LoadingSpinner({ size = 'medium', inline = false }: LoadingSpinn
         <div></div>
       </div>
     </div>
-  );
+  )
 }
