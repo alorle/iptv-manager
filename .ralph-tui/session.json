@@ -3,10 +3,10 @@
   "sessionId": "f7da1394-fd43-4cca-9673-0fbf0e9925bb",
   "status": "running",
   "startedAt": "2026-01-31T15:41:40.721Z",
-  "updatedAt": "2026-01-31T15:54:14.197Z",
-  "currentIteration": 3,
+  "updatedAt": "2026-01-31T15:56:59.363Z",
+  "currentIteration": 4,
   "maxIterations": 0,
-  "tasksCompleted": 3,
+  "tasksCompleted": 4,
   "isPaused": false,
   "agentPlugin": "claude",
   "trackerState": {
@@ -35,8 +35,8 @@
       {
         "id": "US-004",
         "title": "API endpoint para listar canales",
-        "status": "open",
-        "completedInSession": false
+        "status": "completed",
+        "completedInSession": true
       },
       {
         "id": "US-005",
@@ -100,6 +100,16 @@
       "durationMs": 218702,
       "startedAt": "2026-01-31T15:46:42.270Z",
       "endedAt": "2026-01-31T15:50:20.972Z"
+    },
+    {
+      "iteration": 4,
+      "status": "completed",
+      "taskId": "US-004",
+      "taskTitle": "API endpoint para listar canales",
+      "taskCompleted": true,
+      "durationMs": 232033,
+      "startedAt": "2026-01-31T15:50:22.162Z",
+      "endedAt": "2026-01-31T15:54:14.195Z"
     }
   ],
   "skippedTaskIds": [],
