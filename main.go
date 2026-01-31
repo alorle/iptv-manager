@@ -26,6 +26,8 @@ type Config struct {
 	CacheTTL               time.Duration
 	StreamBufferSize       int
 	UseMultiplexing        bool
+	ProxyReadTimeout       time.Duration
+	ProxyWriteTimeout      time.Duration
 }
 
 func loadConfig() (*Config, error) {
@@ -74,6 +76,36 @@ func loadConfig() (*Config, error) {
 		cfg.UseMultiplexing = false
 	}
 
+	// Parse PROXY_READ_TIMEOUT (default 5s)
+	readTimeoutStr := os.Getenv("PROXY_READ_TIMEOUT")
+	if readTimeoutStr == "" {
+		cfg.ProxyReadTimeout = 5 * time.Second
+	} else {
+		readTimeout, err := time.ParseDuration(readTimeoutStr)
+		if err != nil {
+			return nil, fmt.Errorf("invalid PROXY_READ_TIMEOUT: %w", err)
+		}
+		if readTimeout <= 0 {
+			return nil, fmt.Errorf("PROXY_READ_TIMEOUT must be positive")
+		}
+		cfg.ProxyReadTimeout = readTimeout
+	}
+
+	// Parse PROXY_WRITE_TIMEOUT (default 10s)
+	writeTimeoutStr := os.Getenv("PROXY_WRITE_TIMEOUT")
+	if writeTimeoutStr == "" {
+		cfg.ProxyWriteTimeout = 10 * time.Second
+	} else {
+		writeTimeout, err := time.ParseDuration(writeTimeoutStr)
+		if err != nil {
+			return nil, fmt.Errorf("invalid PROXY_WRITE_TIMEOUT: %w", err)
+		}
+		if writeTimeout <= 0 {
+			return nil, fmt.Errorf("PROXY_WRITE_TIMEOUT must be positive")
+		}
+		cfg.ProxyWriteTimeout = writeTimeout
+	}
+
 	// Validate and set CACHE_DIR
 	if cfg.CacheDir == "" {
 		return nil, fmt.Errorf("CACHE_DIR environment variable is required")
@@ -120,6 +152,8 @@ func main() {
 	fmt.Printf("cacheTTL: %v\n", cfg.CacheTTL)
 	fmt.Printf("streamBufferSize: %v bytes\n", cfg.StreamBufferSize)
 	fmt.Printf("useMultiplexing: %v\n", cfg.UseMultiplexing)
+	fmt.Printf("proxyReadTimeout: %v\n", cfg.ProxyReadTimeout)
+	fmt.Printf("proxyWriteTimeout: %v\n", cfg.ProxyWriteTimeout)
 
 	// Initialize cache storage
 	storage, err := cache.NewFileStorage(cfg.CacheDir)
@@ -365,8 +399,11 @@ func main() {
 	})
 
 	s := &http.Server{
-		Handler: handler,
-		Addr:    fmt.Sprintf("%s:%s", cfg.HTTPAddress, cfg.HTTPPort),
+		Handler:      handler,
+		Addr:         fmt.Sprintf("%s:%s", cfg.HTTPAddress, cfg.HTTPPort),
+		ReadTimeout:  cfg.ProxyReadTimeout,
+		WriteTimeout: cfg.ProxyWriteTimeout,
+		ErrorLog:     log.Default(),
 	}
 
 	if err := s.ListenAndServe(); err != nil {
