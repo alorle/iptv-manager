@@ -1,157 +1,70 @@
 {
   "version": 1,
-  "sessionId": "f7da1394-fd43-4cca-9673-0fbf0e9925bb",
+  "sessionId": "78f757b7-042c-43e5-817b-0f68938fa97e",
   "status": "running",
-  "startedAt": "2026-01-31T15:41:40.721Z",
-  "updatedAt": "2026-01-31T16:11:41.432Z",
-  "currentIteration": 8,
+  "startedAt": "2026-01-31T18:08:24.828Z",
+  "updatedAt": "2026-01-31T18:12:55.063Z",
+  "currentIteration": 0,
   "maxIterations": 0,
-  "tasksCompleted": 8,
+  "tasksCompleted": 0,
   "isPaused": false,
   "agentPlugin": "claude",
   "trackerState": {
     "plugin": "json",
-    "prdPath": "./tasks/prd-channel-overrides.json",
-    "totalTasks": 9,
+    "prdPath": "./tasks/prd-robust-streaming.json",
+    "totalTasks": 8,
     "tasks": [
       {
+        "id": "US-008",
+        "title": "Configuración centralizada de resiliencia",
+        "status": "open",
+        "completedInSession": false
+      },
+      {
         "id": "US-001",
-        "title": "Definir estructura de datos para overrides",
-        "status": "completed",
-        "completedInSession": true
-      },
-      {
-        "id": "US-002",
-        "title": "Implementar almacenamiento persistente",
-        "status": "completed",
-        "completedInSession": true
-      },
-      {
-        "id": "US-003",
-        "title": "Gestión en memoria con hot-reload",
-        "status": "completed",
-        "completedInSession": true
+        "title": "Aislar contexto de clientes del contexto de upstream",
+        "status": "open",
+        "completedInSession": false
       },
       {
         "id": "US-004",
-        "title": "API endpoint para listar canales",
-        "status": "completed",
-        "completedInSession": true
+        "title": "Implementar Circuit Breaker para Acestream Engine",
+        "status": "open",
+        "completedInSession": false
+      },
+      {
+        "id": "US-002",
+        "title": "Implementar reconexión automática de upstream",
+        "status": "open",
+        "completedInSession": false
+      },
+      {
+        "id": "US-003",
+        "title": "Buffer de resiliencia durante reconexión",
+        "status": "open",
+        "completedInSession": false
       },
       {
         "id": "US-005",
-        "title": "API endpoint para toggle enable/disable",
-        "status": "completed",
-        "completedInSession": true
-      },
-      {
-        "id": "US-006",
-        "title": "API endpoint para editar metadatos",
-        "status": "completed",
-        "completedInSession": true
+        "title": "Health checks periódicos al Acestream Engine",
+        "status": "open",
+        "completedInSession": false
       },
       {
         "id": "US-007",
-        "title": "Integrar overrides en pipeline de rewriter",
-        "status": "completed",
-        "completedInSession": true
+        "title": "Logging estructurado para eventos de resiliencia",
+        "status": "open",
+        "completedInSession": false
       },
       {
-        "id": "US-008",
-        "title": "Limpieza automática de overrides huérfanos",
-        "status": "completed",
-        "completedInSession": true
-      },
-      {
-        "id": "US-009",
-        "title": "Endpoint para eliminar override",
+        "id": "US-006",
+        "title": "Endpoint de métricas Prometheus",
         "status": "open",
         "completedInSession": false
       }
     ]
   },
-  "iterations": [
-    {
-      "iteration": 1,
-      "status": "completed",
-      "taskId": "US-001",
-      "taskTitle": "Definir estructura de datos para overrides",
-      "taskCompleted": true,
-      "durationMs": 107779,
-      "startedAt": "2026-01-31T15:41:44.333Z",
-      "endedAt": "2026-01-31T15:43:32.112Z"
-    },
-    {
-      "iteration": 2,
-      "status": "completed",
-      "taskId": "US-002",
-      "taskTitle": "Implementar almacenamiento persistente",
-      "taskCompleted": true,
-      "durationMs": 187790,
-      "startedAt": "2026-01-31T15:43:33.301Z",
-      "endedAt": "2026-01-31T15:46:41.091Z"
-    },
-    {
-      "iteration": 3,
-      "status": "completed",
-      "taskId": "US-003",
-      "taskTitle": "Gestión en memoria con hot-reload",
-      "taskCompleted": true,
-      "durationMs": 218702,
-      "startedAt": "2026-01-31T15:46:42.270Z",
-      "endedAt": "2026-01-31T15:50:20.972Z"
-    },
-    {
-      "iteration": 4,
-      "status": "completed",
-      "taskId": "US-004",
-      "taskTitle": "API endpoint para listar canales",
-      "taskCompleted": true,
-      "durationMs": 232033,
-      "startedAt": "2026-01-31T15:50:22.162Z",
-      "endedAt": "2026-01-31T15:54:14.195Z"
-    },
-    {
-      "iteration": 5,
-      "status": "completed",
-      "taskId": "US-005",
-      "taskTitle": "API endpoint para toggle enable/disable",
-      "taskCompleted": true,
-      "durationMs": 163976,
-      "startedAt": "2026-01-31T15:54:15.384Z",
-      "endedAt": "2026-01-31T15:56:59.360Z"
-    },
-    {
-      "iteration": 6,
-      "status": "completed",
-      "taskId": "US-006",
-      "taskTitle": "API endpoint para editar metadatos",
-      "taskCompleted": true,
-      "durationMs": 148922,
-      "startedAt": "2026-01-31T15:57:00.547Z",
-      "endedAt": "2026-01-31T15:59:29.469Z"
-    },
-    {
-      "iteration": 7,
-      "status": "completed",
-      "taskId": "US-007",
-      "taskTitle": "Integrar overrides en pipeline de rewriter",
-      "taskCompleted": true,
-      "durationMs": 284913,
-      "startedAt": "2026-01-31T15:59:30.674Z",
-      "endedAt": "2026-01-31T16:04:15.587Z"
-    },
-    {
-      "iteration": 8,
-      "status": "completed",
-      "taskId": "US-008",
-      "taskTitle": "Limpieza automática de overrides huérfanos",
-      "taskCompleted": true,
-      "durationMs": 204548,
-      "startedAt": "2026-01-31T16:04:16.793Z",
-      "endedAt": "2026-01-31T16:07:41.341Z"
-    }
-  ],
+  "iterations": [],
   "skippedTaskIds": [],
   "cwd": "/home/alorle/gh/alorle/iptv-manager",
   "activeTaskIds": [],

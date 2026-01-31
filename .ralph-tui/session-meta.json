@@ -1,14 +1,14 @@
 {
-  "id": "f7da1394-fd43-4cca-9673-0fbf0e9925bb",
+  "id": "78f757b7-042c-43e5-817b-0f68938fa97e",
   "status": "running",
-  "startedAt": "2026-01-31T15:41:39.678Z",
-  "updatedAt": "2026-01-31T16:07:41.522Z",
+  "startedAt": "2026-01-31T18:08:23.830Z",
+  "updatedAt": "2026-01-31T18:08:23.830Z",
   "agentPlugin": "claude",
   "trackerPlugin": "json",
-  "prdPath": "./tasks/prd-channel-overrides.json",
-  "currentIteration": 8,
+  "prdPath": "./tasks/prd-robust-streaming.json",
+  "currentIteration": 0,
   "maxIterations": 0,
   "totalTasks": 0,
-  "tasksCompleted": 8,
+  "tasksCompleted": 0,
   "cwd": "/home/alorle/gh/alorle/iptv-manager"
 }
