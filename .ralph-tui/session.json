@@ -3,10 +3,10 @@
   "sessionId": "06116c4e-d873-4fe0-ba7a-53d2074f955e",
   "status": "running",
   "startedAt": "2026-01-31T13:25:36.812Z",
-  "updatedAt": "2026-01-31T13:43:43.853Z",
-  "currentIteration": 5,
+  "updatedAt": "2026-01-31T13:48:55.352Z",
+  "currentIteration": 6,
   "maxIterations": 0,
-  "tasksCompleted": 5,
+  "tasksCompleted": 6,
   "isPaused": false,
   "agentPlugin": "claude",
   "trackerState": {
@@ -47,8 +47,8 @@
       {
         "id": "US-006",
         "title": "Crear endpoint /ace/getstream (compatibilidad)",
-        "status": "open",
-        "completedInSession": false
+        "status": "completed",
+        "completedInSession": true
       },
       {
         "id": "US-007",
@@ -120,6 +120,16 @@
       "durationMs": 150505,
       "startedAt": "2026-01-31T13:39:33.123Z",
       "endedAt": "2026-01-31T13:42:03.628Z"
+    },
+    {
+      "iteration": 6,
+      "status": "completed",
+      "taskId": "US-006",
+      "taskTitle": "Crear endpoint /ace/getstream (compatibilidad)",
+      "taskCompleted": true,
+      "durationMs": 98876,
+      "startedAt": "2026-01-31T13:42:04.975Z",
+      "endedAt": "2026-01-31T13:43:43.851Z"
     }
   ],
   "skippedTaskIds": [],
