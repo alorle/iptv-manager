@@ -29,7 +29,6 @@ web-ui/dist/
 
 # Cache and temp files
 .cache
-cache/
 tmp/
 
 # Documentation
