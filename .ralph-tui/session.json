@@ -1,127 +1,78 @@
 {
   "version": 1,
-  "sessionId": "a04ca31d-d1d5-4a16-b083-f988ae3fb046",
+  "sessionId": "06116c4e-d873-4fe0-ba7a-53d2074f955e",
   "status": "running",
-  "startedAt": "2026-01-31T11:42:22.184Z",
-  "updatedAt": "2026-01-31T12:02:29.125Z",
-  "currentIteration": 6,
+  "startedAt": "2026-01-31T13:25:36.812Z",
+  "updatedAt": "2026-01-31T13:28:02.331Z",
+  "currentIteration": 0,
   "maxIterations": 0,
-  "tasksCompleted": 6,
+  "tasksCompleted": 0,
   "isPaused": false,
   "agentPlugin": "claude",
   "trackerState": {
     "plugin": "json",
-    "prdPath": "./tasks/prd.json",
-    "totalTasks": 7,
+    "prdPath": "./tasks/prd-acexy-integration.json",
+    "totalTasks": 9,
     "tasks": [
       {
-        "id": "US-006",
-        "title": "Add network-caching parameter to acexy URLs",
-        "status": "completed",
-        "completedInSession": true
-      },
-      {
-        "id": "US-005",
-        "title": "Remove logo metadata from all streams",
-        "status": "completed",
-        "completedInSession": true
-      },
-      {
-        "id": "US-003",
-        "title": "Deduplicate streams by acestream ID",
-        "status": "completed",
-        "completedInSession": true
-      },
-      {
-        "id": "US-004",
-        "title": "Sort streams alphabetically by display name",
-        "status": "completed",
-        "completedInSession": true
-      },
-      {
         "id": "US-001",
-        "title": "Create unified playlist endpoint handler",
-        "status": "completed",
-        "completedInSession": true
+        "title": "Crear módulo de cliente Ace Stream Engine",
+        "status": "open",
+        "completedInSession": false
       },
       {
         "id": "US-002",
-        "title": "Fetch and merge playlists from both sources",
-        "status": "completed",
-        "completedInSession": true
+        "title": "Implementar gestión de PIDs únicos",
+        "status": "open",
+        "completedInSession": false
+      },
+      {
+        "id": "US-003",
+        "title": "Implementar multiplexación de streams",
+        "status": "open",
+        "completedInSession": false
+      },
+      {
+        "id": "US-004",
+        "title": "Implementar timeouts de producción (PR #46)",
+        "status": "open",
+        "completedInSession": false
+      },
+      {
+        "id": "US-005",
+        "title": "Crear endpoint /stream",
+        "status": "open",
+        "completedInSession": false
+      },
+      {
+        "id": "US-006",
+        "title": "Crear endpoint /ace/getstream (compatibilidad)",
+        "status": "open",
+        "completedInSession": false
       },
       {
         "id": "US-007",
-        "title": "Add integration tests for unified playlist endpoint",
+        "title": "Actualizar rewriter para URLs internas",
+        "status": "open",
+        "completedInSession": false
+      },
+      {
+        "id": "US-008",
+        "title": "Configuración del módulo aceproxy",
+        "status": "open",
+        "completedInSession": false
+      },
+      {
+        "id": "US-009",
+        "title": "Tests de integración del proxy",
         "status": "open",
         "completedInSession": false
       }
     ]
   },
-  "iterations": [
-    {
-      "iteration": 1,
-      "status": "completed",
-      "taskId": "US-006",
-      "taskTitle": "Add network-caching parameter to acexy URLs",
-      "taskCompleted": true,
-      "durationMs": 220011,
-      "startedAt": "2026-01-31T11:42:26.715Z",
-      "endedAt": "2026-01-31T11:46:06.726Z"
-    },
-    {
-      "iteration": 2,
-      "status": "completed",
-      "taskId": "US-005",
-      "taskTitle": "Remove logo metadata from all streams",
-      "taskCompleted": true,
-      "durationMs": 191584,
-      "startedAt": "2026-01-31T11:46:07.891Z",
-      "endedAt": "2026-01-31T11:49:19.475Z"
-    },
-    {
-      "iteration": 3,
-      "status": "completed",
-      "taskId": "US-003",
-      "taskTitle": "Deduplicate streams by acestream ID",
-      "taskCompleted": true,
-      "durationMs": 186916,
-      "startedAt": "2026-01-31T11:49:20.632Z",
-      "endedAt": "2026-01-31T11:52:27.548Z"
-    },
-    {
-      "iteration": 4,
-      "status": "completed",
-      "taskId": "US-004",
-      "taskTitle": "Sort streams alphabetically by display name",
-      "taskCompleted": true,
-      "durationMs": 170980,
-      "startedAt": "2026-01-31T11:52:28.692Z",
-      "endedAt": "2026-01-31T11:55:19.672Z"
-    },
-    {
-      "iteration": 5,
-      "status": "completed",
-      "taskId": "US-001",
-      "taskTitle": "Create unified playlist endpoint handler",
-      "taskCompleted": true,
-      "durationMs": 143984,
-      "startedAt": "2026-01-31T11:55:20.830Z",
-      "endedAt": "2026-01-31T11:57:44.814Z"
-    },
-    {
-      "iteration": 6,
-      "status": "completed",
-      "taskId": "US-002",
-      "taskTitle": "Fetch and merge playlists from both sources",
-      "taskCompleted": true,
-      "durationMs": 92705,
-      "startedAt": "2026-01-31T11:57:46.876Z",
-      "endedAt": "2026-01-31T11:59:19.581Z"
-    }
-  ],
+  "iterations": [],
   "skippedTaskIds": [],
   "cwd": "/home/alorle/gh/alorle/iptv-manager",
   "activeTaskIds": [],
-  "subagentPanelVisible": true
+  "subagentPanelVisible": false
 }

@@ -1,14 +1,14 @@
 {
-  "id": "a04ca31d-d1d5-4a16-b083-f988ae3fb046",
+  "id": "06116c4e-d873-4fe0-ba7a-53d2074f955e",
   "status": "running",
-  "startedAt": "2026-01-31T11:42:20.172Z",
-  "updatedAt": "2026-01-31T11:59:19.761Z",
+  "startedAt": "2026-01-31T13:25:34.823Z",
+  "updatedAt": "2026-01-31T13:25:34.823Z",
   "agentPlugin": "claude",
   "trackerPlugin": "json",
-  "prdPath": "./tasks/prd.json",
-  "currentIteration": 6,
+  "prdPath": "./tasks/prd-acexy-integration.json",
+  "currentIteration": 0,
   "maxIterations": 0,
   "totalTasks": 0,
-  "tasksCompleted": 6,
+  "tasksCompleted": 0,
   "cwd": "/home/alorle/gh/alorle/iptv-manager"
 }
