@@ -3,10 +3,10 @@
   "sessionId": "8599c8e2-3b7f-47e6-a1ab-4e6dd2b3d606",
   "status": "running",
   "startedAt": "2026-01-31T21:05:32.234Z",
-  "updatedAt": "2026-01-31T21:54:05.514Z",
-  "currentIteration": 8,
+  "updatedAt": "2026-01-31T21:58:40.978Z",
+  "currentIteration": 9,
   "maxIterations": 0,
-  "tasksCompleted": 8,
+  "tasksCompleted": 9,
   "isPaused": false,
   "agentPlugin": "claude",
   "trackerState": {
@@ -65,8 +65,8 @@
       {
         "id": "US-009",
         "title": "Channel override edit form",
-        "status": "open",
-        "completedInSession": false
+        "status": "completed",
+        "completedInSession": true
       },
       {
         "id": "US-010",
@@ -168,6 +168,16 @@
       "durationMs": 268347,
       "startedAt": "2026-01-31T21:42:33.487Z",
       "endedAt": "2026-01-31T21:47:01.834Z"
+    },
+    {
+      "iteration": 9,
+      "status": "completed",
+      "taskId": "US-009",
+      "taskTitle": "Channel override edit form",
+      "taskCompleted": true,
+      "durationMs": 362088,
+      "startedAt": "2026-01-31T21:48:03.423Z",
+      "endedAt": "2026-01-31T21:54:05.511Z"
     }
   ],
   "skippedTaskIds": [],

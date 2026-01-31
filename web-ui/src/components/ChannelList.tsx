@@ -1,6 +1,8 @@
 import { useState, useMemo } from 'react';
 import type { Channel } from '../types';
 import { useChannels } from '../hooks/useChannels';
+import { BulkEditModal } from './BulkEditModal';
+import { bulkUpdateOverrides } from '../api/channels';
 import './ChannelList.css';
 
 interface ChannelListProps {
@@ -9,10 +11,15 @@ interface ChannelListProps {
 }
 
 export function ChannelList({ onChannelSelect, refreshTrigger }: ChannelListProps) {
-  const { channels, loading, error } = useChannels(refreshTrigger);
+  const { channels, loading, error, refetch } = useChannels(refreshTrigger);
   const [searchText, setSearchText] = useState('');
   const [groupFilter, setGroupFilter] = useState('');
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [showBulkEditModal, setShowBulkEditModal] = useState(false);
+  const [bulkEditResult, setBulkEditResult] = useState<{
+    type: 'success' | 'error';
+    message: string;
+  } | null>(null);
 
   // Get unique group titles for the filter dropdown
   const uniqueGroups = useMemo(() => {
@@ -61,6 +68,41 @@ export function ChannelList({ onChannelSelect, refreshTrigger }: ChannelListProp
   // Handle row click
   const handleRowClick = (channel: Channel) => {
     onChannelSelect?.(channel);
+  };
+
+  // Handle bulk edit submission
+  const handleBulkEdit = async (field: string, value: string | boolean) => {
+    try {
+      const result = await bulkUpdateOverrides(
+        Array.from(selectedIds),
+        field,
+        value
+      );
+
+      if (result.failed > 0) {
+        setBulkEditResult({
+          type: 'error',
+          message: `Updated ${result.updated} channel(s), but ${result.failed} failed`,
+        });
+      } else {
+        setBulkEditResult({
+          type: 'success',
+          message: `Successfully updated ${result.updated} channel(s)`,
+        });
+      }
+
+      // Clear selection and close modal
+      setSelectedIds(new Set());
+      setShowBulkEditModal(false);
+
+      // Refresh channel list
+      refetch();
+
+      // Clear result message after 5 seconds
+      setTimeout(() => setBulkEditResult(null), 5000);
+    } catch (err) {
+      throw err;
+    }
   };
 
   if (loading) {
@@ -114,8 +156,21 @@ export function ChannelList({ onChannelSelect, refreshTrigger }: ChannelListProp
           </select>
         </div>
         {selectedIds.size > 0 && (
-          <div className="selection-info">
-            {selectedIds.size} channel(s) selected
+          <div className="bulk-actions">
+            <div className="selection-info">
+              {selectedIds.size} channel(s) selected
+            </div>
+            <button
+              className="button button-primary"
+              onClick={() => setShowBulkEditModal(true)}
+            >
+              Bulk Edit
+            </button>
+          </div>
+        )}
+        {bulkEditResult && (
+          <div className={`result-message ${bulkEditResult.type}`}>
+            {bulkEditResult.message}
           </div>
         )}
       </div>
@@ -196,6 +251,14 @@ export function ChannelList({ onChannelSelect, refreshTrigger }: ChannelListProp
           Showing {filteredChannels.length} of {channels.length} channels
         </div>
       </div>
+
+      {showBulkEditModal && (
+        <BulkEditModal
+          selectedCount={selectedIds.size}
+          onClose={() => setShowBulkEditModal(false)}
+          onSubmit={handleBulkEdit}
+        />
+      )}
     </div>
   );
 }

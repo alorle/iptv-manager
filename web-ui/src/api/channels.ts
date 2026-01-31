@@ -113,3 +113,58 @@ export async function validateTvgId(tvgId: string): Promise<ValidateResponse> {
 
   return response.json();
 }
+
+export interface BulkUpdateRequest {
+  acestream_ids: string[];
+  field: string;
+  value: string | boolean;
+}
+
+export interface BulkUpdateError {
+  acestream_id: string;
+  error: string;
+}
+
+export interface BulkUpdateResponse {
+  updated: number;
+  failed: number;
+  errors?: BulkUpdateError[];
+}
+
+export async function bulkUpdateOverrides(
+  acestreamIds: string[],
+  field: string,
+  value: string | boolean,
+  force = false
+): Promise<BulkUpdateResponse> {
+  const url = new URL(
+    `${API_BASE}/overrides/bulk`,
+    window.location.origin
+  );
+
+  if (force) {
+    url.searchParams.set('force', 'true');
+  }
+
+  const response = await fetch(url.toString(), {
+    method: 'PATCH',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      acestream_ids: acestreamIds,
+      field,
+      value,
+    }),
+  });
+
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => null);
+    if (errorData && errorData.error === 'validation_error') {
+      throw errorData as ValidationError;
+    }
+    throw new Error(`Failed to bulk update: ${response.statusText}`);
+  }
+
+  return response.json();
+}
