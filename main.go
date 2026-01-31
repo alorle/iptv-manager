@@ -6,11 +6,14 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 
 	"github.com/alorle/iptv-manager/cache"
 	"github.com/alorle/iptv-manager/fetcher"
+	"github.com/alorle/iptv-manager/multiplexer"
+	"github.com/alorle/iptv-manager/pidmanager"
 	"github.com/alorle/iptv-manager/rewriter"
 )
 
@@ -18,8 +21,11 @@ type Config struct {
 	HTTPAddress            string
 	HTTPPort               string
 	AcestreamPlayerBaseURL string
+	AcestreamEngineURL     string
 	CacheDir               string
 	CacheTTL               time.Duration
+	StreamBufferSize       int
+	UseMultiplexing        bool
 }
 
 func loadConfig() (*Config, error) {
@@ -27,6 +33,7 @@ func loadConfig() (*Config, error) {
 		HTTPAddress:            os.Getenv("HTTP_ADDRESS"),
 		HTTPPort:               os.Getenv("HTTP_PORT"),
 		AcestreamPlayerBaseURL: os.Getenv("ACESTREAM_PLAYER_BASE_URL"),
+		AcestreamEngineURL:     os.Getenv("ACESTREAM_ENGINE_URL"),
 		CacheDir:               os.Getenv("CACHE_DIR"),
 	}
 
@@ -39,6 +46,32 @@ func loadConfig() (*Config, error) {
 	}
 	if cfg.AcestreamPlayerBaseURL == "" {
 		cfg.AcestreamPlayerBaseURL = "http://127.0.0.1:6878/ace/getstream"
+	}
+	if cfg.AcestreamEngineURL == "" {
+		cfg.AcestreamEngineURL = "http://127.0.0.1:6878"
+	}
+
+	// Parse STREAM_BUFFER_SIZE (default 1MB)
+	bufferSizeStr := os.Getenv("STREAM_BUFFER_SIZE")
+	if bufferSizeStr == "" {
+		cfg.StreamBufferSize = 1024 * 1024 // 1MB default
+	} else {
+		bufferSize, err := strconv.Atoi(bufferSizeStr)
+		if err != nil {
+			return nil, fmt.Errorf("invalid STREAM_BUFFER_SIZE: %w", err)
+		}
+		if bufferSize <= 0 {
+			return nil, fmt.Errorf("STREAM_BUFFER_SIZE must be positive")
+		}
+		cfg.StreamBufferSize = bufferSize
+	}
+
+	// Parse USE_MULTIPLEXING (default true)
+	useMultiplexingStr := os.Getenv("USE_MULTIPLEXING")
+	if useMultiplexingStr == "" || useMultiplexingStr == "true" || useMultiplexingStr == "1" {
+		cfg.UseMultiplexing = true
+	} else {
+		cfg.UseMultiplexing = false
 	}
 
 	// Validate and set CACHE_DIR
@@ -82,8 +115,11 @@ func main() {
 	fmt.Printf("httpAddress: %v\n", cfg.HTTPAddress)
 	fmt.Printf("httpPort: %v\n", cfg.HTTPPort)
 	fmt.Printf("acestreamPlayerBaseUrl: %v\n", cfg.AcestreamPlayerBaseURL)
+	fmt.Printf("acestreamEngineUrl: %v\n", cfg.AcestreamEngineURL)
 	fmt.Printf("cacheDir: %v\n", cfg.CacheDir)
 	fmt.Printf("cacheTTL: %v\n", cfg.CacheTTL)
+	fmt.Printf("streamBufferSize: %v bytes\n", cfg.StreamBufferSize)
+	fmt.Printf("useMultiplexing: %v\n", cfg.UseMultiplexing)
 
 	// Initialize cache storage
 	storage, err := cache.NewFileStorage(cfg.CacheDir)
@@ -94,14 +130,72 @@ func main() {
 	// Initialize fetcher with 30 second timeout
 	fetch := fetcher.New(30*time.Second, storage, cfg.CacheTTL)
 
-	// Initialize rewriter
-	rw := rewriter.New(cfg.AcestreamPlayerBaseURL)
+	// Initialize rewriter - use local stream endpoint if multiplexing is enabled
+	var playerURL string
+	if cfg.UseMultiplexing {
+		playerURL = fmt.Sprintf("http://%s:%s/stream", cfg.HTTPAddress, cfg.HTTPPort)
+	} else {
+		playerURL = cfg.AcestreamPlayerBaseURL
+	}
+	rw := rewriter.New(playerURL)
+
+	// Initialize multiplexer
+	muxCfg := multiplexer.Config{
+		BufferSize:   cfg.StreamBufferSize,
+		ReadTimeout:  30 * time.Second,
+		WriteTimeout: 10 * time.Second,
+	}
+	mux := multiplexer.New(muxCfg)
+
+	// Initialize PID manager
+	pidMgr := pidmanager.NewManager()
 
 	handler := http.NewServeMux()
 
 	handler.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 		w.Write([]byte("OK"))
+	})
+
+	// Stream proxy endpoint with multiplexing
+	handler.HandleFunc("/stream", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+
+		// Get content ID from query parameter
+		contentID := r.URL.Query().Get("id")
+		if contentID == "" {
+			http.Error(w, "Missing content ID parameter", http.StatusBadRequest)
+			return
+		}
+
+		// Extract client identifier
+		clientInfo := pidmanager.ExtractClientIdentifier(r)
+		pid := pidMgr.GetOrCreatePID(contentID, clientInfo)
+		clientID := fmt.Sprintf("%s-%d", clientInfo.IP, pid)
+
+		log.Printf("Stream request: contentID=%s, clientID=%s, pid=%d", contentID, clientID, pid)
+
+		// Build upstream URL with PID
+		upstreamURL := fmt.Sprintf("%s/ace/getstream?id=%s&pid=%d", cfg.AcestreamEngineURL, contentID, pid)
+
+		// Serve the stream through multiplexer
+		if err := mux.ServeStream(r.Context(), w, contentID, upstreamURL, clientID); err != nil {
+			log.Printf("Failed to serve stream for contentID=%s: %v", contentID, err)
+			// Don't write error response - connection may already be established
+		}
+
+		// Release PID when client disconnects
+		if err := pidMgr.ReleasePID(pid); err != nil {
+			log.Printf("Failed to release PID %d: %v", pid, err)
+		}
+
+		// Cleanup disconnected sessions periodically
+		if cleaned := pidMgr.CleanupDisconnected(); cleaned > 0 {
+			log.Printf("Cleaned up %d disconnected sessions", cleaned)
+		}
 	})
 
 	// Elcano playlist endpoint
