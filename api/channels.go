@@ -18,6 +18,7 @@ type Channel struct {
 	AcestreamID string `json:"acestream_id"`
 	Name        string `json:"name"`
 	TvgID       string `json:"tvg_id"`
+	TvgName     string `json:"tvg_name"`
 	TvgLogo     string `json:"tvg_logo"`
 	GroupTitle  string `json:"group_title"`
 	Source      string `json:"source"` // "elcano" or "newera"
@@ -128,6 +129,9 @@ func applyOverrides(channels []Channel, overridesMgr *overrides.Manager) []Chann
 			if override.TvgID != nil {
 				ch.TvgID = *override.TvgID
 			}
+			if override.TvgName != nil {
+				ch.TvgName = *override.TvgName
+			}
 			if override.TvgLogo != nil {
 				ch.TvgLogo = *override.TvgLogo
 			}
@@ -221,9 +225,13 @@ func (h *ChannelsHandler) handleList(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// ToggleRequest represents the request body for toggling a channel's enabled status
-type ToggleRequest struct {
-	Enabled bool `json:"enabled"`
+// UpdateChannelRequest represents the request body for updating a channel's metadata
+type UpdateChannelRequest struct {
+	Enabled    *bool   `json:"enabled,omitempty"`
+	TvgID      *string `json:"tvg_id,omitempty"`
+	TvgName    *string `json:"tvg_name,omitempty"`
+	TvgLogo    *string `json:"tvg_logo,omitempty"`
+	GroupTitle *string `json:"group_title,omitempty"`
 }
 
 // handleToggle handles the PATCH /api/channels/{acestream_id} request
@@ -247,9 +255,20 @@ func (h *ChannelsHandler) handleToggle(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Parse request body
-	var req ToggleRequest
+	var req UpdateChannelRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	// Validate tvg_id and tvg_name are not empty if provided
+	if req.TvgID != nil && strings.TrimSpace(*req.TvgID) == "" {
+		http.Error(w, "tvg_id cannot be empty", http.StatusBadRequest)
+		return
+	}
+
+	if req.TvgName != nil && strings.TrimSpace(*req.TvgName) == "" {
+		http.Error(w, "tvg_name cannot be empty", http.StatusBadRequest)
 		return
 	}
 
@@ -301,17 +320,35 @@ func (h *ChannelsHandler) handleToggle(w http.ResponseWriter, r *http.Request) {
 		override = *existingOverride
 	}
 
-	// Update the enabled field
-	override.Enabled = &req.Enabled
+	// Perform partial merge - only update fields that are present in the request
+	if req.Enabled != nil {
+		override.Enabled = req.Enabled
+	}
 
-	// Save the override to disk
+	if req.TvgID != nil {
+		override.TvgID = req.TvgID
+	}
+
+	if req.TvgName != nil {
+		override.TvgName = req.TvgName
+	}
+
+	if req.TvgLogo != nil {
+		override.TvgLogo = req.TvgLogo
+	}
+
+	if req.GroupTitle != nil {
+		override.GroupTitle = req.GroupTitle
+	}
+
+	// Save the override to disk immediately
 	if err := h.overridesMgr.Set(acestreamID, override); err != nil {
 		log.Printf("Failed to save override for %s: %v", acestreamID, err)
 		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
 		return
 	}
 
-	log.Printf("Updated channel %s: enabled=%v", acestreamID, req.Enabled)
+	log.Printf("Updated channel %s with overrides", acestreamID)
 
 	// Return the updated channel
 	// Fetch channels again to get the updated state
@@ -321,8 +358,6 @@ func (h *ChannelsHandler) handleToggle(w http.ResponseWriter, r *http.Request) {
 		elcanoChannels := parseM3UChannels(elcanoContent, "elcano")
 		for _, ch := range elcanoChannels {
 			if ch.AcestreamID == acestreamID {
-				ch.HasOverride = true
-				ch.Enabled = req.Enabled
 				updatedChannel = &ch
 				break
 			}
@@ -333,11 +368,30 @@ func (h *ChannelsHandler) handleToggle(w http.ResponseWriter, r *http.Request) {
 		neweraChannels := parseM3UChannels(neweraContent, "newera")
 		for _, ch := range neweraChannels {
 			if ch.AcestreamID == acestreamID {
-				ch.HasOverride = true
-				ch.Enabled = req.Enabled
 				updatedChannel = &ch
 				break
 			}
+		}
+	}
+
+	// Apply all overrides to the channel
+	if updatedChannel != nil {
+		updatedChannel.HasOverride = true
+
+		if override.Enabled != nil {
+			updatedChannel.Enabled = *override.Enabled
+		}
+		if override.TvgID != nil {
+			updatedChannel.TvgID = *override.TvgID
+		}
+		if override.TvgName != nil {
+			updatedChannel.TvgName = *override.TvgName
+		}
+		if override.TvgLogo != nil {
+			updatedChannel.TvgLogo = *override.TvgLogo
+		}
+		if override.GroupTitle != nil {
+			updatedChannel.GroupTitle = *override.GroupTitle
 		}
 	}
 
