@@ -204,8 +204,8 @@ func main() {
 		w.Write([]byte("OK"))
 	})
 
-	// Stream proxy endpoint with multiplexing
-	handler.HandleFunc("/stream", func(w http.ResponseWriter, r *http.Request) {
+	// Stream handler function - shared by /stream and /ace/getstream
+	streamHandler := func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 			return
@@ -265,7 +265,13 @@ func main() {
 		if cleaned := pidMgr.CleanupDisconnected(); cleaned > 0 {
 			log.Printf("Cleaned up %d disconnected sessions", cleaned)
 		}
-	})
+	}
+
+	// Stream proxy endpoint with multiplexing
+	handler.HandleFunc("/stream", streamHandler)
+
+	// Acexy-compatible endpoint - uses same logic as /stream
+	handler.HandleFunc("/ace/getstream", streamHandler)
 
 	// Elcano playlist endpoint
 	handler.HandleFunc("/playlists/elcano.m3u", func(w http.ResponseWriter, r *http.Request) {
