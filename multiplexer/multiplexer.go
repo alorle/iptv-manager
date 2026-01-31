@@ -12,6 +12,7 @@ import (
 
 	"github.com/alorle/iptv-manager/circuitbreaker"
 	"github.com/alorle/iptv-manager/config"
+	"github.com/alorle/iptv-manager/logging"
 )
 
 // Config holds multiplexer configuration
@@ -24,6 +25,8 @@ type Config struct {
 	WriteTimeout time.Duration
 	// ResilienceConfig holds reconnection and circuit breaker settings
 	ResilienceConfig *config.ResilienceConfig
+	// ResilienceLogger for resilience events
+	ResilienceLogger *logging.Logger
 }
 
 // DefaultConfig returns default multiplexer configuration
@@ -116,6 +119,8 @@ type Stream struct {
 	ringBuffer     *RingBuffer
 	reconnecting   bool
 	reconnectMu    sync.RWMutex
+	resLogger      *logging.Logger
+	reconnectStart time.Time
 }
 
 // NewStream creates a new stream with ring buffer
@@ -206,6 +211,7 @@ func (s *Stream) Start(ctx context.Context, upstream io.ReadCloser, upstreamURL 
 	s.startedOnce.Do(func() {
 		s.upstream = upstream
 		s.upstreamURL = upstreamURL
+		s.resLogger = cfg.ResilienceLogger
 		ctx, cancel := context.WithCancel(ctx)
 		s.cancel = cancel
 		s.started = true
@@ -259,6 +265,7 @@ func (s *Stream) fanOut(ctx context.Context, cfg Config) {
 
 			// Mark as reconnecting
 			s.setReconnecting(true)
+			s.reconnectStart = time.Now()
 			log.Printf("Stream %s: Entering reconnection mode - clients will use buffer", s.ContentID)
 
 			// Close current upstream connection
@@ -274,7 +281,14 @@ func (s *Stream) fanOut(ctx context.Context, cfg Config) {
 			for {
 				// Check if we should stop reconnecting
 				if ctx.Err() != nil || s.ClientCount() == 0 {
+					reason := "context cancelled"
+					if s.ClientCount() == 0 {
+						reason = "no clients remaining"
+					}
 					log.Printf("Stream %s: Stopping reconnection - no clients or context cancelled", s.ContentID)
+					if s.resLogger != nil {
+						s.resLogger.LogReconnectFailed(s.ContentID, reason, attemptNumber)
+					}
 					s.setReconnecting(false)
 					return
 				}
@@ -297,6 +311,9 @@ func (s *Stream) fanOut(ctx context.Context, cfg Config) {
 				// Log reconnection attempt
 				log.Printf("Stream %s: Reconnection attempt #%d (backoff: %v, buffer available: %d bytes)",
 					s.ContentID, attemptNumber, backoff, s.ringBuffer.Available())
+				if s.resLogger != nil {
+					s.resLogger.LogReconnectAttempt(s.ContentID, attemptNumber, backoff)
+				}
 
 				// Wait for backoff duration
 				select {
@@ -342,7 +359,11 @@ func (s *Stream) fanOut(ctx context.Context, cfg Config) {
 				}
 
 				// Reconnection successful
+				downtime := time.Since(s.reconnectStart)
 				log.Printf("Stream %s: Reconnection attempt #%d succeeded - resuming normal streaming", s.ContentID, attemptNumber)
+				if s.resLogger != nil {
+					s.resLogger.LogReconnectSuccess(s.ContentID, downtime)
+				}
 				s.mu.Lock()
 				s.upstream = newUpstream
 				s.mu.Unlock()
@@ -432,6 +453,8 @@ func (m *Multiplexer) GetOrCreateStream(ctx context.Context, contentID string, u
 		FailureThreshold: m.cfg.ResilienceConfig.CBFailureThreshold,
 		Timeout:          m.cfg.ResilienceConfig.CBTimeout,
 		HalfOpenRequests: m.cfg.ResilienceConfig.CBHalfOpenRequests,
+		Logger:           m.cfg.ResilienceLogger,
+		ContentID:        contentID,
 	}
 	cb := circuitbreaker.New(cbConfig)
 

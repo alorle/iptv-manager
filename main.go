@@ -12,7 +12,9 @@ import (
 
 	"github.com/alorle/iptv-manager/api"
 	"github.com/alorle/iptv-manager/cache"
+	"github.com/alorle/iptv-manager/config"
 	"github.com/alorle/iptv-manager/fetcher"
+	"github.com/alorle/iptv-manager/logging"
 	"github.com/alorle/iptv-manager/multiplexer"
 	"github.com/alorle/iptv-manager/overrides"
 	"github.com/alorle/iptv-manager/pidmanager"
@@ -186,6 +188,16 @@ func main() {
 		log.Fatalf("Configuration error: %v", err)
 	}
 
+	// Load resilience configuration
+	resCfg, err := config.LoadFromEnv()
+	if err != nil {
+		log.Fatalf("Failed to load resilience configuration: %v", err)
+	}
+
+	// Create resilience logger
+	logLevel := logging.ParseLogLevel(resCfg.LogLevel)
+	resLogger := logging.New(logLevel, "[resilience]")
+
 	// Print configuration
 	fmt.Printf("httpAddress: %v\n", cfg.HTTPAddress)
 	fmt.Printf("httpPort: %v\n", cfg.HTTPPort)
@@ -198,6 +210,7 @@ func main() {
 	fmt.Printf("proxyReadTimeout: %v\n", cfg.ProxyReadTimeout)
 	fmt.Printf("proxyWriteTimeout: %v\n", cfg.ProxyWriteTimeout)
 	fmt.Printf("proxyBufferSize: %v bytes\n", cfg.ProxyBufferSize)
+	fmt.Printf("logLevel: %v\n", resCfg.LogLevel)
 
 	// Initialize cache storage
 	storage, err := cache.NewFileStorage(cfg.CacheDir)
@@ -221,9 +234,11 @@ func main() {
 
 	// Initialize multiplexer
 	muxCfg := multiplexer.Config{
-		BufferSize:   cfg.StreamBufferSize,
-		ReadTimeout:  30 * time.Second,
-		WriteTimeout: 10 * time.Second,
+		BufferSize:       cfg.StreamBufferSize,
+		ReadTimeout:      30 * time.Second,
+		WriteTimeout:     10 * time.Second,
+		ResilienceConfig: resCfg,
+		ResilienceLogger: resLogger,
 	}
 	mux := multiplexer.New(muxCfg)
 

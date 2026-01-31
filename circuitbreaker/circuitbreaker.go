@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"sync"
 	"time"
+
+	"github.com/alorle/iptv-manager/logging"
 )
 
 // State represents the current state of the circuit breaker
@@ -38,6 +40,8 @@ type Config struct {
 	FailureThreshold   int           // Number of consecutive failures before opening
 	Timeout            time.Duration // How long to wait in OPEN before transitioning to HALF-OPEN
 	HalfOpenRequests   int           // Number of test requests allowed in HALF-OPEN state
+	Logger             *logging.Logger // Logger for state changes (optional)
+	ContentID          string        // Content ID for logging context (optional)
 }
 
 // CircuitBreaker defines the interface for circuit breaker functionality
@@ -67,6 +71,8 @@ type breaker struct {
 	halfOpenRequests int
 	halfOpenSuccesses int
 	openedAt         time.Time
+	logger           *logging.Logger
+	contentID        string
 }
 
 // New creates a new circuit breaker with the given configuration
@@ -82,8 +88,10 @@ func New(cfg Config) CircuitBreaker {
 	}
 
 	return &breaker{
-		config: cfg,
-		state:  StateClosed,
+		config:    cfg,
+		state:     StateClosed,
+		logger:    cfg.Logger,
+		contentID: cfg.ContentID,
 	}
 }
 
@@ -180,7 +188,13 @@ func (b *breaker) transitionTo(newState State) {
 		return
 	}
 
+	oldState := b.state
 	b.state = newState
+
+	// Log state change
+	if b.logger != nil {
+		b.logger.LogCircuitBreakerChange(oldState.String(), newState.String(), b.contentID)
+	}
 
 	switch newState {
 	case StateClosed:

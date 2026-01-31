@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/alorle/iptv-manager/circuitbreaker"
+	"github.com/alorle/iptv-manager/logging"
 )
 
 const (
@@ -44,6 +45,7 @@ type Client struct {
 	healthMu            sync.RWMutex
 	circuitBreaker      circuitbreaker.CircuitBreaker
 	logger              *log.Logger
+	resLogger           *logging.Logger
 }
 
 // Config holds configuration for the Ace Stream Engine client
@@ -53,6 +55,7 @@ type Config struct {
 	HealthCheckInterval time.Duration              // 0 to disable health checks
 	CircuitBreaker      circuitbreaker.CircuitBreaker
 	Logger              *log.Logger
+	ResilienceLogger    *logging.Logger // Logger for resilience events
 }
 
 // NewClient creates a new Ace Stream Engine client with the provided configuration
@@ -98,6 +101,7 @@ func NewClient(cfg *Config) *Client {
 		healthCheckInterval: cfg.HealthCheckInterval,
 		healthCheckDone:     make(chan struct{}),
 		circuitBreaker:      cfg.CircuitBreaker,
+		resLogger:           cfg.ResilienceLogger,
 		logger:              logger,
 		lastHealthStatus: HealthStatus{
 			Healthy:   true, // Assume healthy initially
@@ -242,8 +246,12 @@ func (c *Client) performHealthCheck(ctx context.Context) {
 	c.healthMu.Unlock()
 
 	if err != nil {
-		// Log warning for failed health check
-		c.logger.Printf("WARN: Health check failed: %v", err)
+		// Log warning for failed health check using resilience logger
+		if c.resLogger != nil {
+			c.resLogger.LogHealthCheckFailed(err)
+		} else {
+			c.logger.Printf("WARN: Health check failed: %v", err)
+		}
 
 		// If circuit breaker is configured, record the failure
 		if c.circuitBreaker != nil {
