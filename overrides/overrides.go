@@ -217,3 +217,146 @@ func (m *Manager) CleanOrphans(validIDs []string) (int, error) {
 
 	return deletedCount, nil
 }
+
+// BulkUpdateError represents an error that occurred during a bulk update operation
+type BulkUpdateError struct {
+	AcestreamID string
+	Error       string
+}
+
+// BulkUpdateResult contains the result of a bulk update operation
+type BulkUpdateResult struct {
+	Updated int
+	Failed  int
+	Errors  []BulkUpdateError
+}
+
+// BulkUpdate updates a specific field across multiple acestream IDs.
+// If atomic is true, all updates succeed or none (rollback on any error).
+// If atomic is false, partial updates are allowed (best effort).
+// Returns a BulkUpdateResult with counts and any errors encountered.
+func (m *Manager) BulkUpdate(acestreamIDs []string, field string, value interface{}, atomic bool) (*BulkUpdateResult, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	result := &BulkUpdateResult{
+		Errors: []BulkUpdateError{},
+	}
+
+	// Validate field name
+	validFields := map[string]bool{
+		"enabled":     true,
+		"tvg_id":      true,
+		"tvg_name":    true,
+		"tvg_logo":    true,
+		"group_title": true,
+	}
+
+	if !validFields[field] {
+		return nil, fmt.Errorf("invalid field: %s", field)
+	}
+
+	// Store original state for rollback if atomic
+	var originalState map[string]ChannelOverride
+	if atomic {
+		originalState = make(map[string]ChannelOverride, len(acestreamIDs))
+		for _, id := range acestreamIDs {
+			if override, exists := m.config[id]; exists {
+				originalState[id] = override
+			}
+		}
+	}
+
+	// Apply updates
+	for _, id := range acestreamIDs {
+		// Get existing override or create new one
+		override, exists := m.config[id]
+		if !exists {
+			override = ChannelOverride{}
+		}
+
+		// Update the specified field
+		if err := updateOverrideField(&override, field, value); err != nil {
+			result.Failed++
+			result.Errors = append(result.Errors, BulkUpdateError{
+				AcestreamID: id,
+				Error:       err.Error(),
+			})
+
+			if atomic {
+				// Rollback all changes
+				m.config = make(OverridesConfig, len(originalState))
+				for origID, origOverride := range originalState {
+					m.config[origID] = origOverride
+				}
+				return result, fmt.Errorf("atomic operation failed, rolled back all changes")
+			}
+			continue
+		}
+
+		m.config[id] = override
+		result.Updated++
+	}
+
+	// Persist changes if any updates succeeded
+	if result.Updated > 0 {
+		if err := m.config.Save(m.path); err != nil {
+			// If atomic and save fails, rollback
+			if atomic {
+				m.config = make(OverridesConfig, len(originalState))
+				for origID, origOverride := range originalState {
+					m.config[origID] = origOverride
+				}
+				return result, fmt.Errorf("failed to save overrides: %w", err)
+			}
+			return result, fmt.Errorf("failed to save overrides: %w", err)
+		}
+	}
+
+	return result, nil
+}
+
+// updateOverrideField updates a specific field in a ChannelOverride struct
+func updateOverrideField(override *ChannelOverride, field string, value interface{}) error {
+	switch field {
+	case "enabled":
+		boolVal, ok := value.(bool)
+		if !ok {
+			return fmt.Errorf("enabled must be a boolean")
+		}
+		override.Enabled = &boolVal
+
+	case "tvg_id":
+		strVal, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("tvg_id must be a string")
+		}
+		override.TvgID = &strVal
+
+	case "tvg_name":
+		strVal, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("tvg_name must be a string")
+		}
+		override.TvgName = &strVal
+
+	case "tvg_logo":
+		strVal, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("tvg_logo must be a string")
+		}
+		override.TvgLogo = &strVal
+
+	case "group_title":
+		strVal, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("group_title must be a string")
+		}
+		override.GroupTitle = &strVal
+
+	default:
+		return fmt.Errorf("unknown field: %s", field)
+	}
+
+	return nil
+}

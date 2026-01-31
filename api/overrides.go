@@ -53,6 +53,16 @@ func (h *OverridesHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// /api/overrides/bulk - bulk update operations
+	if path == "bulk" {
+		if r.Method == http.MethodPatch {
+			h.handleBulkUpdate(w, r)
+			return
+		}
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
 	// /api/overrides/:acestreamId - single override operations
 	acestreamID := path
 
@@ -221,4 +231,127 @@ func (h *OverridesHandler) getSuggestions(tvgID string, maxResults int) []string
 		suggestions = append(suggestions, match.ID)
 	}
 	return suggestions
+}
+
+// BulkUpdateRequest represents a request to update multiple overrides
+type BulkUpdateRequest struct {
+	AcestreamIDs []string    `json:"acestream_ids"`
+	Field        string      `json:"field"`
+	Value        interface{} `json:"value"`
+}
+
+// BulkUpdateResponse represents the response for a bulk update operation
+type BulkUpdateResponse struct {
+	Updated int                           `json:"updated"`
+	Failed  int                           `json:"failed"`
+	Errors  []overrides.BulkUpdateError   `json:"errors,omitempty"`
+}
+
+// handleBulkUpdate handles PATCH /api/overrides/bulk
+func (h *OverridesHandler) handleBulkUpdate(w http.ResponseWriter, r *http.Request) {
+	// Check for force parameter (skip TVG-ID validation)
+	force := r.URL.Query().Get("force") == "true"
+
+	// Check for atomic parameter (default to true for safety)
+	atomic := r.URL.Query().Get("atomic") != "false"
+
+	// Parse request body
+	var req BulkUpdateRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	// Validate request
+	if len(req.AcestreamIDs) == 0 {
+		http.Error(w, "acestream_ids cannot be empty", http.StatusBadRequest)
+		return
+	}
+
+	if req.Field == "" {
+		http.Error(w, "field cannot be empty", http.StatusBadRequest)
+		return
+	}
+
+	// Validate all acestream IDs
+	for _, id := range req.AcestreamIDs {
+		if !validateAcestreamID(id) {
+			http.Error(w, "Invalid acestream_id: "+id+" must be 40 hexadecimal characters", http.StatusBadRequest)
+			return
+		}
+	}
+
+	// Validate TVG-ID if that's the field being updated (unless force=true)
+	if !force && req.Field == "tvg_id" && h.epgCache != nil {
+		if strVal, ok := req.Value.(string); ok {
+			tvgID := strings.TrimSpace(strVal)
+
+			// Empty TVG-ID is valid (means "no EPG")
+			if tvgID != "" && !h.epgCache.IsValid(tvgID) {
+				// Get suggestions for invalid TVG-ID
+				suggestions := h.getSuggestions(tvgID, 10)
+
+				validationErr := ValidationError{
+					Error:   "validation_error",
+					Field:   "tvg_id",
+					Message: "TVG-ID not found in EPG data",
+					Suggestions: suggestions,
+				}
+
+				w.Header().Set("Content-Type", "application/json")
+				w.WriteHeader(http.StatusBadRequest)
+				if err := json.NewEncoder(w).Encode(validationErr); err != nil {
+					log.Printf("Failed to encode validation error: %v", err)
+				}
+				return
+			}
+		}
+	}
+
+	// Perform bulk update
+	result, err := h.overridesMgr.BulkUpdate(req.AcestreamIDs, req.Field, req.Value, atomic)
+	if err != nil {
+		log.Printf("Bulk update failed: %v", err)
+
+		// If result is not nil, return partial results
+		if result != nil {
+			response := BulkUpdateResponse{
+				Updated: result.Updated,
+				Failed:  result.Failed,
+				Errors:  result.Errors,
+			}
+
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusInternalServerError)
+			if encErr := json.NewEncoder(w).Encode(response); encErr != nil {
+				log.Printf("Failed to encode bulk update response: %v", encErr)
+			}
+			return
+		}
+
+		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		return
+	}
+
+	log.Printf("Bulk update completed: %d updated, %d failed", result.Updated, result.Failed)
+
+	// Return the result
+	response := BulkUpdateResponse{
+		Updated: result.Updated,
+		Failed:  result.Failed,
+		Errors:  result.Errors,
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+
+	// Return 200 if all succeeded, 207 Multi-Status if some failed
+	if result.Failed > 0 {
+		w.WriteHeader(http.StatusMultiStatus)
+	} else {
+		w.WriteHeader(http.StatusOK)
+	}
+
+	if err := json.NewEncoder(w).Encode(response); err != nil {
+		log.Printf("Failed to encode bulk update response: %v", err)
+	}
 }
