@@ -3,10 +3,10 @@
   "sessionId": "78f757b7-042c-43e5-817b-0f68938fa97e",
   "status": "running",
   "startedAt": "2026-01-31T18:08:24.828Z",
-  "updatedAt": "2026-01-31T18:39:36.478Z",
-  "currentIteration": 5,
+  "updatedAt": "2026-01-31T18:47:03.029Z",
+  "currentIteration": 6,
   "maxIterations": 0,
-  "tasksCompleted": 5,
+  "tasksCompleted": 6,
   "isPaused": false,
   "agentPlugin": "claude",
   "trackerState": {
@@ -47,8 +47,8 @@
       {
         "id": "US-005",
         "title": "Health checks periódicos al Acestream Engine",
-        "status": "open",
-        "completedInSession": false
+        "status": "completed",
+        "completedInSession": true
       },
       {
         "id": "US-007",
@@ -114,6 +114,16 @@
       "durationMs": 543546,
       "startedAt": "2026-01-31T18:25:28.961Z",
       "endedAt": "2026-01-31T18:34:32.507Z"
+    },
+    {
+      "iteration": 6,
+      "status": "completed",
+      "taskId": "US-005",
+      "taskTitle": "Health checks periódicos al Acestream Engine",
+      "taskCompleted": true,
+      "durationMs": 302767,
+      "startedAt": "2026-01-31T18:34:33.708Z",
+      "endedAt": "2026-01-31T18:39:36.475Z"
     }
   ],
   "skippedTaskIds": [],
