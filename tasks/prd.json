@@ -1,0 +1,151 @@
+{
+  "name": "iptv-manager",
+  "description": "Create a new endpoint /playlist.m3u that returns a unified playlist combining all streams from both NewEra and Elcano playlists, deduplicated by acestream ID, sorted alphabetically by display name, with logo metadata removed and network-caching=1000 parameter added to acexy URLs.",
+  "branchName": "ralph/unified-playlist-endpoint",
+  "userStories": [
+    {
+      "id": "US-006",
+      "title": "Add network-caching parameter to acexy URLs",
+      "description": "As a user, I want acexy URLs to include network-caching parameter so that playback is optimized.",
+      "acceptanceCriteria": [
+        "Rewritten acexy URLs include &network-caching=1000 parameter",
+        "Parameter is appended after the existing ?id={streamID} parameter",
+        "Non-acestream URLs are not modified",
+        "URL format: {baseURL}?id={streamID}&network-caching=1000",
+        "go build ./... passes",
+        "go test ./... passes"
+      ],
+      "priority": 1,
+      "passes": true,
+      "notes": "",
+      "dependsOn": [],
+      "completionNotes": "Completed by agent"
+    },
+    {
+      "id": "US-005",
+      "title": "Remove logo metadata from all streams",
+      "description": "As a user, I want logo metadata removed so that the playlist is smaller and loads faster.",
+      "acceptanceCriteria": [
+        "tvg-logo=\"...\" attribute is removed from all EXTINF lines",
+        "Other metadata attributes (tvg-id, tvg-name, group-title) are preserved",
+        "Logo removal handles various formats (with/without quotes, different URL patterns)",
+        "Logo removal logic is implemented in a testable function",
+        "go build ./... passes",
+        "go test ./... passes"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "",
+      "dependsOn": []
+    },
+    {
+      "id": "US-003",
+      "title": "Deduplicate streams by acestream ID",
+      "description": "As a user, I want duplicate streams removed so that the playlist doesn't contain redundant entries.",
+      "acceptanceCriteria": [
+        "Streams with identical acestream IDs are deduplicated",
+        "First occurrence is kept when duplicates exist",
+        "Non-acestream URLs are preserved (no deduplication applied)",
+        "Deduplication logic is implemented in a testable function",
+        "go build ./... passes",
+        "go test ./... passes"
+      ],
+      "priority": 3,
+      "passes": false,
+      "notes": "",
+      "dependsOn": []
+    },
+    {
+      "id": "US-004",
+      "title": "Sort streams alphabetically by display name",
+      "description": "As a user, I want streams sorted alphabetically by name so that I can easily find channels.",
+      "acceptanceCriteria": [
+        "Streams are sorted case-insensitively by display name",
+        "Display name is extracted from text after comma in EXTINF line",
+        "#EXTM3U header remains at the top of the playlist",
+        "Sorting logic is implemented in a testable function",
+        "go build ./... passes",
+        "go test ./... passes"
+      ],
+      "priority": 4,
+      "passes": false,
+      "notes": "",
+      "dependsOn": []
+    },
+    {
+      "id": "US-001",
+      "title": "Create unified playlist endpoint handler",
+      "description": "As a user, I want to access /playlist.m3u so that I get a single playlist containing all available streams.",
+      "acceptanceCriteria": [
+        "New endpoint registered at GET /playlist.m3u",
+        "Returns HTTP 405 Method Not Allowed for non-GET requests",
+        "Returns Content-Type: audio/x-mpegurl header",
+        "Returns HTTP 200 OK on success",
+        "Returns HTTP 502 Bad Gateway if both sources fail and no cache exists",
+        "go build ./... passes",
+        "go test ./... passes"
+      ],
+      "priority": 5,
+      "passes": false,
+      "notes": "",
+      "dependsOn": [
+        "US-006"
+      ]
+    },
+    {
+      "id": "US-002",
+      "title": "Fetch and merge playlists from both sources",
+      "description": "As a user, I want the unified playlist to contain streams from both NewEra and Elcano sources so that I have access to all available content.",
+      "acceptanceCriteria": [
+        "Fetches content from Elcano source URL using existing FetchWithCache",
+        "Fetches content from NewEra source URL using existing FetchWithCache",
+        "Merges entries from both playlists into a single list",
+        "Applies deduplication by acestream ID (US-003)",
+        "Applies alphabetical sorting by display name (US-004)",
+        "Applies logo removal to all entries (US-005)",
+        "Handles partial failures gracefully (serves available content if one source fails but cache exists for both)",
+        "go build ./... passes",
+        "go test ./... passes"
+      ],
+      "priority": 6,
+      "passes": false,
+      "notes": "",
+      "dependsOn": [
+        "US-001",
+        "US-003",
+        "US-004",
+        "US-005"
+      ]
+    },
+    {
+      "id": "US-007",
+      "title": "Add integration tests for unified playlist endpoint",
+      "description": "As a developer, I want integration tests so that the endpoint behavior is verified.",
+      "acceptanceCriteria": [
+        "Test for successful fetch and merge from both sources",
+        "Test for deduplication behavior",
+        "Test for alphabetical sorting",
+        "Test for logo removal",
+        "Test for network-caching parameter presence in acexy URLs",
+        "Test for cache fallback behavior",
+        "Tests follow existing patterns in main_test.go",
+        "go build ./... passes",
+        "go test ./... passes"
+      ],
+      "priority": 7,
+      "passes": false,
+      "notes": "",
+      "dependsOn": [
+        "US-001",
+        "US-002",
+        "US-003",
+        "US-004",
+        "US-005",
+        "US-006"
+      ]
+    }
+  ],
+  "metadata": {
+    "updatedAt": "2026-01-31T11:46:06.727Z"
+  }
+}

@@ -1,141 +1,64 @@
 {
   "version": 1,
-  "sessionId": "9e6ef0b1-49e0-4323-a350-3e44c9e24270",
+  "sessionId": "a04ca31d-d1d5-4a16-b083-f988ae3fb046",
   "status": "running",
-  "startedAt": "2026-01-30T11:18:48.636Z",
-  "updatedAt": "2026-01-30T11:41:56.078Z",
-  "currentIteration": 7,
+  "startedAt": "2026-01-31T11:42:22.184Z",
+  "updatedAt": "2026-01-31T11:46:06.729Z",
+  "currentIteration": 0,
   "maxIterations": 0,
-  "tasksCompleted": 7,
+  "tasksCompleted": 0,
   "isPaused": false,
   "agentPlugin": "claude",
   "trackerState": {
     "plugin": "json",
-    "prdPath": "./prd.json",
-    "totalTasks": 8,
+    "prdPath": "./tasks/prd.json",
+    "totalTasks": 7,
     "tasks": [
       {
-        "id": "US-001",
-        "title": "Add configuration for cache and player URL",
-        "status": "completed",
-        "completedInSession": true
-      },
-      {
-        "id": "US-002",
-        "title": "Implement persistent cache storage layer",
-        "status": "completed",
-        "completedInSession": true
-      },
-      {
-        "id": "US-003",
-        "title": "Implement M3U fetching with cache fallback",
-        "status": "completed",
-        "completedInSession": true
-      },
-      {
-        "id": "US-004",
-        "title": "Implement acestream:// URL rewriting",
-        "status": "completed",
-        "completedInSession": true
+        "id": "US-006",
+        "title": "Add network-caching parameter to acexy URLs",
+        "status": "open",
+        "completedInSession": false
       },
       {
         "id": "US-005",
-        "title": "Implement cache expiration and refresh logic",
-        "status": "completed",
-        "completedInSession": true
+        "title": "Remove logo metadata from all streams",
+        "status": "open",
+        "completedInSession": false
       },
       {
-        "id": "US-006",
-        "title": "Add /playlists/elcano.m3u endpoint",
-        "status": "completed",
-        "completedInSession": true
+        "id": "US-003",
+        "title": "Deduplicate streams by acestream ID",
+        "status": "open",
+        "completedInSession": false
+      },
+      {
+        "id": "US-004",
+        "title": "Sort streams alphabetically by display name",
+        "status": "open",
+        "completedInSession": false
+      },
+      {
+        "id": "US-001",
+        "title": "Create unified playlist endpoint handler",
+        "status": "open",
+        "completedInSession": false
+      },
+      {
+        "id": "US-002",
+        "title": "Fetch and merge playlists from both sources",
+        "status": "open",
+        "completedInSession": false
       },
       {
         "id": "US-007",
-        "title": "Add /playlists/newera.m3u endpoint",
-        "status": "completed",
-        "completedInSession": true
-      },
-      {
-        "id": "US-008",
-        "title": "Add integration tests for endpoints",
+        "title": "Add integration tests for unified playlist endpoint",
         "status": "open",
         "completedInSession": false
       }
     ]
   },
-  "iterations": [
-    {
-      "iteration": 1,
-      "status": "completed",
-      "taskId": "US-001",
-      "taskTitle": "Add configuration for cache and player URL",
-      "taskCompleted": true,
-      "durationMs": 143476,
-      "startedAt": "2026-01-30T11:18:50.530Z",
-      "endedAt": "2026-01-30T11:21:14.006Z"
-    },
-    {
-      "iteration": 2,
-      "status": "completed",
-      "taskId": "US-002",
-      "taskTitle": "Implement persistent cache storage layer",
-      "taskCompleted": true,
-      "durationMs": 217807,
-      "startedAt": "2026-01-30T11:21:15.192Z",
-      "endedAt": "2026-01-30T11:24:52.999Z"
-    },
-    {
-      "iteration": 3,
-      "status": "completed",
-      "taskId": "US-003",
-      "taskTitle": "Implement M3U fetching with cache fallback",
-      "taskCompleted": true,
-      "durationMs": 200501,
-      "startedAt": "2026-01-30T11:24:54.328Z",
-      "endedAt": "2026-01-30T11:28:14.829Z"
-    },
-    {
-      "iteration": 4,
-      "status": "completed",
-      "taskId": "US-004",
-      "taskTitle": "Implement acestream:// URL rewriting",
-      "taskCompleted": true,
-      "durationMs": 170341,
-      "startedAt": "2026-01-30T11:28:16.202Z",
-      "endedAt": "2026-01-30T11:31:06.543Z"
-    },
-    {
-      "iteration": 5,
-      "status": "completed",
-      "taskId": "US-005",
-      "taskTitle": "Implement cache expiration and refresh logic",
-      "taskCompleted": true,
-      "durationMs": 181267,
-      "startedAt": "2026-01-30T11:31:07.752Z",
-      "endedAt": "2026-01-30T11:34:09.019Z"
-    },
-    {
-      "iteration": 6,
-      "status": "completed",
-      "taskId": "US-006",
-      "taskTitle": "Add /playlists/elcano.m3u endpoint",
-      "taskCompleted": true,
-      "durationMs": 115401,
-      "startedAt": "2026-01-30T11:34:10.211Z",
-      "endedAt": "2026-01-30T11:36:05.612Z"
-    },
-    {
-      "iteration": 7,
-      "status": "completed",
-      "taskId": "US-007",
-      "taskTitle": "Add /playlists/newera.m3u endpoint",
-      "taskCompleted": true,
-      "durationMs": 89888,
-      "startedAt": "2026-01-30T11:36:06.853Z",
-      "endedAt": "2026-01-30T11:37:36.741Z"
-    }
-  ],
+  "iterations": [],
   "skippedTaskIds": [],
   "cwd": "/home/alorle/gh/alorle/iptv-manager",
   "activeTaskIds": [],
