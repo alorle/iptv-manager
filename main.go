@@ -29,6 +29,7 @@ type Config struct {
 	UseMultiplexing        bool
 	ProxyReadTimeout       time.Duration
 	ProxyWriteTimeout      time.Duration
+	ProxyBufferSize        int
 }
 
 // isValidContentID validates that a content ID is exactly 40 hexadecimal characters
@@ -121,6 +122,21 @@ func loadConfig() (*Config, error) {
 		cfg.ProxyWriteTimeout = writeTimeout
 	}
 
+	// Parse PROXY_BUFFER_SIZE (default 4MB = 4194304 bytes)
+	bufferSizeEnvStr := os.Getenv("PROXY_BUFFER_SIZE")
+	if bufferSizeEnvStr == "" {
+		cfg.ProxyBufferSize = 4194304 // 4MB default
+	} else {
+		proxyBufferSize, err := strconv.Atoi(bufferSizeEnvStr)
+		if err != nil {
+			return nil, fmt.Errorf("invalid PROXY_BUFFER_SIZE: %w", err)
+		}
+		if proxyBufferSize <= 0 {
+			return nil, fmt.Errorf("PROXY_BUFFER_SIZE must be positive")
+		}
+		cfg.ProxyBufferSize = proxyBufferSize
+	}
+
 	// Validate and set CACHE_DIR
 	if cfg.CacheDir == "" {
 		return nil, fmt.Errorf("CACHE_DIR environment variable is required")
@@ -163,12 +179,14 @@ func main() {
 	fmt.Printf("httpPort: %v\n", cfg.HTTPPort)
 	fmt.Printf("acestreamPlayerBaseUrl: %v\n", cfg.AcestreamPlayerBaseURL)
 	fmt.Printf("acestreamEngineUrl: %v\n", cfg.AcestreamEngineURL)
+	fmt.Printf("streamBaseURL: %v\n", cfg.StreamBaseURL)
 	fmt.Printf("cacheDir: %v\n", cfg.CacheDir)
 	fmt.Printf("cacheTTL: %v\n", cfg.CacheTTL)
 	fmt.Printf("streamBufferSize: %v bytes\n", cfg.StreamBufferSize)
 	fmt.Printf("useMultiplexing: %v\n", cfg.UseMultiplexing)
 	fmt.Printf("proxyReadTimeout: %v\n", cfg.ProxyReadTimeout)
 	fmt.Printf("proxyWriteTimeout: %v\n", cfg.ProxyWriteTimeout)
+	fmt.Printf("proxyBufferSize: %v bytes\n", cfg.ProxyBufferSize)
 
 	// Initialize cache storage
 	storage, err := cache.NewFileStorage(cfg.CacheDir)
