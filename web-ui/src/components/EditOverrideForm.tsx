@@ -43,9 +43,9 @@ export function EditOverrideForm({
   const [error, setError] = useState<string | null>(null);
   const [deleteConfirm, setDeleteConfirm] = useState(false);
 
-  // Debounced TVG-ID validation
-  useEffect(() => {
-    const trimmedTvgId = tvgId.trim();
+  // Validation function
+  const performValidation = async (value: string) => {
+    const trimmedTvgId = value.trim();
 
     // Empty TVG-ID is always valid
     if (trimmedTvgId === '') {
@@ -59,24 +59,34 @@ export function EditOverrideForm({
       return;
     }
 
-    const timeoutId = setTimeout(async () => {
-      setValidating(true);
-      try {
-        const result = await validateTvgId(trimmedTvgId);
-        setTvgIdValidation({
-          valid: result.valid,
-          suggestions: result.suggestions || [],
-        });
-      } catch (err) {
-        console.error('Failed to validate TVG-ID:', err);
-        setTvgIdValidation({ valid: true, suggestions: [] }); // Assume valid on error
-      } finally {
-        setValidating(false);
-      }
-    }, 500); // 500ms debounce
+    setValidating(true);
+    try {
+      const result = await validateTvgId(trimmedTvgId);
+      setTvgIdValidation({
+        valid: result.valid,
+        suggestions: result.suggestions || [],
+      });
+    } catch (err) {
+      console.error('Failed to validate TVG-ID:', err);
+      setTvgIdValidation({ valid: true, suggestions: [] }); // Assume valid on error
+    } finally {
+      setValidating(false);
+    }
+  };
+
+  // Debounced TVG-ID validation while typing
+  useEffect(() => {
+    const timeoutId = setTimeout(() => {
+      performValidation(tvgId);
+    }, 300); // 300ms debounce
 
     return () => clearTimeout(timeoutId);
   }, [tvgId, channel.tvg_id]);
+
+  // Handle blur event to validate immediately
+  const handleTvgIdBlur = () => {
+    performValidation(tvgId);
+  };
 
   const handleAddCustomAttribute = () => {
     setCustomAttributes([...customAttributes, { key: '', value: '' }]);
@@ -227,6 +237,7 @@ export function EditOverrideForm({
               type="text"
               value={tvgId}
               onChange={(e) => setTvgId(e.target.value)}
+              onBlur={handleTvgIdBlur}
               placeholder={channel.tvg_id || 'Original TVG-ID'}
             />
             {validating && (
