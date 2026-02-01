@@ -125,6 +125,7 @@ $RECYCLE.BIN/
 
 # End of https://www.toptal.com/developers/gitignore/api/windows,linux,macos,visualstudiocode,direnv,dotenv,go
 
+.ralph-tui/
 .tmp/
 
 # UI build artifacts (copied from web-ui/dist for embedding)
