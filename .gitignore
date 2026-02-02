@@ -127,6 +127,7 @@ $RECYCLE.BIN/
 
 .ralph-tui/
 .tmp/
+tasks/
 
 # UI build artifacts (copied from web-ui/dist for embedding)
 ui/dist/
