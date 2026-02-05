@@ -17,7 +17,37 @@
    Header Section
    ───────────────────────────────────────────────────────────────────────────── */
 .channel-list-header {
+  position: sticky;
+  top: 0;
+  z-index: var(--z-sticky);
+  background: var(--color-bg-base);
   margin-bottom: var(--space-6);
+  padding-bottom: var(--space-4);
+  transition: box-shadow var(--transition-fast);
+}
+
+/* Add shadow when content scrolls beneath */
+.channel-list-header::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    var(--color-border-strong) 20%,
+    var(--color-border-strong) 80%,
+    transparent 100%
+  );
+  opacity: 0;
+  transition: opacity var(--transition-fast);
+}
+
+/* Show shadow when scrolled */
+.channel-list-container.scrolled .channel-list-header::after {
+  opacity: 1;
 }
 
 .channel-list-header h1 {

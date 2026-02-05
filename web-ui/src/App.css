@@ -5,8 +5,9 @@
 .app {
   display: flex;
   flex-direction: column;
-  min-height: 100vh;
+  height: 100vh;
   background: var(--color-bg-base);
+  overflow: hidden;
 }
 
 /* Main content area with ID for skip link target */

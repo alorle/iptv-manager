@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect, useRef } from 'react'
 import type { Channel } from '../types'
 import { useChannels } from '../hooks/useChannels'
 import { BulkEditModal } from './BulkEditModal'
@@ -23,6 +23,26 @@ export function ChannelList({ onChannelSelect, refreshTrigger, toast }: ChannelL
   const [enabledFilter, setEnabledFilter] = useState<EnabledFilter>('enabled')
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
   const [showBulkEditModal, setShowBulkEditModal] = useState(false)
+  const [isScrolled, setIsScrolled] = useState(false)
+  const containerRef = useRef<HTMLElement>(null)
+  const tableContainerRef = useRef<HTMLDivElement>(null)
+
+  // Detect scroll to show header shadow
+  useEffect(() => {
+    const tableContainer = tableContainerRef.current
+    if (!tableContainer) return
+
+    const handleScroll = () => {
+      const scrollThreshold = 20
+      setIsScrolled(tableContainer.scrollTop > scrollThreshold)
+    }
+
+    // Check initial scroll position
+    handleScroll()
+
+    tableContainer.addEventListener('scroll', handleScroll, { passive: true })
+    return () => tableContainer.removeEventListener('scroll', handleScroll)
+  }, [loading, channels.length])
 
   // Get unique group titles for the filter dropdown
   const uniqueGroups = useMemo(() => {
@@ -121,7 +141,12 @@ export function ChannelList({ onChannelSelect, refreshTrigger, toast }: ChannelL
     filteredChannels.some((ch) => selectedIds.has(ch.acestream_id))
 
   return (
-    <main className="channel-list-container" id="main-content" aria-labelledby="page-title">
+    <main
+      ref={containerRef}
+      className={`channel-list-container${isScrolled ? ' scrolled' : ''}`}
+      id="main-content"
+      aria-labelledby="page-title"
+    >
       <div className="channel-list-header">
         <h1 id="page-title">Channel Management</h1>
         <div className="filters" role="search" aria-label="Filter channels">
@@ -196,7 +221,12 @@ export function ChannelList({ onChannelSelect, refreshTrigger, toast }: ChannelL
         )}
       </div>
 
-      <div className="table-container" role="region" aria-label="Channel list">
+      <div
+        ref={tableContainerRef}
+        className="table-container"
+        role="region"
+        aria-label="Channel list"
+      >
         <table className="channel-table" aria-describedby="search-results">
           <thead>
             <tr>
