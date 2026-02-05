@@ -24,8 +24,10 @@ export function ChannelList({ onChannelSelect, refreshTrigger, toast }: ChannelL
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
   const [showBulkEditModal, setShowBulkEditModal] = useState(false)
   const [isScrolled, setIsScrolled] = useState(false)
+  const [expandedChannelId, setExpandedChannelId] = useState<string | null>(null)
   const containerRef = useRef<HTMLElement>(null)
   const tableContainerRef = useRef<HTMLDivElement>(null)
+  const expandedRowRef = useRef<HTMLTableRowElement>(null)
 
   // Detect scroll to show header shadow
   useEffect(() => {
@@ -50,6 +52,12 @@ export function ChannelList({ onChannelSelect, refreshTrigger, toast }: ChannelL
     return Array.from(groups).sort()
   }, [channels])
 
+  // Generate unique channel key
+  const getChannelKey = (channel: Channel) => {
+    // Use tvg_id if available, otherwise use first stream's acestream_id
+    return channel.tvg_id || channel.streams[0]?.acestream_id || channel.name
+  }
+
   // Filter channels based on search, group filter, and enabled filter
   const filteredChannels = useMemo(() => {
     return channels.filter((channel) => {
@@ -72,7 +80,7 @@ export function ChannelList({ onChannelSelect, refreshTrigger, toast }: ChannelL
   // Handle select all checkbox (selects all channels in filtered list)
   const handleSelectAll = (checked: boolean) => {
     if (checked) {
-      const allChannelIds = filteredChannels.map((ch) => ch.tvg_id)
+      const allChannelIds = filteredChannels.map((ch) => getChannelKey(ch))
       setSelectedIds(new Set(allChannelIds))
     } else {
       setSelectedIds(new Set())
@@ -90,10 +98,25 @@ export function ChannelList({ onChannelSelect, refreshTrigger, toast }: ChannelL
     setSelectedIds(newSelected)
   }
 
-  // Handle row click to edit channel
+  // Handle row click to expand/collapse channel
   const handleRowClick = (channel: Channel) => {
-    onChannelSelect?.(channel)
+    const channelKey = getChannelKey(channel)
+    if (expandedChannelId === channelKey) {
+      setExpandedChannelId(null)
+    } else {
+      setExpandedChannelId(channelKey)
+    }
   }
+
+  // Scroll expanded channel into view
+  useEffect(() => {
+    if (expandedChannelId && expandedRowRef.current) {
+      expandedRowRef.current.scrollIntoView({
+        behavior: 'smooth',
+        block: 'nearest',
+      })
+    }
+  }, [expandedChannelId])
 
   // Handle bulk edit submission
   const handleBulkEdit = async (field: string, value: string | boolean) => {
@@ -121,7 +144,7 @@ export function ChannelList({ onChannelSelect, refreshTrigger, toast }: ChannelL
 
   // Check if all channels in filtered list are selected (must be before early returns)
   const allChannelIds = useMemo(
-    () => new Set(filteredChannels.map((ch) => ch.tvg_id)),
+    () => new Set(filteredChannels.map((ch) => getChannelKey(ch))),
     [filteredChannels]
   )
 
@@ -267,96 +290,182 @@ export function ChannelList({ onChannelSelect, refreshTrigger, toast }: ChannelL
               </tr>
             ) : (
               filteredChannels.map((channel) => {
+                const channelKey = getChannelKey(channel)
                 const hasEnabledStream = channel.streams.some((s) => s.enabled)
                 const hasOverride = channel.streams.some((s) => s.has_override)
+                const isExpanded = expandedChannelId === channelKey
                 return (
-                  <tr
-                    key={channel.tvg_id}
-                    className="channel-row"
-                    onClick={() => handleRowClick(channel)}
-                    tabIndex={0}
-                    role="button"
-                    aria-label={`Edit ${channel.name}${!hasEnabledStream ? ' (disabled)' : ''}${hasOverride ? ', has custom overrides' : ''}`}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter' || e.key === ' ') {
-                        e.preventDefault()
-                        handleRowClick(channel)
-                      }
-                    }}
-                  >
-                    <td
-                      className="checkbox-column"
-                      onClick={(e) => e.stopPropagation()}
-                      onKeyDown={(e) => e.stopPropagation()}
+                  <>
+                    <tr
+                      key={channelKey}
+                      ref={isExpanded ? expandedRowRef : null}
+                      className={`channel-row${isExpanded ? ' expanded' : ''}`}
+                      onClick={() => handleRowClick(channel)}
+                      tabIndex={0}
+                      role="button"
+                      aria-label={`${isExpanded ? 'Collapse' : 'Expand'} ${channel.name}${!hasEnabledStream ? ' (disabled)' : ''}${hasOverride ? ', has custom overrides' : ''}`}
+                      aria-expanded={isExpanded}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' || e.key === ' ') {
+                          e.preventDefault()
+                          handleRowClick(channel)
+                        }
+                      }}
                     >
-                      <input
-                        type="checkbox"
-                        checked={selectedIds.has(channel.tvg_id)}
-                        onChange={(e) => handleSelectOne(channel.tvg_id, e.target.checked)}
-                        aria-label={`Select ${channel.name}`}
-                      />
-                    </td>
-                    <td className="logo-column">
-                      {channel.tvg_logo ? (
-                        <img
-                          src={channel.tvg_logo}
-                          alt={`${channel.name} logo`}
-                          className="channel-logo"
-                          onError={(e) => {
-                            e.currentTarget.style.display = 'none'
-                            const placeholder = e.currentTarget.nextElementSibling as HTMLElement
-                            if (placeholder) placeholder.style.display = 'flex'
-                          }}
-                        />
-                      ) : null}
-                      <div
-                        className="channel-logo-placeholder"
-                        style={{ display: channel.tvg_logo ? 'none' : 'flex' }}
-                        aria-label="No logo available"
+                      <td
+                        className="checkbox-column"
+                        onClick={(e) => e.stopPropagation()}
+                        onKeyDown={(e) => e.stopPropagation()}
                       >
-                        <svg
-                          width="24"
-                          height="24"
-                          viewBox="0 0 24 24"
-                          fill="none"
-                          stroke="currentColor"
-                          strokeWidth="2"
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
+                        <input
+                          type="checkbox"
+                          checked={selectedIds.has(channelKey)}
+                          onChange={(e) => handleSelectOne(channelKey, e.target.checked)}
+                          aria-label={`Select ${channel.name}`}
+                        />
+                      </td>
+                      <td className="logo-column">
+                        {channel.tvg_logo ? (
+                          <img
+                            src={channel.tvg_logo}
+                            alt={`${channel.name} logo`}
+                            className="channel-logo"
+                            onError={(e) => {
+                              e.currentTarget.style.display = 'none'
+                              const placeholder = e.currentTarget.nextElementSibling as HTMLElement
+                              if (placeholder) placeholder.style.display = 'flex'
+                            }}
+                          />
+                        ) : null}
+                        <div
+                          className="channel-logo-placeholder"
+                          style={{ display: channel.tvg_logo ? 'none' : 'flex' }}
+                          aria-label="No logo available"
                         >
-                          <rect x="2" y="7" width="20" height="15" rx="2" ry="2" />
-                          <polyline points="17 2 12 7 7 2" />
-                        </svg>
-                      </div>
-                    </td>
-                    <td className="channel-name">
-                      <span className="channel-name-text">{channel.name}</span>
-                      {!hasEnabledStream && (
-                        <span className="disabled-badge" aria-label="Channel is disabled">
-                          Disabled
-                        </span>
-                      )}
-                      {hasOverride && (
-                        <span
-                          className="override-indicator-inline"
-                          title="Has custom overrides"
-                          aria-label="Has custom overrides"
-                        >
-                          ⚙
-                        </span>
-                      )}
-                    </td>
-                    <td className="channel-group">
-                      <span className="group-badge">{channel.group_title}</span>
-                    </td>
-                    <td className="stream-count-cell">
-                      {channel.streams.length > 1 ? (
-                        <span className="stream-count">{channel.streams.length} streams</span>
-                      ) : (
-                        <span className="stream-count single">1 stream</span>
-                      )}
-                    </td>
-                  </tr>
+                          <svg
+                            width="24"
+                            height="24"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            strokeWidth="2"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                          >
+                            <rect x="2" y="7" width="20" height="15" rx="2" ry="2" />
+                            <polyline points="17 2 12 7 7 2" />
+                          </svg>
+                        </div>
+                      </td>
+                      <td className="channel-name">
+                        <div className="channel-name-content">
+                          <svg
+                            className={`chevron-icon${isExpanded ? ' expanded' : ''}`}
+                            width="16"
+                            height="16"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            strokeWidth="2"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            aria-hidden="true"
+                          >
+                            <polyline points="9 18 15 12 9 6" />
+                          </svg>
+                          <span className="channel-name-text">{channel.name}</span>
+                          {!hasEnabledStream && (
+                            <span className="disabled-badge" aria-label="Channel is disabled">
+                              Disabled
+                            </span>
+                          )}
+                          {hasOverride && (
+                            <span
+                              className="override-indicator-inline"
+                              title="Has custom overrides"
+                              aria-label="Has custom overrides"
+                            >
+                              ⚙
+                            </span>
+                          )}
+                        </div>
+                      </td>
+                      <td className="channel-group">
+                        <span className="group-badge">{channel.group_title}</span>
+                      </td>
+                      <td className="stream-count-cell">
+                        {channel.streams.length > 1 ? (
+                          <span className="stream-count">{channel.streams.length} streams</span>
+                        ) : (
+                          <span className="stream-count single">1 stream</span>
+                        )}
+                      </td>
+                    </tr>
+                    {isExpanded && (
+                      <tr key={`${channelKey}-streams`} className="stream-expansion">
+                        <td colSpan={5} className="stream-expansion-cell">
+                          <div className="stream-list">
+                            <div className="stream-list-header">
+                              <h3>Streams for {channel.name}</h3>
+                              <button
+                                type="button"
+                                className="button button-small"
+                                onClick={(e) => {
+                                  e.stopPropagation()
+                                  onChannelSelect?.(channel)
+                                }}
+                              >
+                                Edit Channel
+                              </button>
+                            </div>
+                            {channel.streams.map((stream) => (
+                              <div key={stream.acestream_id} className="stream-item">
+                                <div className="stream-info">
+                                  <div className="stream-name">
+                                    <span className="stream-name-text">{stream.name}</span>
+                                    {!stream.enabled && (
+                                      <span
+                                        className="disabled-badge"
+                                        aria-label="Stream is disabled"
+                                      >
+                                        Disabled
+                                      </span>
+                                    )}
+                                    {stream.has_override && (
+                                      <span
+                                        className="override-indicator-inline"
+                                        title="Has custom overrides"
+                                        aria-label="Has custom overrides"
+                                      >
+                                        ⚙
+                                      </span>
+                                    )}
+                                  </div>
+                                  <div className="stream-meta">
+                                    <span className="stream-source">{stream.source}</span>
+                                    <span className="stream-id">{stream.acestream_id}</span>
+                                  </div>
+                                </div>
+                                <div className="stream-actions">
+                                  <button
+                                    type="button"
+                                    className="button button-small button-secondary"
+                                    onClick={(e) => {
+                                      e.stopPropagation()
+                                      window.open(`/stream?id=${stream.acestream_id}`, '_blank')
+                                    }}
+                                    disabled={!stream.enabled}
+                                  >
+                                    Play
+                                  </button>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </td>
+                      </tr>
+                    )}
+                  </>
                 )
               })
             )}
