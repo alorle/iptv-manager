@@ -69,17 +69,17 @@ export function ChannelList({ onChannelSelect, refreshTrigger, toast }: ChannelL
     })
   }, [channels, searchText, groupFilter, enabledFilter])
 
-  // Handle select all checkbox (selects all streams in filtered channels)
+  // Handle select all checkbox (selects all channels in filtered list)
   const handleSelectAll = (checked: boolean) => {
     if (checked) {
-      const allStreamIds = filteredChannels.flatMap((ch) => ch.streams.map((s) => s.acestream_id))
-      setSelectedIds(new Set(allStreamIds))
+      const allChannelIds = filteredChannels.map((ch) => ch.tvg_id)
+      setSelectedIds(new Set(allChannelIds))
     } else {
       setSelectedIds(new Set())
     }
   }
 
-  // Handle individual checkbox for a stream
+  // Handle individual checkbox for a channel
   const handleSelectOne = (id: string, checked: boolean) => {
     const newSelected = new Set(selectedIds)
     if (checked) {
@@ -90,19 +90,9 @@ export function ChannelList({ onChannelSelect, refreshTrigger, toast }: ChannelL
     setSelectedIds(newSelected)
   }
 
-  // Handle row click (currently disabled since we now have channels with multiple streams)
-  const handleRowClick = (channel: Channel, stream: (typeof channel.streams)[0]) => {
-    // For now, we'll need to pass stream data to the parent
-    // This will require updating the parent component to handle stream selection
-    // For backward compatibility, we can create a synthetic Channel object
-    const syntheticChannel: Channel = {
-      name: stream.name,
-      tvg_id: channel.tvg_id,
-      tvg_logo: channel.tvg_logo,
-      group_title: channel.group_title,
-      streams: [stream],
-    }
-    onChannelSelect?.(syntheticChannel)
+  // Handle row click to edit channel
+  const handleRowClick = (channel: Channel) => {
+    onChannelSelect?.(channel)
   }
 
   // Handle bulk edit submission
@@ -129,19 +119,19 @@ export function ChannelList({ onChannelSelect, refreshTrigger, toast }: ChannelL
     }
   }
 
-  // Check if all streams in filtered channels are selected (must be before early returns)
-  const allStreamIds = useMemo(
-    () => new Set(filteredChannels.flatMap((ch) => ch.streams.map((s) => s.acestream_id))),
+  // Check if all channels in filtered list are selected (must be before early returns)
+  const allChannelIds = useMemo(
+    () => new Set(filteredChannels.map((ch) => ch.tvg_id)),
     [filteredChannels]
   )
 
   const allSelected =
-    allStreamIds.size > 0 && Array.from(allStreamIds).every((id) => selectedIds.has(id))
+    allChannelIds.size > 0 && Array.from(allChannelIds).every((id) => selectedIds.has(id))
 
   const someSelected =
     selectedIds.size > 0 &&
     !allSelected &&
-    Array.from(allStreamIds).some((id) => selectedIds.has(id))
+    Array.from(allChannelIds).some((id) => selectedIds.has(id))
 
   if (loading) {
     return (
@@ -260,12 +250,12 @@ export function ChannelList({ onChannelSelect, refreshTrigger, toast }: ChannelL
                   aria-label={allSelected ? 'Deselect all channels' : 'Select all channels'}
                 />
               </th>
+              <th className="logo-column" scope="col">
+                Logo
+              </th>
               <th scope="col">Name</th>
               <th scope="col">Group</th>
-              <th scope="col">TVG-ID</th>
-              <th className="status-column" scope="col">
-                Status
-              </th>
+              <th scope="col">Streams</th>
             </tr>
           </thead>
           <tbody>
@@ -276,19 +266,21 @@ export function ChannelList({ onChannelSelect, refreshTrigger, toast }: ChannelL
                 </td>
               </tr>
             ) : (
-              filteredChannels.map((channel) =>
-                channel.streams.map((stream, streamIndex) => (
+              filteredChannels.map((channel) => {
+                const hasEnabledStream = channel.streams.some((s) => s.enabled)
+                const hasOverride = channel.streams.some((s) => s.has_override)
+                return (
                   <tr
-                    key={stream.acestream_id}
+                    key={channel.tvg_id}
                     className="channel-row"
-                    onClick={() => handleRowClick(channel, stream)}
+                    onClick={() => handleRowClick(channel)}
                     tabIndex={0}
                     role="button"
-                    aria-label={`Edit ${stream.name}${!stream.enabled ? ' (disabled)' : ''}${stream.has_override ? ', has custom overrides' : ''}`}
+                    aria-label={`Edit ${channel.name}${!hasEnabledStream ? ' (disabled)' : ''}${hasOverride ? ', has custom overrides' : ''}`}
                     onKeyDown={(e) => {
                       if (e.key === 'Enter' || e.key === ' ') {
                         e.preventDefault()
-                        handleRowClick(channel, stream)
+                        handleRowClick(channel)
                       }
                     }}
                   >
@@ -299,44 +291,74 @@ export function ChannelList({ onChannelSelect, refreshTrigger, toast }: ChannelL
                     >
                       <input
                         type="checkbox"
-                        checked={selectedIds.has(stream.acestream_id)}
-                        onChange={(e) => handleSelectOne(stream.acestream_id, e.target.checked)}
-                        aria-label={`Select ${stream.name}`}
+                        checked={selectedIds.has(channel.tvg_id)}
+                        onChange={(e) => handleSelectOne(channel.tvg_id, e.target.checked)}
+                        aria-label={`Select ${channel.name}`}
                       />
                     </td>
+                    <td className="logo-column">
+                      {channel.tvg_logo ? (
+                        <img
+                          src={channel.tvg_logo}
+                          alt={`${channel.name} logo`}
+                          className="channel-logo"
+                          onError={(e) => {
+                            e.currentTarget.style.display = 'none'
+                            const placeholder = e.currentTarget.nextElementSibling as HTMLElement
+                            if (placeholder) placeholder.style.display = 'flex'
+                          }}
+                        />
+                      ) : null}
+                      <div
+                        className="channel-logo-placeholder"
+                        style={{ display: channel.tvg_logo ? 'none' : 'flex' }}
+                        aria-label="No logo available"
+                      >
+                        <svg
+                          width="24"
+                          height="24"
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth="2"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                        >
+                          <rect x="2" y="7" width="20" height="15" rx="2" ry="2" />
+                          <polyline points="17 2 12 7 7 2" />
+                        </svg>
+                      </div>
+                    </td>
                     <td className="channel-name">
-                      {stream.name}
-                      {!stream.enabled && (
-                        <span className="disabled-badge" aria-label="Stream is disabled">
+                      <span className="channel-name-text">{channel.name}</span>
+                      {!hasEnabledStream && (
+                        <span className="disabled-badge" aria-label="Channel is disabled">
                           Disabled
                         </span>
                       )}
-                      {channel.streams.length > 1 && streamIndex === 0 && (
+                      {hasOverride && (
                         <span
-                          className="stream-count"
-                          title={`${channel.streams.length} streams in this channel`}
-                        >
-                          ({channel.streams.length})
-                        </span>
-                      )}
-                    </td>
-                    <td className="channel-group">{channel.group_title}</td>
-                    <td className="channel-tvg-id">{channel.tvg_id || '-'}</td>
-                    <td className="status-column">
-                      {stream.has_override && (
-                        <span
-                          className="override-indicator"
+                          className="override-indicator-inline"
                           title="Has custom overrides"
                           aria-label="Has custom overrides"
-                          role="img"
                         >
                           ⚙
                         </span>
                       )}
                     </td>
+                    <td className="channel-group">
+                      <span className="group-badge">{channel.group_title}</span>
+                    </td>
+                    <td className="stream-count-cell">
+                      {channel.streams.length > 1 ? (
+                        <span className="stream-count">{channel.streams.length} streams</span>
+                      ) : (
+                        <span className="stream-count single">1 stream</span>
+                      )}
+                    </td>
                   </tr>
-                ))
-              )
+                )
+              })
             )}
           </tbody>
         </table>
@@ -344,10 +366,10 @@ export function ChannelList({ onChannelSelect, refreshTrigger, toast }: ChannelL
 
       <div className="channel-list-footer">
         <div id="search-results" className="footer-info" aria-live="polite">
-          Showing {filteredChannels.reduce((sum, ch) => sum + ch.streams.length, 0)} stream(s) in{' '}
-          {filteredChannels.length} channel(s) (Total:{' '}
-          {channels.reduce((sum, ch) => sum + ch.streams.length, 0)} streams in {channels.length}{' '}
-          channels)
+          Showing {filteredChannels.length} channel(s) with{' '}
+          {filteredChannels.reduce((sum, ch) => sum + ch.streams.length, 0)} stream(s) (Total:{' '}
+          {channels.length} channels with {channels.reduce((sum, ch) => sum + ch.streams.length, 0)}{' '}
+          streams)
         </div>
       </div>
 
