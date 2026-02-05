@@ -58,25 +58,28 @@ export function ChannelList({ onChannelSelect, refreshTrigger, toast }: ChannelL
 
       const matchesGroup = groupFilter === '' || channel.group_title === groupFilter
 
+      // Channel is considered enabled if at least one stream is enabled
+      const hasEnabledStream = channel.streams.some((s) => s.enabled)
       const matchesEnabled =
         enabledFilter === 'all' ||
-        (enabledFilter === 'enabled' && channel.enabled) ||
-        (enabledFilter === 'disabled' && !channel.enabled)
+        (enabledFilter === 'enabled' && hasEnabledStream) ||
+        (enabledFilter === 'disabled' && !hasEnabledStream)
 
       return matchesSearch && matchesGroup && matchesEnabled
     })
   }, [channels, searchText, groupFilter, enabledFilter])
 
-  // Handle select all checkbox
+  // Handle select all checkbox (selects all streams in filtered channels)
   const handleSelectAll = (checked: boolean) => {
     if (checked) {
-      setSelectedIds(new Set(filteredChannels.map((ch) => ch.acestream_id)))
+      const allStreamIds = filteredChannels.flatMap((ch) => ch.streams.map((s) => s.acestream_id))
+      setSelectedIds(new Set(allStreamIds))
     } else {
       setSelectedIds(new Set())
     }
   }
 
-  // Handle individual checkbox
+  // Handle individual checkbox for a stream
   const handleSelectOne = (id: string, checked: boolean) => {
     const newSelected = new Set(selectedIds)
     if (checked) {
@@ -87,9 +90,19 @@ export function ChannelList({ onChannelSelect, refreshTrigger, toast }: ChannelL
     setSelectedIds(newSelected)
   }
 
-  // Handle row click
-  const handleRowClick = (channel: Channel) => {
-    onChannelSelect?.(channel)
+  // Handle row click (currently disabled since we now have channels with multiple streams)
+  const handleRowClick = (channel: Channel, stream: (typeof channel.streams)[0]) => {
+    // For now, we'll need to pass stream data to the parent
+    // This will require updating the parent component to handle stream selection
+    // For backward compatibility, we can create a synthetic Channel object
+    const syntheticChannel: Channel = {
+      name: stream.name,
+      tvg_id: channel.tvg_id,
+      tvg_logo: channel.tvg_logo,
+      group_title: channel.group_title,
+      streams: [stream],
+    }
+    onChannelSelect?.(syntheticChannel)
   }
 
   // Handle bulk edit submission
@@ -116,6 +129,20 @@ export function ChannelList({ onChannelSelect, refreshTrigger, toast }: ChannelL
     }
   }
 
+  // Check if all streams in filtered channels are selected (must be before early returns)
+  const allStreamIds = useMemo(
+    () => new Set(filteredChannels.flatMap((ch) => ch.streams.map((s) => s.acestream_id))),
+    [filteredChannels]
+  )
+
+  const allSelected =
+    allStreamIds.size > 0 && Array.from(allStreamIds).every((id) => selectedIds.has(id))
+
+  const someSelected =
+    selectedIds.size > 0 &&
+    !allSelected &&
+    Array.from(allStreamIds).some((id) => selectedIds.has(id))
+
   if (loading) {
     return (
       <div className="channel-list-container">
@@ -131,14 +158,6 @@ export function ChannelList({ onChannelSelect, refreshTrigger, toast }: ChannelL
       </div>
     )
   }
-
-  const allSelected =
-    filteredChannels.length > 0 && filteredChannels.every((ch) => selectedIds.has(ch.acestream_id))
-
-  const someSelected =
-    selectedIds.size > 0 &&
-    !allSelected &&
-    filteredChannels.some((ch) => selectedIds.has(ch.acestream_id))
 
   return (
     <main
@@ -257,57 +276,67 @@ export function ChannelList({ onChannelSelect, refreshTrigger, toast }: ChannelL
                 </td>
               </tr>
             ) : (
-              filteredChannels.map((channel) => (
-                <tr
-                  key={channel.acestream_id}
-                  className="channel-row"
-                  onClick={() => handleRowClick(channel)}
-                  tabIndex={0}
-                  role="button"
-                  aria-label={`Edit ${channel.name}${!channel.enabled ? ' (disabled)' : ''}${channel.has_override ? ', has custom overrides' : ''}`}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter' || e.key === ' ') {
-                      e.preventDefault()
-                      handleRowClick(channel)
-                    }
-                  }}
-                >
-                  <td
-                    className="checkbox-column"
-                    onClick={(e) => e.stopPropagation()}
-                    onKeyDown={(e) => e.stopPropagation()}
+              filteredChannels.map((channel) =>
+                channel.streams.map((stream, streamIndex) => (
+                  <tr
+                    key={stream.acestream_id}
+                    className="channel-row"
+                    onClick={() => handleRowClick(channel, stream)}
+                    tabIndex={0}
+                    role="button"
+                    aria-label={`Edit ${stream.name}${!stream.enabled ? ' (disabled)' : ''}${stream.has_override ? ', has custom overrides' : ''}`}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault()
+                        handleRowClick(channel, stream)
+                      }
+                    }}
                   >
-                    <input
-                      type="checkbox"
-                      checked={selectedIds.has(channel.acestream_id)}
-                      onChange={(e) => handleSelectOne(channel.acestream_id, e.target.checked)}
-                      aria-label={`Select ${channel.name}`}
-                    />
-                  </td>
-                  <td className="channel-name">
-                    {channel.name}
-                    {!channel.enabled && (
-                      <span className="disabled-badge" aria-label="Channel is disabled">
-                        Disabled
-                      </span>
-                    )}
-                  </td>
-                  <td className="channel-group">{channel.group_title}</td>
-                  <td className="channel-tvg-id">{channel.tvg_id || '-'}</td>
-                  <td className="status-column">
-                    {channel.has_override && (
-                      <span
-                        className="override-indicator"
-                        title="Has custom overrides"
-                        aria-label="Has custom overrides"
-                        role="img"
-                      >
-                        ⚙
-                      </span>
-                    )}
-                  </td>
-                </tr>
-              ))
+                    <td
+                      className="checkbox-column"
+                      onClick={(e) => e.stopPropagation()}
+                      onKeyDown={(e) => e.stopPropagation()}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={selectedIds.has(stream.acestream_id)}
+                        onChange={(e) => handleSelectOne(stream.acestream_id, e.target.checked)}
+                        aria-label={`Select ${stream.name}`}
+                      />
+                    </td>
+                    <td className="channel-name">
+                      {stream.name}
+                      {!stream.enabled && (
+                        <span className="disabled-badge" aria-label="Stream is disabled">
+                          Disabled
+                        </span>
+                      )}
+                      {channel.streams.length > 1 && streamIndex === 0 && (
+                        <span
+                          className="stream-count"
+                          title={`${channel.streams.length} streams in this channel`}
+                        >
+                          ({channel.streams.length})
+                        </span>
+                      )}
+                    </td>
+                    <td className="channel-group">{channel.group_title}</td>
+                    <td className="channel-tvg-id">{channel.tvg_id || '-'}</td>
+                    <td className="status-column">
+                      {stream.has_override && (
+                        <span
+                          className="override-indicator"
+                          title="Has custom overrides"
+                          aria-label="Has custom overrides"
+                          role="img"
+                        >
+                          ⚙
+                        </span>
+                      )}
+                    </td>
+                  </tr>
+                ))
+              )
             )}
           </tbody>
         </table>
@@ -315,7 +344,10 @@ export function ChannelList({ onChannelSelect, refreshTrigger, toast }: ChannelL
 
       <div className="channel-list-footer">
         <div id="search-results" className="footer-info" aria-live="polite">
-          Showing {filteredChannels.length} of {channels.length} channels
+          Showing {filteredChannels.reduce((sum, ch) => sum + ch.streams.length, 0)} stream(s) in{' '}
+          {filteredChannels.length} channel(s) (Total:{' '}
+          {channels.reduce((sum, ch) => sum + ch.streams.length, 0)} streams in {channels.length}{' '}
+          channels)
         </div>
       </div>
 

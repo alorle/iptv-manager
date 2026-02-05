@@ -13,17 +13,23 @@ import (
 	"github.com/alorle/iptv-manager/rewriter"
 )
 
-// Channel represents a channel with its metadata and override status
-type Channel struct {
+// Stream represents a single stream within a channel
+type Stream struct {
 	AcestreamID string `json:"acestream_id"`
 	Name        string `json:"name"`
-	TvgID       string `json:"tvg_id"`
 	TvgName     string `json:"tvg_name"`
-	TvgLogo     string `json:"tvg_logo"`
-	GroupTitle  string `json:"group_title"`
 	Source      string `json:"source"` // "elcano" or "newera"
 	Enabled     bool   `json:"enabled"`
 	HasOverride bool   `json:"has_override"`
+}
+
+// Channel represents a channel with its metadata and array of streams
+type Channel struct {
+	Name        string   `json:"name"`
+	TvgID       string   `json:"tvg_id"`
+	TvgLogo     string   `json:"tvg_logo"`
+	GroupTitle  string   `json:"group_title"`
+	Streams     []Stream `json:"streams"`
 }
 
 // ChannelsHandler handles the GET /api/channels endpoint
@@ -65,10 +71,23 @@ func extractMetadata(extinf string) (tvgID, tvgLogo, groupTitle string) {
 	return
 }
 
-// parseM3UChannels parses M3U content and extracts channel information
-func parseM3UChannels(content []byte, source string) []Channel {
+// streamData holds raw parsed stream data before grouping
+type streamData struct {
+	AcestreamID string
+	Name        string
+	TvgID       string
+	TvgName     string
+	TvgLogo     string
+	GroupTitle  string
+	Source      string
+	Enabled     bool
+	HasOverride bool
+}
+
+// parseM3UStreams parses M3U content and extracts stream information
+func parseM3UStreams(content []byte, source string) []streamData {
 	lines := strings.Split(string(content), "\n")
-	var channels []Channel
+	var streams []streamData
 
 	for i := 0; i < len(lines); i++ {
 		line := strings.TrimSpace(lines[i])
@@ -94,7 +113,7 @@ func parseM3UChannels(content []byte, source string) []Channel {
 						// Extract metadata attributes
 						tvgID, tvgLogo, groupTitle := extractMetadata(metadata)
 
-						channels = append(channels, Channel{
+						streams = append(streams, streamData{
 							AcestreamID: aceID,
 							Name:        name,
 							TvgID:       tvgID,
@@ -110,6 +129,77 @@ func parseM3UChannels(content []byte, source string) []Channel {
 		}
 	}
 
+	return streams
+}
+
+// isValidTvgID checks if a tvg-id is valid (not empty or whitespace-only)
+func isValidTvgID(tvgID string) bool {
+	return strings.TrimSpace(tvgID) != ""
+}
+
+// groupStreamsByTvgID groups streams by their tvg-id
+// Streams with empty/whitespace tvg-id are returned as individual channels
+func groupStreamsByTvgID(streams []streamData) []Channel {
+	var channels []Channel
+
+	// Group streams by valid tvg-id
+	grouped := make(map[string][]streamData)
+	var ungrouped []streamData
+
+	for _, stream := range streams {
+		if isValidTvgID(stream.TvgID) {
+			grouped[stream.TvgID] = append(grouped[stream.TvgID], stream)
+		} else {
+			ungrouped = append(ungrouped, stream)
+		}
+	}
+
+	// Create channels from grouped streams
+	for tvgID, streamList := range grouped {
+		// Use first stream's metadata for the channel
+		first := streamList[0]
+
+		var streamObjs []Stream
+		for _, s := range streamList {
+			streamObjs = append(streamObjs, Stream{
+				AcestreamID: s.AcestreamID,
+				Name:        s.Name,
+				TvgName:     s.TvgName,
+				Source:      s.Source,
+				Enabled:     s.Enabled,
+				HasOverride: s.HasOverride,
+			})
+		}
+
+		channels = append(channels, Channel{
+			Name:       first.Name,
+			TvgID:      tvgID,
+			TvgLogo:    first.TvgLogo,
+			GroupTitle: first.GroupTitle,
+			Streams:    streamObjs,
+		})
+	}
+
+	// Create individual channels for ungrouped streams
+	for _, stream := range ungrouped {
+		channels = append(channels, Channel{
+			Name:       stream.Name,
+			TvgID:      stream.TvgID,
+			TvgLogo:    stream.TvgLogo,
+			GroupTitle: stream.GroupTitle,
+			Streams: []Stream{
+				{
+					AcestreamID: stream.AcestreamID,
+					Name:        stream.Name,
+					TvgName:     stream.TvgName,
+					Source:      stream.Source,
+					Enabled:     stream.Enabled,
+					HasOverride: stream.HasOverride,
+				},
+			},
+		})
+	}
+
 	return channels
 }
 
@@ -119,44 +209,41 @@ func applyOverrides(channels []Channel, overridesMgr *overrides.Manager) []Chann
 
 	for i := range channels {
 		ch := &channels[i]
-		if override, exists := allOverrides[ch.AcestreamID]; exists {
-			ch.HasOverride = true
 
-			// Apply overrides if they are set (not nil)
-			if override.Enabled != nil {
-				ch.Enabled = *override.Enabled
+		// Apply overrides to each stream in the channel
+		for j := range ch.Streams {
+			stream := &ch.Streams[j]
+			if override, exists := allOverrides[stream.AcestreamID]; exists {
+				stream.HasOverride = true
+
+				// Apply overrides if they are set (not nil)
+				if override.Enabled != nil {
+					stream.Enabled = *override.Enabled
+				}
+				if override.TvgName != nil {
+					stream.TvgName = *override.TvgName
+				}
 			}
-			if override.TvgID != nil {
-				ch.TvgID = *override.TvgID
-			}
-			if override.TvgName != nil {
-				ch.TvgName = *override.TvgName
-			}
-			if override.TvgLogo != nil {
-				ch.TvgLogo = *override.TvgLogo
-			}
-			if override.GroupTitle != nil {
-				ch.GroupTitle = *override.GroupTitle
+		}
+
+		// Apply channel-level overrides from the first stream if it has overrides
+		if len(ch.Streams) > 0 {
+			firstStream := ch.Streams[0]
+			if override, exists := allOverrides[firstStream.AcestreamID]; exists {
+				if override.TvgID != nil {
+					ch.TvgID = *override.TvgID
+				}
+				if override.TvgLogo != nil {
+					ch.TvgLogo = *override.TvgLogo
+				}
+				if override.GroupTitle != nil {
+					ch.GroupTitle = *override.GroupTitle
+				}
 			}
 		}
 	}
 
 	return channels
-}
-
-// deduplicateChannels removes duplicate channels by acestream ID, keeping the first occurrence
-func deduplicateChannels(channels []Channel) []Channel {
-	seen := make(map[string]bool)
-	var result []Channel
-
-	for _, ch := range channels {
-		if !seen[ch.AcestreamID] {
-			seen[ch.AcestreamID] = true
-			result = append(result, ch)
-		}
-	}
-
-	return result
 }
 
 // filterChannels filters channels by name and/or group (case-insensitive substring match)
@@ -215,25 +302,25 @@ func (h *ChannelsHandler) handleList(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Parse channels from both sources
-	var allChannels []Channel
+	// Parse streams from both sources
+	var allStreams []streamData
 
 	if elcanoErr == nil {
-		elcanoChannels := parseM3UChannels(elcanoContent, "elcano")
-		allChannels = append(allChannels, elcanoChannels...)
+		elcanoStreams := parseM3UStreams(elcanoContent, "elcano")
+		allStreams = append(allStreams, elcanoStreams...)
 	} else {
 		log.Printf("Skipping elcano source: %v", elcanoErr)
 	}
 
 	if neweraErr == nil {
-		neweraChannels := parseM3UChannels(neweraContent, "newera")
-		allChannels = append(allChannels, neweraChannels...)
+		neweraStreams := parseM3UStreams(neweraContent, "newera")
+		allStreams = append(allStreams, neweraStreams...)
 	} else {
 		log.Printf("Skipping newera source: %v", neweraErr)
 	}
 
-	// Deduplicate channels by acestream ID
-	allChannels = deduplicateChannels(allChannels)
+	// Group streams by tvg-id into channels
+	allChannels := groupStreamsByTvgID(allStreams)
 
 	// Apply overrides
 	allChannels = applyOverrides(allChannels, h.overridesMgr)
@@ -316,30 +403,30 @@ func (h *ChannelsHandler) handleToggle(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Check if the acestream_id exists in any source
-	channelFound := false
+	streamFound := false
 
 	if elcanoErr == nil {
-		elcanoChannels := parseM3UChannels(elcanoContent, "elcano")
-		for _, ch := range elcanoChannels {
-			if ch.AcestreamID == acestreamID {
-				channelFound = true
+		elcanoStreams := parseM3UStreams(elcanoContent, "elcano")
+		for _, s := range elcanoStreams {
+			if s.AcestreamID == acestreamID {
+				streamFound = true
 				break
 			}
 		}
 	}
 
-	if !channelFound && neweraErr == nil {
-		neweraChannels := parseM3UChannels(neweraContent, "newera")
-		for _, ch := range neweraChannels {
-			if ch.AcestreamID == acestreamID {
-				channelFound = true
+	if !streamFound && neweraErr == nil {
+		neweraStreams := parseM3UStreams(neweraContent, "newera")
+		for _, s := range neweraStreams {
+			if s.AcestreamID == acestreamID {
+				streamFound = true
 				break
 			}
 		}
 	}
 
-	if !channelFound {
-		http.Error(w, "Channel not found", http.StatusNotFound)
+	if !streamFound {
+		http.Error(w, "Stream not found", http.StatusNotFound)
 		return
 	}
 
@@ -380,59 +467,58 @@ func (h *ChannelsHandler) handleToggle(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	log.Printf("Updated channel %s with overrides", acestreamID)
+	log.Printf("Updated stream %s with overrides", acestreamID)
 
-	// Return the updated channel
-	// Fetch channels again to get the updated state
-	var updatedChannel *Channel
+	// Return the updated stream wrapped in a response
+	var updatedStream *streamData
 
 	if elcanoErr == nil {
-		elcanoChannels := parseM3UChannels(elcanoContent, "elcano")
-		for _, ch := range elcanoChannels {
-			if ch.AcestreamID == acestreamID {
-				updatedChannel = &ch
+		elcanoStreams := parseM3UStreams(elcanoContent, "elcano")
+		for _, s := range elcanoStreams {
+			if s.AcestreamID == acestreamID {
+				updatedStream = &s
 				break
 			}
 		}
 	}
 
-	if updatedChannel == nil && neweraErr == nil {
-		neweraChannels := parseM3UChannels(neweraContent, "newera")
-		for _, ch := range neweraChannels {
-			if ch.AcestreamID == acestreamID {
-				updatedChannel = &ch
+	if updatedStream == nil && neweraErr == nil {
+		neweraStreams := parseM3UStreams(neweraContent, "newera")
+		for _, s := range neweraStreams {
+			if s.AcestreamID == acestreamID {
+				updatedStream = &s
 				break
 			}
 		}
 	}
 
-	// Apply all overrides to the channel
-	if updatedChannel != nil {
-		updatedChannel.HasOverride = true
+	// Apply all overrides to the stream
+	if updatedStream != nil {
+		updatedStream.HasOverride = true
 
 		if override.Enabled != nil {
-			updatedChannel.Enabled = *override.Enabled
+			updatedStream.Enabled = *override.Enabled
 		}
 		if override.TvgID != nil {
-			updatedChannel.TvgID = *override.TvgID
+			updatedStream.TvgID = *override.TvgID
 		}
 		if override.TvgName != nil {
-			updatedChannel.TvgName = *override.TvgName
+			updatedStream.TvgName = *override.TvgName
 		}
 		if override.TvgLogo != nil {
-			updatedChannel.TvgLogo = *override.TvgLogo
+			updatedStream.TvgLogo = *override.TvgLogo
 		}
 		if override.GroupTitle != nil {
-			updatedChannel.GroupTitle = *override.GroupTitle
+			updatedStream.GroupTitle = *override.GroupTitle
 		}
 	}
 
-	// Return the updated channel as JSON
+	// Return the updated stream as JSON
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
 
-	if err := json.NewEncoder(w).Encode(updatedChannel); err != nil {
-		log.Printf("Failed to encode channel response: %v", err)
+	if err := json.NewEncoder(w).Encode(updatedStream); err != nil {
+		log.Printf("Failed to encode stream response: %v", err)
 	}
 }
 
@@ -477,33 +563,33 @@ func (h *ChannelsHandler) handleDelete(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Check if the acestream_id exists in any source
-	channelFound := false
-	var originalChannel *Channel
+	streamFound := false
+	var originalStream *streamData
 
 	if elcanoErr == nil {
-		elcanoChannels := parseM3UChannels(elcanoContent, "elcano")
-		for _, ch := range elcanoChannels {
-			if ch.AcestreamID == acestreamID {
-				channelFound = true
-				originalChannel = &ch
+		elcanoStreams := parseM3UStreams(elcanoContent, "elcano")
+		for _, s := range elcanoStreams {
+			if s.AcestreamID == acestreamID {
+				streamFound = true
+				originalStream = &s
 				break
 			}
 		}
 	}
 
-	if !channelFound && neweraErr == nil {
-		neweraChannels := parseM3UChannels(neweraContent, "newera")
-		for _, ch := range neweraChannels {
-			if ch.AcestreamID == acestreamID {
-				channelFound = true
-				originalChannel = &ch
+	if !streamFound && neweraErr == nil {
+		neweraStreams := parseM3UStreams(neweraContent, "newera")
+		for _, s := range neweraStreams {
+			if s.AcestreamID == acestreamID {
+				streamFound = true
+				originalStream = &s
 				break
 			}
 		}
 	}
 
-	if !channelFound {
-		http.Error(w, "Channel not found", http.StatusNotFound)
+	if !streamFound {
+		http.Error(w, "Stream not found", http.StatusNotFound)
 		return
 	}
 
@@ -514,15 +600,15 @@ func (h *ChannelsHandler) handleDelete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	log.Printf("Deleted override for channel %s", acestreamID)
+	log.Printf("Deleted override for stream %s", acestreamID)
 
-	// Return the channel in its original state (without override)
-	originalChannel.HasOverride = false
+	// Return the stream in its original state (without override)
+	originalStream.HasOverride = false
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
 
-	if err := json.NewEncoder(w).Encode(originalChannel); err != nil {
-		log.Printf("Failed to encode channel response: %v", err)
+	if err := json.NewEncoder(w).Encode(originalStream); err != nil {
+		log.Printf("Failed to encode stream response: %v", err)
 	}
 }

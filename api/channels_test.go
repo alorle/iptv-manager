@@ -98,23 +98,23 @@ func TestDeleteOverride_Success(t *testing.T) {
 	}
 
 	// Verify response body
-	var channel Channel
-	if err := json.NewDecoder(w.Body).Decode(&channel); err != nil {
+	var stream streamData
+	if err := json.NewDecoder(w.Body).Decode(&stream); err != nil {
 		t.Fatalf("Failed to decode response: %v", err)
 	}
 
-	// Check that channel is returned in original state
-	if channel.HasOverride {
+	// Check that stream is returned in original state
+	if stream.HasOverride {
 		t.Error("Expected HasOverride to be false")
 	}
-	if channel.AcestreamID != acestreamID {
-		t.Errorf("Expected acestream_id %s, got %s", acestreamID, channel.AcestreamID)
+	if stream.AcestreamID != acestreamID {
+		t.Errorf("Expected acestream_id %s, got %s", acestreamID, stream.AcestreamID)
 	}
-	if channel.Name != "Test Channel 1" {
-		t.Errorf("Expected original name 'Test Channel 1', got %s", channel.Name)
+	if stream.Name != "Test Channel 1" {
+		t.Errorf("Expected original name 'Test Channel 1', got %s", stream.Name)
 	}
-	if !channel.Enabled {
-		t.Error("Expected channel to be enabled (original state)")
+	if !stream.Enabled {
+		t.Error("Expected stream to be enabled (original state)")
 	}
 
 	// Verify override was deleted from manager
@@ -221,8 +221,8 @@ func TestDeleteOverride_ChannelNotFound(t *testing.T) {
 	}
 
 	body := w.Body.String()
-	if body != "Channel not found\n" {
-		t.Errorf("Expected 'Channel not found' error, got: %s", body)
+	if body != "Stream not found\n" {
+		t.Errorf("Expected 'Stream not found' error, got: %s", body)
 	}
 }
 

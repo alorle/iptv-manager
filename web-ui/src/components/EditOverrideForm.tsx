@@ -24,9 +24,12 @@ interface CustomAttribute {
 }
 
 export function EditOverrideForm({ channel, onClose, onSave, toast }: EditOverrideFormProps) {
-  const [enabled, setEnabled] = useState<boolean>(channel.enabled)
+  // Extract the first (and only) stream from the channel
+  const stream = channel.streams[0]
+
+  const [enabled, setEnabled] = useState<boolean>(stream.enabled)
   const [tvgId, setTvgId] = useState<string>(channel.tvg_id)
-  const [tvgName, setTvgName] = useState<string>(channel.tvg_name)
+  const [tvgName, setTvgName] = useState<string>(stream.tvg_name)
   const [tvgLogo, setTvgLogo] = useState<string>(channel.tvg_logo)
   const [groupTitle, setGroupTitle] = useState<string>(channel.group_title)
   const [customAttributes, setCustomAttributes] = useState<CustomAttribute[]>([])
@@ -136,7 +139,7 @@ export function EditOverrideForm({ channel, onClose, onSave, toast }: EditOverri
       // Build override object with only changed fields
       const override: Record<string, unknown> = {}
 
-      if (enabled !== channel.enabled) {
+      if (enabled !== stream.enabled) {
         override.enabled = enabled
       }
 
@@ -144,7 +147,7 @@ export function EditOverrideForm({ channel, onClose, onSave, toast }: EditOverri
         override.tvg_id = tvgId.trim() || null
       }
 
-      if (tvgName.trim() !== channel.tvg_name) {
+      if (tvgName.trim() !== stream.tvg_name) {
         override.tvg_name = tvgName.trim() || null
       }
 
@@ -170,7 +173,7 @@ export function EditOverrideForm({ channel, onClose, onSave, toast }: EditOverri
         }
       }
 
-      await updateOverride(channel.acestream_id, override, forceCheck)
+      await updateOverride(stream.acestream_id, override, forceCheck)
       toast.success('Channel override saved successfully')
       onSave()
     } catch (err) {
@@ -201,7 +204,7 @@ export function EditOverrideForm({ channel, onClose, onSave, toast }: EditOverri
     setSaving(true)
 
     try {
-      await deleteOverride(channel.acestream_id)
+      await deleteOverride(stream.acestream_id)
       toast.success('Channel override deleted successfully')
       onSave()
     } catch (err) {
@@ -245,8 +248,8 @@ export function EditOverrideForm({ channel, onClose, onSave, toast }: EditOverri
 
         <div className="form-content">
           <div className="channel-info">
-            <h3>{channel.name}</h3>
-            <p className="acestream-id">ID: {channel.acestream_id}</p>
+            <h3>{stream.name}</h3>
+            <p className="acestream-id">ID: {stream.acestream_id}</p>
           </div>
 
           {validationError && <div className="error-message">{validationError}</div>}
@@ -299,7 +302,7 @@ export function EditOverrideForm({ channel, onClose, onSave, toast }: EditOverri
               type="text"
               value={tvgName}
               onChange={(e) => setTvgName(e.target.value)}
-              placeholder={channel.tvg_name || 'Original TVG-Name'}
+              placeholder={stream.tvg_name || 'Original TVG-Name'}
             />
           </div>
 
@@ -394,7 +397,7 @@ export function EditOverrideForm({ channel, onClose, onSave, toast }: EditOverri
           <button className="cancel-button" onClick={onClose} disabled={saving}>
             Cancel
           </button>
-          {channel.has_override && (
+          {stream.has_override && (
             <button
               className="delete-button"
               onClick={() => setShowDeleteConfirm(true)}
@@ -409,7 +412,7 @@ export function EditOverrideForm({ channel, onClose, onSave, toast }: EditOverri
       {showDeleteConfirm && (
         <ConfirmDialog
           title="Delete Channel Override"
-          message={`Are you sure you want to delete the override for "${channel.name}"? This action cannot be undone.`}
+          message={`Are you sure you want to delete the override for "${stream.name}"? This action cannot be undone.`}
           confirmText="Delete"
           cancelText="Cancel"
           confirmVariant="danger"
