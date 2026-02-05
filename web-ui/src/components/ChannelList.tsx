@@ -285,7 +285,13 @@ export function ChannelList({ onChannelSelect, refreshTrigger, toast }: ChannelL
             {filteredChannels.length === 0 ? (
               <tr>
                 <td colSpan={5} className="empty-state">
-                  No channels found
+                  {enabledFilter === 'enabled' && channels.length > 0
+                    ? 'No channels with enabled streams found'
+                    : enabledFilter === 'disabled' && channels.length > 0
+                      ? 'No channels with all streams disabled found'
+                      : searchText || groupFilter
+                        ? 'No channels match the current filters'
+                        : 'No channels found'}
                 </td>
               </tr>
             ) : (
@@ -394,11 +400,21 @@ export function ChannelList({ onChannelSelect, refreshTrigger, toast }: ChannelL
                         <span className="group-badge">{channel.group_title}</span>
                       </td>
                       <td className="stream-count-cell">
-                        {channel.streams.length > 1 ? (
-                          <span className="stream-count">{channel.streams.length} streams</span>
-                        ) : (
-                          <span className="stream-count single">1 stream</span>
-                        )}
+                        {(() => {
+                          const enabledCount = channel.streams.filter((s) => s.enabled).length
+                          const totalCount = channel.streams.length
+                          if (totalCount === 1) {
+                            return <span className="stream-count single">1 stream</span>
+                          }
+                          if (enabledFilter !== 'all' && enabledCount !== totalCount) {
+                            return (
+                              <span className="stream-count">
+                                {enabledCount}/{totalCount} streams
+                              </span>
+                            )
+                          }
+                          return <span className="stream-count">{totalCount} streams</span>
+                        })()}
                       </td>
                     </tr>
                     {isExpanded && (
