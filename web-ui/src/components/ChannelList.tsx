@@ -14,10 +14,13 @@ interface ChannelListProps {
   toast: ReturnType<typeof useToast>
 }
 
+type EnabledFilter = 'all' | 'enabled' | 'disabled'
+
 export function ChannelList({ onChannelSelect, refreshTrigger, toast }: ChannelListProps) {
   const { channels, loading, error, refetch } = useChannels(refreshTrigger)
   const [searchText, setSearchText] = useState('')
   const [groupFilter, setGroupFilter] = useState('')
+  const [enabledFilter, setEnabledFilter] = useState<EnabledFilter>('enabled')
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
   const [showBulkEditModal, setShowBulkEditModal] = useState(false)
 
@@ -27,7 +30,7 @@ export function ChannelList({ onChannelSelect, refreshTrigger, toast }: ChannelL
     return Array.from(groups).sort()
   }, [channels])
 
-  // Filter channels based on search and group filter
+  // Filter channels based on search, group filter, and enabled filter
   const filteredChannels = useMemo(() => {
     return channels.filter((channel) => {
       const matchesSearch =
@@ -35,9 +38,14 @@ export function ChannelList({ onChannelSelect, refreshTrigger, toast }: ChannelL
 
       const matchesGroup = groupFilter === '' || channel.group_title === groupFilter
 
-      return matchesSearch && matchesGroup
+      const matchesEnabled =
+        enabledFilter === 'all' ||
+        (enabledFilter === 'enabled' && channel.enabled) ||
+        (enabledFilter === 'disabled' && !channel.enabled)
+
+      return matchesSearch && matchesGroup && matchesEnabled
     })
-  }, [channels, searchText, groupFilter])
+  }, [channels, searchText, groupFilter, enabledFilter])
 
   // Handle select all checkbox
   const handleSelectAll = (checked: boolean) => {
@@ -145,6 +153,32 @@ export function ChannelList({ onChannelSelect, refreshTrigger, toast }: ChannelL
               </option>
             ))}
           </select>
+          <div className="enabled-filter" role="group" aria-label="Filter by enabled status">
+            <button
+              type="button"
+              className={`filter-button ${enabledFilter === 'all' ? 'active' : ''}`}
+              onClick={() => setEnabledFilter('all')}
+              aria-pressed={enabledFilter === 'all'}
+            >
+              All
+            </button>
+            <button
+              type="button"
+              className={`filter-button ${enabledFilter === 'enabled' ? 'active' : ''}`}
+              onClick={() => setEnabledFilter('enabled')}
+              aria-pressed={enabledFilter === 'enabled'}
+            >
+              Enabled
+            </button>
+            <button
+              type="button"
+              className={`filter-button ${enabledFilter === 'disabled' ? 'active' : ''}`}
+              onClick={() => setEnabledFilter('disabled')}
+              aria-pressed={enabledFilter === 'disabled'}
+            >
+              Disabled
+            </button>
+          </div>
         </div>
         {selectedIds.size > 0 && (
           <div className="bulk-actions" role="toolbar" aria-label="Bulk actions">
