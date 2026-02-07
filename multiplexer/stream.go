@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"io"
-	"log"
 	"net/http"
 	"sync"
 	"time"
@@ -141,8 +140,16 @@ func NewStream(contentID string, cb circuitbreaker.CircuitBreaker, httpClient *h
 func (s *Stream) AddClient(client *Client) {
 	s.mu.Lock()
 	s.Clients[client.ID] = client
-	log.Printf("Stream %s: Added client %s (total clients: %d)", s.ContentID, client.ID, len(s.Clients))
+	clientCount := len(s.Clients)
 	s.mu.Unlock()
+
+	if s.resLogger != nil {
+		s.resLogger.Info("Added client to stream", map[string]interface{}{
+			"content_id":   s.ContentID,
+			"client_id":    client.ID,
+			"total_clients": clientCount,
+		})
+	}
 
 	// Update metrics through multiplexer
 	if s.mux != nil {
@@ -158,10 +165,23 @@ func (s *Stream) RemoveClient(clientID string) int {
 	if client, exists := s.Clients[clientID]; exists {
 		client.Close()
 		delete(s.Clients, clientID)
-		log.Printf("Stream %s: Removed client %s (remaining clients: %d)", s.ContentID, clientID, len(s.Clients))
+		remaining := len(s.Clients)
+		s.mu.Unlock()
+
+		if s.resLogger != nil {
+			s.resLogger.Info("Removed client from stream", map[string]interface{}{
+				"content_id":        s.ContentID,
+				"client_id":         clientID,
+				"remaining_clients": remaining,
+			})
+		}
+	} else {
+		s.mu.Unlock()
 	}
+
+	s.mu.RLock()
 	remaining := len(s.Clients)
-	s.mu.Unlock()
+	s.mu.RUnlock()
 
 	// Update metrics through multiplexer
 	if s.mux != nil {
@@ -198,12 +218,24 @@ func (s *Stream) sendBufferToClient(client *Client, contentID string) bool {
 		chunk := bufferedData[i:end]
 
 		if err := client.Send(chunk); err != nil {
-			log.Printf("Stream %s: Failed to send buffered data to client %s: %v", contentID, client.ID, err)
+			if s.resLogger != nil {
+				s.resLogger.Warn("Failed to send buffered data to client", map[string]interface{}{
+					"content_id": contentID,
+					"client_id":  client.ID,
+					"error":      err.Error(),
+				})
+			}
 			return false
 		}
 	}
 
-	log.Printf("Stream %s: Sent %d bytes of buffered data to new client %s", contentID, len(bufferedData), client.ID)
+	if s.resLogger != nil {
+		s.resLogger.Info("Sent buffered data to new client", map[string]interface{}{
+			"content_id": contentID,
+			"client_id":  client.ID,
+			"bytes":      len(bufferedData),
+		})
+	}
 	return true
 }
 
@@ -242,7 +274,8 @@ func (s *Stream) distributeData(data []byte) {
 		go func(c *Client) {
 			defer wg.Done()
 			if err := c.Send(data); err != nil {
-				log.Printf("Stream %s: Failed to send to client %s: %v", s.ContentID, c.ID, err)
+				// Client send errors are expected (slow clients, disconnects)
+				// Only log at debug level to avoid spam
 				c.Close()
 			}
 		}(client)

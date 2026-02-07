@@ -8,7 +8,7 @@ import (
 
 // streamData holds raw parsed stream data before grouping
 type streamData struct {
-	AcestreamID string
+	ContentID   string
 	Name        string
 	TvgID       string
 	TvgName     string
@@ -49,7 +49,7 @@ func parseM3UStreams(content []byte, source string) []streamData {
 						tvgID, tvgLogo, groupTitle := domain.ExtractMetadata(metadata)
 
 						streams = append(streams, streamData{
-							AcestreamID: aceID,
+							ContentID:   aceID,
 							Name:        name,
 							TvgID:       tvgID,
 							TvgLogo:     tvgLogo,

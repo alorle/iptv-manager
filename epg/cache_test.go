@@ -7,7 +7,13 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/alorle/iptv-manager/logging"
 )
+
+func newTestLogger() *logging.Logger {
+	return logging.New(logging.INFO, "[test]")
+}
 
 // mockEPGXML provides sample EPG XML for testing
 const mockEPGXML = `<?xml version="1.0" encoding="UTF-8"?>
@@ -39,7 +45,7 @@ func TestNew_Success(t *testing.T) {
 	defer server.Close()
 
 	// Create cache with mock server URL
-	cache, err := New(server.URL, 5*time.Second)
+	cache, err := New(server.URL, 5*time.Second, newTestLogger())
 	if err != nil {
 		t.Fatalf("Expected no error, got: %v", err)
 	}
@@ -57,7 +63,7 @@ func TestNew_Success(t *testing.T) {
 
 func TestNew_EmptyURL(t *testing.T) {
 	// Test that empty URL returns an error
-	_, err := New("", 5*time.Second)
+	_, err := New("", 5*time.Second, newTestLogger())
 	if err == nil {
 		t.Error("Expected error when URL is empty, got nil")
 	}
@@ -74,7 +80,7 @@ func TestNew_HTTPError(t *testing.T) {
 	defer server.Close()
 
 	// Create cache with mock server URL
-	_, err := New(server.URL, 5*time.Second)
+	_, err := New(server.URL, 5*time.Second, newTestLogger())
 	if err == nil {
 		t.Fatal("Expected error, got nil")
 	}
@@ -90,7 +96,7 @@ func TestNew_InvalidXML(t *testing.T) {
 	defer server.Close()
 
 	// Create cache with mock server URL
-	_, err := New(server.URL, 5*time.Second)
+	_, err := New(server.URL, 5*time.Second, newTestLogger())
 	if err == nil {
 		t.Fatal("Expected error for invalid XML, got nil")
 	}
@@ -106,7 +112,7 @@ func TestNew_Timeout(t *testing.T) {
 	defer server.Close()
 
 	// Create cache with very short timeout
-	_, err := New(server.URL, 100*time.Millisecond)
+	_, err := New(server.URL, 100*time.Millisecond, newTestLogger())
 	if err == nil {
 		t.Fatal("Expected timeout error, got nil")
 	}
@@ -120,7 +126,7 @@ func TestIsValid(t *testing.T) {
 	}))
 	defer server.Close()
 
-	cache, err := New(server.URL, 5*time.Second)
+	cache, err := New(server.URL, 5*time.Second, newTestLogger())
 	if err != nil {
 		t.Fatalf("Failed to create cache: %v", err)
 	}
@@ -157,7 +163,7 @@ func TestGetChannelInfo(t *testing.T) {
 	}))
 	defer server.Close()
 
-	cache, err := New(server.URL, 5*time.Second)
+	cache, err := New(server.URL, 5*time.Second, newTestLogger())
 	if err != nil {
 		t.Fatalf("Failed to create cache: %v", err)
 	}
@@ -189,7 +195,7 @@ func TestSearch(t *testing.T) {
 	}))
 	defer server.Close()
 
-	cache, err := New(server.URL, 5*time.Second)
+	cache, err := New(server.URL, 5*time.Second, newTestLogger())
 	if err != nil {
 		t.Fatalf("Failed to create cache: %v", err)
 	}
@@ -277,7 +283,7 @@ func TestSearch_MaxResults(t *testing.T) {
 	}))
 	defer server.Close()
 
-	cache, err := New(server.URL, 5*time.Second)
+	cache, err := New(server.URL, 5*time.Second, newTestLogger())
 	if err != nil {
 		t.Fatalf("Failed to create cache: %v", err)
 	}
@@ -297,7 +303,7 @@ func TestCount(t *testing.T) {
 	}))
 	defer server.Close()
 
-	cache, err := New(server.URL, 5*time.Second)
+	cache, err := New(server.URL, 5*time.Second, newTestLogger())
 	if err != nil {
 		t.Fatalf("Failed to create cache: %v", err)
 	}
@@ -316,7 +322,7 @@ func TestSearch_CaseInsensitive(t *testing.T) {
 	}))
 	defer server.Close()
 
-	cache, err := New(server.URL, 5*time.Second)
+	cache, err := New(server.URL, 5*time.Second, newTestLogger())
 	if err != nil {
 		t.Fatalf("Failed to create cache: %v", err)
 	}

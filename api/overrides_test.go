@@ -3,6 +3,7 @@ package api
 import (
 	"bytes"
 	"encoding/json"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -10,6 +11,7 @@ import (
 	"testing"
 
 	"github.com/alorle/iptv-manager/domain"
+	"github.com/alorle/iptv-manager/logging"
 	"github.com/alorle/iptv-manager/overrides"
 )
 
@@ -23,6 +25,9 @@ const (
 func createTestOverridesManager(t *testing.T) (overrides.Interface, func()) {
 	t.Helper()
 
+	// Create test logger
+	logger := logging.New(logging.INFO, "[test]")
+
 	// Create temporary directory
 	tmpDir, err := os.MkdirTemp("", "overrides-test-*")
 	if err != nil {
@@ -31,7 +36,7 @@ func createTestOverridesManager(t *testing.T) (overrides.Interface, func()) {
 
 	// Create overrides manager
 	overridesPath := filepath.Join(tmpDir, "overrides.yaml")
-	mgr, err := overrides.NewManager(overridesPath)
+	mgr, err := overrides.NewManager(overridesPath, logger)
 	if err != nil {
 		_ = os.RemoveAll(tmpDir)
 		t.Fatalf("Failed to create overrides manager: %v", err)
@@ -50,18 +55,19 @@ func TestOverridesHandler_Get_Success(t *testing.T) {
 	defer cleanup()
 
 	// Create a test override
-	acestreamID := testAcestreamID
+	contentID := testAcestreamID
 	tvgID := testTvgIDLa1
 	override := overrides.ChannelOverride{
 		TvgID: &tvgID,
 	}
-	if err := mgr.Set(acestreamID, override); err != nil {
+	if err := mgr.Set(contentID, override); err != nil {
 		t.Fatalf("Failed to set override: %v", err)
 	}
 
-	handler := NewOverridesHandler(mgr, nil)
+	logger := logging.NewWithWriter(logging.INFO, "test", io.Discard)
+	handler := NewOverridesHandler(mgr, nil, logger)
 
-	req := httptest.NewRequest(http.MethodGet, "/api/overrides/"+acestreamID, nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/overrides/"+contentID, nil)
 	w := httptest.NewRecorder()
 
 	handler.ServeHTTP(w, req)
@@ -75,8 +81,8 @@ func TestOverridesHandler_Get_Success(t *testing.T) {
 		t.Fatalf("Failed to decode response: %v", err)
 	}
 
-	if resp.AcestreamID != acestreamID {
-		t.Errorf("Expected acestream_id=%s, got %s", acestreamID, resp.AcestreamID)
+	if resp.ContentID != contentID {
+		t.Errorf("Expected content_id=%s, got %s", contentID, resp.ContentID)
 	}
 
 	if resp.Override == nil || resp.Override.TvgID == nil || *resp.Override.TvgID != tvgID {
@@ -88,10 +94,11 @@ func TestOverridesHandler_Get_NotFound(t *testing.T) {
 	mgr, cleanup := createTestOverridesManager(t)
 	defer cleanup()
 
-	handler := NewOverridesHandler(mgr, nil)
+	logger := logging.NewWithWriter(logging.INFO, "test", io.Discard)
+	handler := NewOverridesHandler(mgr, nil, logger)
 
-	acestreamID := testAcestreamID
-	req := httptest.NewRequest(http.MethodGet, "/api/overrides/"+acestreamID, nil)
+	contentID := testAcestreamID
+	req := httptest.NewRequest(http.MethodGet, "/api/overrides/"+contentID, nil)
 	w := httptest.NewRecorder()
 
 	handler.ServeHTTP(w, req)
@@ -105,7 +112,8 @@ func TestOverridesHandler_Get_InvalidID(t *testing.T) {
 	mgr, cleanup := createTestOverridesManager(t)
 	defer cleanup()
 
-	handler := NewOverridesHandler(mgr, nil)
+	logger := logging.NewWithWriter(logging.INFO, "test", io.Discard)
+	handler := NewOverridesHandler(mgr, nil, logger)
 
 	req := httptest.NewRequest(http.MethodGet, "/api/overrides/invalid", nil)
 	w := httptest.NewRecorder()
@@ -121,16 +129,17 @@ func TestOverridesHandler_Put_Create(t *testing.T) {
 	mgr, cleanup := createTestOverridesManager(t)
 	defer cleanup()
 
-	handler := NewOverridesHandler(mgr, nil)
+	logger := logging.NewWithWriter(logging.INFO, "test", io.Discard)
+	handler := NewOverridesHandler(mgr, nil, logger)
 
-	acestreamID := testAcestreamID
+	contentID := testAcestreamID
 	tvgID := testTvgIDLa1
 	override := overrides.ChannelOverride{
 		TvgID: &tvgID,
 	}
 
 	body, _ := json.Marshal(override)
-	req := httptest.NewRequest(http.MethodPut, "/api/overrides/"+acestreamID, bytes.NewReader(body))
+	req := httptest.NewRequest(http.MethodPut, "/api/overrides/"+contentID, bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
 
@@ -141,7 +150,7 @@ func TestOverridesHandler_Put_Create(t *testing.T) {
 	}
 
 	// Verify it was saved
-	saved := mgr.Get(acestreamID)
+	saved := mgr.Get(contentID)
 	if saved == nil || saved.TvgID == nil || *saved.TvgID != tvgID {
 		t.Errorf("Override was not saved correctly")
 	}
@@ -151,16 +160,17 @@ func TestOverridesHandler_Put_Update(t *testing.T) {
 	mgr, cleanup := createTestOverridesManager(t)
 	defer cleanup()
 
-	acestreamID := testAcestreamID
+	contentID := testAcestreamID
 	tvgID1 := testTvgIDLa1
 	override1 := overrides.ChannelOverride{
 		TvgID: &tvgID1,
 	}
-	if err := mgr.Set(acestreamID, override1); err != nil {
+	if err := mgr.Set(contentID, override1); err != nil {
 		t.Fatalf("Failed to set initial override: %v", err)
 	}
 
-	handler := NewOverridesHandler(mgr, nil)
+	logger := logging.NewWithWriter(logging.INFO, "test", io.Discard)
+	handler := NewOverridesHandler(mgr, nil, logger)
 
 	tvgID2 := testTvgIDLa2
 	override2 := overrides.ChannelOverride{
@@ -168,7 +178,7 @@ func TestOverridesHandler_Put_Update(t *testing.T) {
 	}
 
 	body, _ := json.Marshal(override2)
-	req := httptest.NewRequest(http.MethodPut, "/api/overrides/"+acestreamID, bytes.NewReader(body))
+	req := httptest.NewRequest(http.MethodPut, "/api/overrides/"+contentID, bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
 
@@ -179,7 +189,7 @@ func TestOverridesHandler_Put_Update(t *testing.T) {
 	}
 
 	// Verify it was updated
-	saved := mgr.Get(acestreamID)
+	saved := mgr.Get(contentID)
 	if saved == nil || saved.TvgID == nil || *saved.TvgID != tvgID2 {
 		t.Errorf("Override was not updated correctly")
 	}
@@ -190,16 +200,17 @@ func TestOverridesHandler_Put_WithValidation_Valid(t *testing.T) {
 	defer cleanup()
 
 	cache := newMockEPGCache()
-	handler := NewOverridesHandler(mgr, cache)
+	logger := logging.NewWithWriter(logging.INFO, "test", io.Discard)
+	handler := NewOverridesHandler(mgr, cache, logger)
 
-	acestreamID := testAcestreamID
+	contentID := testAcestreamID
 	tvgID := testTvgIDLa1
 	override := overrides.ChannelOverride{
 		TvgID: &tvgID,
 	}
 
 	body, _ := json.Marshal(override)
-	req := httptest.NewRequest(http.MethodPut, "/api/overrides/"+acestreamID, bytes.NewReader(body))
+	req := httptest.NewRequest(http.MethodPut, "/api/overrides/"+contentID, bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
 
@@ -215,16 +226,17 @@ func TestOverridesHandler_Put_WithValidation_Invalid(t *testing.T) {
 	defer cleanup()
 
 	cache := newMockEPGCache()
-	handler := NewOverridesHandler(mgr, cache)
+	logger := logging.NewWithWriter(logging.INFO, "test", io.Discard)
+	handler := NewOverridesHandler(mgr, cache, logger)
 
-	acestreamID := testAcestreamID
+	contentID := testAcestreamID
 	tvgID := "InvalidChannel.TV"
 	override := overrides.ChannelOverride{
 		TvgID: &tvgID,
 	}
 
 	body, _ := json.Marshal(override)
-	req := httptest.NewRequest(http.MethodPut, "/api/overrides/"+acestreamID, bytes.NewReader(body))
+	req := httptest.NewRequest(http.MethodPut, "/api/overrides/"+contentID, bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
 
@@ -257,16 +269,17 @@ func TestOverridesHandler_Put_WithValidation_Force(t *testing.T) {
 	defer cleanup()
 
 	cache := newMockEPGCache()
-	handler := NewOverridesHandler(mgr, cache)
+	logger := logging.NewWithWriter(logging.INFO, "test", io.Discard)
+	handler := NewOverridesHandler(mgr, cache, logger)
 
-	acestreamID := testAcestreamID
+	contentID := testAcestreamID
 	tvgID := "InvalidChannel.TV"
 	override := overrides.ChannelOverride{
 		TvgID: &tvgID,
 	}
 
 	body, _ := json.Marshal(override)
-	req := httptest.NewRequest(http.MethodPut, "/api/overrides/"+acestreamID+"?force=true", bytes.NewReader(body))
+	req := httptest.NewRequest(http.MethodPut, "/api/overrides/"+contentID+"?force=true", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
 
@@ -277,7 +290,7 @@ func TestOverridesHandler_Put_WithValidation_Force(t *testing.T) {
 	}
 
 	// Verify it was saved despite invalid TVG-ID
-	saved := mgr.Get(acestreamID)
+	saved := mgr.Get(contentID)
 	if saved == nil || saved.TvgID == nil || *saved.TvgID != tvgID {
 		t.Errorf("Override was not saved with force=true")
 	}
@@ -288,16 +301,17 @@ func TestOverridesHandler_Put_EmptyTvgID(t *testing.T) {
 	defer cleanup()
 
 	cache := newMockEPGCache()
-	handler := NewOverridesHandler(mgr, cache)
+	logger := logging.NewWithWriter(logging.INFO, "test", io.Discard)
+	handler := NewOverridesHandler(mgr, cache, logger)
 
-	acestreamID := testAcestreamID
+	contentID := testAcestreamID
 	tvgID := ""
 	override := overrides.ChannelOverride{
 		TvgID: &tvgID,
 	}
 
 	body, _ := json.Marshal(override)
-	req := httptest.NewRequest(http.MethodPut, "/api/overrides/"+acestreamID, bytes.NewReader(body))
+	req := httptest.NewRequest(http.MethodPut, "/api/overrides/"+contentID, bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
 
@@ -312,9 +326,10 @@ func TestOverridesHandler_Put_AllAttributes(t *testing.T) {
 	mgr, cleanup := createTestOverridesManager(t)
 	defer cleanup()
 
-	handler := NewOverridesHandler(mgr, nil)
+	logger := logging.NewWithWriter(logging.INFO, "test", io.Discard)
+	handler := NewOverridesHandler(mgr, nil, logger)
 
-	acestreamID := testAcestreamID
+	contentID := testAcestreamID
 	enabled := false
 	tvgID := testTvgIDLa1
 	tvgName := "La 1"
@@ -330,7 +345,7 @@ func TestOverridesHandler_Put_AllAttributes(t *testing.T) {
 	}
 
 	body, _ := json.Marshal(override)
-	req := httptest.NewRequest(http.MethodPut, "/api/overrides/"+acestreamID, bytes.NewReader(body))
+	req := httptest.NewRequest(http.MethodPut, "/api/overrides/"+contentID, bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
 
@@ -341,7 +356,7 @@ func TestOverridesHandler_Put_AllAttributes(t *testing.T) {
 	}
 
 	// Verify all attributes were saved
-	saved := mgr.Get(acestreamID)
+	saved := mgr.Get(contentID)
 	if saved == nil {
 		t.Fatal("Override was not saved")
 	}
@@ -367,10 +382,11 @@ func TestOverridesHandler_Put_InvalidJSON(t *testing.T) {
 	mgr, cleanup := createTestOverridesManager(t)
 	defer cleanup()
 
-	handler := NewOverridesHandler(mgr, nil)
+	logger := logging.NewWithWriter(logging.INFO, "test", io.Discard)
+	handler := NewOverridesHandler(mgr, nil, logger)
 
-	acestreamID := testAcestreamID
-	req := httptest.NewRequest(http.MethodPut, "/api/overrides/"+acestreamID, bytes.NewReader([]byte("invalid json")))
+	contentID := testAcestreamID
+	req := httptest.NewRequest(http.MethodPut, "/api/overrides/"+contentID, bytes.NewReader([]byte("invalid json")))
 	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
 
@@ -386,18 +402,19 @@ func TestOverridesHandler_Delete_Success(t *testing.T) {
 	defer cleanup()
 
 	// Create a test override
-	acestreamID := testAcestreamID
+	contentID := testAcestreamID
 	tvgID := testTvgIDLa1
 	override := overrides.ChannelOverride{
 		TvgID: &tvgID,
 	}
-	if err := mgr.Set(acestreamID, override); err != nil {
+	if err := mgr.Set(contentID, override); err != nil {
 		t.Fatalf("Failed to set override: %v", err)
 	}
 
-	handler := NewOverridesHandler(mgr, nil)
+	logger := logging.NewWithWriter(logging.INFO, "test", io.Discard)
+	handler := NewOverridesHandler(mgr, nil, logger)
 
-	req := httptest.NewRequest(http.MethodDelete, "/api/overrides/"+acestreamID, nil)
+	req := httptest.NewRequest(http.MethodDelete, "/api/overrides/"+contentID, nil)
 	w := httptest.NewRecorder()
 
 	handler.ServeHTTP(w, req)
@@ -407,7 +424,7 @@ func TestOverridesHandler_Delete_Success(t *testing.T) {
 	}
 
 	// Verify it was deleted
-	if mgr.Get(acestreamID) != nil {
+	if mgr.Get(contentID) != nil {
 		t.Error("Override was not deleted")
 	}
 }
@@ -416,10 +433,11 @@ func TestOverridesHandler_Delete_NotFound(t *testing.T) {
 	mgr, cleanup := createTestOverridesManager(t)
 	defer cleanup()
 
-	handler := NewOverridesHandler(mgr, nil)
+	logger := logging.NewWithWriter(logging.INFO, "test", io.Discard)
+	handler := NewOverridesHandler(mgr, nil, logger)
 
-	acestreamID := testAcestreamID
-	req := httptest.NewRequest(http.MethodDelete, "/api/overrides/"+acestreamID, nil)
+	contentID := testAcestreamID
+	req := httptest.NewRequest(http.MethodDelete, "/api/overrides/"+contentID, nil)
 	w := httptest.NewRecorder()
 
 	handler.ServeHTTP(w, req)
@@ -433,7 +451,8 @@ func TestOverridesHandler_List_Empty(t *testing.T) {
 	mgr, cleanup := createTestOverridesManager(t)
 	defer cleanup()
 
-	handler := NewOverridesHandler(mgr, nil)
+	logger := logging.NewWithWriter(logging.INFO, "test", io.Discard)
+	handler := NewOverridesHandler(mgr, nil, logger)
 
 	req := httptest.NewRequest(http.MethodGet, "/api/overrides", nil)
 	w := httptest.NewRecorder()
@@ -475,7 +494,8 @@ func TestOverridesHandler_List_WithData(t *testing.T) {
 		t.Fatalf("Failed to set override2: %v", err)
 	}
 
-	handler := NewOverridesHandler(mgr, nil)
+	logger := logging.NewWithWriter(logging.INFO, "test", io.Discard)
+	handler := NewOverridesHandler(mgr, nil, logger)
 
 	req := httptest.NewRequest(http.MethodGet, "/api/overrides", nil)
 	w := httptest.NewRecorder()
@@ -498,7 +518,7 @@ func TestOverridesHandler_List_WithData(t *testing.T) {
 	// Verify both overrides are in the list
 	foundIDs := make(map[string]bool)
 	for _, item := range resp {
-		foundIDs[item.AcestreamID] = true
+		foundIDs[item.ContentID] = true
 	}
 
 	if !foundIDs[acestreamID1] {
@@ -513,7 +533,8 @@ func TestOverridesHandler_List_MethodNotAllowed(t *testing.T) {
 	mgr, cleanup := createTestOverridesManager(t)
 	defer cleanup()
 
-	handler := NewOverridesHandler(mgr, nil)
+	logger := logging.NewWithWriter(logging.INFO, "test", io.Discard)
+	handler := NewOverridesHandler(mgr, nil, logger)
 
 	req := httptest.NewRequest(http.MethodPost, "/api/overrides", nil)
 	w := httptest.NewRecorder()
@@ -543,7 +564,7 @@ func TestValidateAcestreamID(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := domain.IsValidAcestreamID(tt.id)
+			result := domain.IsValidContentID(tt.id)
 			if result != tt.expected {
 				t.Errorf("IsValidAcestreamID(%q) = %v, expected %v", tt.id, result, tt.expected)
 			}

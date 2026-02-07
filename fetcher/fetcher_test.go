@@ -8,7 +8,12 @@ import (
 	"time"
 
 	"github.com/alorle/iptv-manager/cache"
+	"github.com/alorle/iptv-manager/logging"
 )
+
+func newTestLogger() *logging.Logger {
+	return logging.New(logging.INFO, "[test]")
+}
 
 // mockStorage is a simple in-memory cache for testing
 type mockStorage struct {
@@ -50,7 +55,7 @@ func TestNew(t *testing.T) {
 	timeout := 10 * time.Second
 	cacheTTL := 1 * time.Hour
 
-	fetcherInterface := New(timeout, storage, cacheTTL)
+	fetcherInterface := New(timeout, storage, cacheTTL, newTestLogger())
 
 	if fetcherInterface == nil {
 		t.Fatal("Expected fetcher to be non-nil")
@@ -89,7 +94,7 @@ func TestFetchWithCacheFallback_SuccessfulFetch(t *testing.T) {
 	defer server.Close()
 
 	storage := newMockStorage()
-	fetcher := New(10*time.Second, storage, 1*time.Hour)
+	fetcher := New(10*time.Second, storage, 1*time.Hour, newTestLogger())
 
 	content, fromCache, err := fetcher.FetchWithCacheFallback(server.URL)
 
@@ -125,7 +130,7 @@ func TestFetchWithCacheFallback_FetchFailure_CacheFallback(t *testing.T) {
 	defer server.Close()
 
 	storage := newMockStorage()
-	fetcher := New(10*time.Second, storage, 1*time.Hour)
+	fetcher := New(10*time.Second, storage, 1*time.Hour, newTestLogger())
 
 	// Pre-populate cache with stale content
 	cacheKey := cache.DeriveKeyFromURL(server.URL)
@@ -155,7 +160,7 @@ func TestFetchWithCacheFallback_FetchFailure_NoCache(t *testing.T) {
 	defer server.Close()
 
 	storage := newMockStorage()
-	fetcher := New(10*time.Second, storage, 1*time.Hour)
+	fetcher := New(10*time.Second, storage, 1*time.Hour, newTestLogger())
 
 	content, fromCache, err := fetcher.FetchWithCacheFallback(server.URL)
 
@@ -188,7 +193,7 @@ func TestFetchWithCacheFallback_NetworkTimeout(t *testing.T) {
 
 	storage := newMockStorage()
 	// Set very short timeout to trigger timeout error
-	fetcher := New(50*time.Millisecond, storage, 1*time.Hour)
+	fetcher := New(50*time.Millisecond, storage, 1*time.Hour, newTestLogger())
 
 	// Pre-populate cache
 	cacheKey := cache.DeriveKeyFromURL(server.URL)
@@ -230,7 +235,7 @@ func TestFetchWithCacheFallback_Non200StatusCode(t *testing.T) {
 			defer server.Close()
 
 			storage := newMockStorage()
-			fetcher := New(10*time.Second, storage, 1*time.Hour)
+			fetcher := New(10*time.Second, storage, 1*time.Hour, newTestLogger())
 
 			// Pre-populate cache
 			cacheKey := cache.DeriveKeyFromURL(server.URL)
@@ -257,7 +262,7 @@ func TestFetchWithCacheFallback_Non200StatusCode(t *testing.T) {
 
 func TestIsExpired(t *testing.T) {
 	storage := newMockStorage()
-	fetcher := New(10*time.Second, storage, 1*time.Hour)
+	fetcher := New(10*time.Second, storage, 1*time.Hour, newTestLogger())
 
 	testURL := "http://example.com/test.m3u"
 	cacheKey := cache.DeriveKeyFromURL(testURL)
@@ -308,7 +313,7 @@ func TestFetchFromURL_LargeContent(t *testing.T) {
 	defer server.Close()
 
 	storage := newMockStorage()
-	fetcher := New(10*time.Second, storage, 1*time.Hour)
+	fetcher := New(10*time.Second, storage, 1*time.Hour, newTestLogger())
 
 	content, fromCache, err := fetcher.FetchWithCacheFallback(server.URL)
 
@@ -338,7 +343,7 @@ func TestFetchWithCache_FreshCache_ServeImmediately(t *testing.T) {
 	defer server.Close()
 
 	storage := newMockStorage()
-	fetcher := New(10*time.Second, storage, 1*time.Hour)
+	fetcher := New(10*time.Second, storage, 1*time.Hour, newTestLogger())
 
 	// Pre-populate cache with fresh content
 	cacheKey := cache.DeriveKeyFromURL(server.URL)
@@ -379,7 +384,7 @@ func TestFetchWithCache_ExpiredCache_FetchSuccess_UpdateCache(t *testing.T) {
 
 	storage := newMockStorage()
 	// Set very short TTL to make cache expire
-	fetcher := New(10*time.Second, storage, 10*time.Millisecond)
+	fetcher := New(10*time.Second, storage, 10*time.Millisecond, newTestLogger())
 
 	// Pre-populate cache with old content
 	cacheKey := cache.DeriveKeyFromURL(server.URL)
@@ -427,7 +432,7 @@ func TestFetchWithCache_ExpiredCache_FetchFail_ServeStale(t *testing.T) {
 
 	storage := newMockStorage()
 	// Set very short TTL to make cache expire
-	fetcher := New(10*time.Second, storage, 10*time.Millisecond)
+	fetcher := New(10*time.Second, storage, 10*time.Millisecond, newTestLogger())
 
 	// Pre-populate cache with old content
 	cacheKey := cache.DeriveKeyFromURL(server.URL)
@@ -466,7 +471,7 @@ func TestFetchWithCache_NoCache_FetchSuccess(t *testing.T) {
 	defer server.Close()
 
 	storage := newMockStorage()
-	fetcher := New(10*time.Second, storage, 1*time.Hour)
+	fetcher := New(10*time.Second, storage, 1*time.Hour, newTestLogger())
 
 	content, fromCache, isStale, err := fetcher.FetchWithCache(server.URL)
 
@@ -506,7 +511,7 @@ func TestFetchWithCache_NoCache_FetchFail(t *testing.T) {
 	defer server.Close()
 
 	storage := newMockStorage()
-	fetcher := New(10*time.Second, storage, 1*time.Hour)
+	fetcher := New(10*time.Second, storage, 1*time.Hour, newTestLogger())
 
 	content, fromCache, isStale, err := fetcher.FetchWithCache(server.URL)
 
@@ -536,7 +541,7 @@ func TestFetchWithCache_TTLCalculation(t *testing.T) {
 	storage := newMockStorage()
 	// Set TTL to 100ms for precise testing
 	ttl := 100 * time.Millisecond
-	fetcher := New(10*time.Second, storage, ttl)
+	fetcher := New(10*time.Second, storage, ttl, newTestLogger())
 
 	// Create a test server
 	serverCallCount := 0

@@ -265,9 +265,17 @@ func (c *Client) performHealthCheck(ctx context.Context) {
 		if c.circuitBreaker != nil {
 			// Use Execute with a function that returns the error
 			// This increments the circuit breaker's failure counter
-			_ = c.circuitBreaker.Execute(func() error {
+			if cbErr := c.circuitBreaker.Execute(func() error {
 				return err
-			})
+			}); cbErr != nil {
+				// Circuit breaker Execute can return errors, but in this case we're just
+				// recording the health check failure, so we can safely ignore cb errors
+				if c.resLogger != nil {
+					c.resLogger.Warn("Circuit breaker Execute failed while recording health check failure", map[string]interface{}{
+						"error": cbErr.Error(),
+					})
+				}
+			}
 		}
 	} else {
 		// Log debug for successful health check

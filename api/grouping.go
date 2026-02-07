@@ -36,7 +36,7 @@ func groupStreamsByTvgID(streams []streamData) []Channel {
 		var streamObjs []Stream
 		for _, s := range streamList {
 			streamObjs = append(streamObjs, Stream{
-				AcestreamID: s.AcestreamID,
+				ContentID:   s.ContentID,
 				Name:        s.Name,
 				TvgName:     s.TvgName,
 				Source:      s.Source,
@@ -63,7 +63,7 @@ func groupStreamsByTvgID(streams []streamData) []Channel {
 			GroupTitle: stream.GroupTitle,
 			Streams: []Stream{
 				{
-					AcestreamID: stream.AcestreamID,
+					ContentID:   stream.ContentID,
 					Name:        stream.Name,
 					TvgName:     stream.TvgName,
 					Source:      stream.Source,
@@ -87,7 +87,7 @@ func applyOverrides(channels []Channel, overridesMgr overrides.Interface) []Chan
 		// Apply overrides to each stream in the channel
 		for j := range ch.Streams {
 			stream := &ch.Streams[j]
-			if override, exists := allOverrides[stream.AcestreamID]; exists {
+			if override, exists := allOverrides[stream.ContentID]; exists {
 				stream.HasOverride = true
 
 				// Apply overrides if they are set (not nil)
@@ -103,7 +103,7 @@ func applyOverrides(channels []Channel, overridesMgr overrides.Interface) []Chan
 		// Apply channel-level overrides from the first stream if it has overrides
 		if len(ch.Streams) > 0 {
 			firstStream := ch.Streams[0]
-			if override, exists := allOverrides[firstStream.AcestreamID]; exists {
+			if override, exists := allOverrides[firstStream.ContentID]; exists {
 				if override.TvgID != nil {
 					ch.TvgID = *override.TvgID
 				}

@@ -3,11 +3,11 @@ package fetcher
 import (
 	"fmt"
 	"io"
-	"log"
 	"net/http"
 	"time"
 
 	"github.com/alorle/iptv-manager/cache"
+	"github.com/alorle/iptv-manager/logging"
 )
 
 // Fetcher handles fetching M3U content with cache fallback
@@ -15,16 +15,18 @@ type Fetcher struct {
 	client   *http.Client
 	storage  cache.Storage
 	cacheTTL time.Duration
+	logger   *logging.Logger
 }
 
 // New creates a new Fetcher with the specified timeout and cache configuration
-func New(timeout time.Duration, storage cache.Storage, cacheTTL time.Duration) Interface {
+func New(timeout time.Duration, storage cache.Storage, cacheTTL time.Duration, logger *logging.Logger) Interface {
 	return &Fetcher{
 		client: &http.Client{
 			Timeout: timeout,
 		},
 		storage:  storage,
 		cacheTTL: cacheTTL,
+		logger:   logger,
 	}
 }
 
@@ -34,36 +36,56 @@ func (f *Fetcher) FetchWithCacheFallback(url string) ([]byte, bool, error) {
 	cacheKey := cache.DeriveKeyFromURL(url)
 
 	// Attempt to fetch from the source
-	log.Printf("Attempting to fetch M3U from: %s", url)
+	f.logger.Info("Attempting to fetch M3U from URL", map[string]interface{}{
+		"url": url,
+	})
 
 	content, err := f.fetchFromURL(url)
 	if err == nil {
 		// Success: update cache and return fresh content
-		log.Printf("Successfully fetched M3U from source: %s", url)
+		f.logger.Info("Successfully fetched M3U from source", map[string]interface{}{
+			"url": url,
+		})
 
 		if setErr := f.storage.Set(cacheKey, content); setErr != nil {
-			log.Printf("Warning: Failed to update cache for %s: %v", url, setErr)
+			f.logger.Warn("Failed to update cache", map[string]interface{}{
+				"url":   url,
+				"error": setErr.Error(),
+			})
 		} else {
-			log.Printf("Cache updated for: %s", url)
+			f.logger.Info("Cache updated", map[string]interface{}{
+				"url": url,
+			})
 		}
 
 		return content, false, nil
 	}
 
 	// Fetch failed: log the error and try cache fallback
-	log.Printf("Failed to fetch M3U from source: %v", err)
-	log.Printf("Attempting cache fallback for: %s", url)
+	f.logger.Warn("Failed to fetch M3U from source", map[string]interface{}{
+		"url":   url,
+		"error": err.Error(),
+	})
+	f.logger.Info("Attempting cache fallback", map[string]interface{}{
+		"url": url,
+	})
 
 	// Check if we have cached content (even if expired)
 	entry, cacheErr := f.storage.Get(cacheKey)
 	if cacheErr != nil {
 		// No cache available - return error with 502 indication
-		log.Printf("Cache miss for %s: %v", url, cacheErr)
+		f.logger.Warn("Cache miss - no fallback available", map[string]interface{}{
+			"url":   url,
+			"error": cacheErr.Error(),
+		})
 		return nil, false, fmt.Errorf("upstream fetch failed and no cache available: %w", err)
 	}
 
 	// Serve stale cache as fallback
-	log.Printf("Serving stale cache for: %s (cached at: %s)", url, entry.Timestamp.Format(time.RFC3339))
+	f.logger.Info("Serving stale cache", map[string]interface{}{
+		"url":       url,
+		"cached_at": entry.Timestamp.Format(time.RFC3339),
+	})
 	return entry.Content, true, nil
 }
 
@@ -75,7 +97,9 @@ func (f *Fetcher) fetchFromURL(url string) ([]byte, error) {
 	}
 	defer func() {
 		if closeErr := resp.Body.Close(); closeErr != nil {
-			log.Printf("warning: failed to close response body: %v", closeErr)
+			f.logger.Warn("Failed to close response body", map[string]interface{}{
+				"error": closeErr.Error(),
+			})
 		}
 	}()
 
@@ -110,52 +134,80 @@ func (f *Fetcher) FetchWithCache(url string) ([]byte, bool, bool, error) {
 		// Cache exists - check if it's fresh
 		expired, expErr := f.storage.IsExpired(cacheKey, f.cacheTTL)
 		if expErr != nil {
-			log.Printf("Error checking cache expiration for %s: %v", url, expErr)
+			f.logger.Warn("Error checking cache expiration", map[string]interface{}{
+				"url":   url,
+				"error": expErr.Error(),
+			})
 			// Treat as expired and continue to fetch
 		} else if !expired {
 			// Cache is fresh - serve immediately
-			log.Printf("Serving fresh cache for: %s (cached at: %s, age: %s)",
-				url, entry.Timestamp.Format(time.RFC3339), time.Since(entry.Timestamp))
+			f.logger.Info("Serving fresh cache", map[string]interface{}{
+				"url":       url,
+				"cached_at": entry.Timestamp.Format(time.RFC3339),
+				"age":       time.Since(entry.Timestamp).String(),
+			})
 			return entry.Content, true, false, nil
 		}
 
 		// Cache is expired - log and attempt refresh
-		log.Printf("Cache expired for: %s (cached at: %s, age: %s)",
-			url, entry.Timestamp.Format(time.RFC3339), time.Since(entry.Timestamp))
+		f.logger.Info("Cache expired - attempting refresh", map[string]interface{}{
+			"url":       url,
+			"cached_at": entry.Timestamp.Format(time.RFC3339),
+			"age":       time.Since(entry.Timestamp).String(),
+		})
 	} else {
 		// No cache exists
-		log.Printf("No cache found for: %s", url)
+		f.logger.Info("No cache found", map[string]interface{}{
+			"url": url,
+		})
 	}
 
 	// Step 2: Cache is expired or doesn't exist - attempt to fetch
-	log.Printf("Attempting to fetch M3U from: %s", url)
+	f.logger.Info("Attempting to fetch M3U from URL", map[string]interface{}{
+		"url": url,
+	})
 
 	content, fetchErr := f.fetchFromURL(url)
 	if fetchErr == nil {
 		// Fetch succeeded - update cache and serve new content
-		log.Printf("Successfully fetched M3U from source: %s", url)
+		f.logger.Info("Successfully fetched M3U from source", map[string]interface{}{
+			"url": url,
+		})
 
 		if setErr := f.storage.Set(cacheKey, content); setErr != nil {
-			log.Printf("Warning: Failed to update cache for %s: %v", url, setErr)
+			f.logger.Warn("Failed to update cache", map[string]interface{}{
+				"url":   url,
+				"error": setErr.Error(),
+			})
 		} else {
-			log.Printf("Cache updated for: %s", url)
+			f.logger.Info("Cache updated", map[string]interface{}{
+				"url": url,
+			})
 		}
 
 		return content, false, false, nil
 	}
 
 	// Step 3: Fetch failed - check if we can serve stale cache
-	log.Printf("Failed to fetch M3U from source: %v", fetchErr)
+	f.logger.Warn("Failed to fetch M3U from source", map[string]interface{}{
+		"url":   url,
+		"error": fetchErr.Error(),
+	})
 
 	if cacheErr != nil {
 		// No cache available at all
-		log.Printf("No cache available for fallback: %s", url)
+		f.logger.Warn("No cache available for fallback", map[string]interface{}{
+			"url": url,
+		})
 		return nil, false, false, fmt.Errorf("upstream fetch failed and no cache available: %w", fetchErr)
 	}
 
 	// Serve stale cache with warning
-	log.Printf("WARNING: Serving stale cache for: %s (cached at: %s, age: %s)",
-		url, entry.Timestamp.Format(time.RFC3339), time.Since(entry.Timestamp))
+	f.logger.Warn("Serving stale cache", map[string]interface{}{
+		"url":       url,
+		"cached_at": entry.Timestamp.Format(time.RFC3339),
+		"age":       time.Since(entry.Timestamp).String(),
+	})
 
 	return entry.Content, true, true, nil
 }

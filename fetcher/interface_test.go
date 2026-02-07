@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/alorle/iptv-manager/cache"
+	"github.com/alorle/iptv-manager/logging"
 )
 
 // TestFetcherImplementsInterface ensures Fetcher implements Interface
@@ -13,7 +14,8 @@ func TestFetcherImplementsInterface(t *testing.T) {
 	t.Parallel()
 
 	mockStorage := &cache.MockStorage{}
-	var _ Interface = New(30*time.Second, mockStorage, 1*time.Hour)
+	logger := logging.New(logging.INFO, "[test]")
+	var _ Interface = New(30*time.Second, mockStorage, 1*time.Hour, logger)
 }
 
 // TestMockFetcherImplementsInterface ensures MockFetcher implements Interface

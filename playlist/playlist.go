@@ -1,9 +1,9 @@
 package playlist
 
 import (
-	"log"
 	"strings"
 
+	"github.com/alorle/iptv-manager/logging"
 	"github.com/alorle/iptv-manager/overrides"
 	"github.com/alorle/iptv-manager/rewriter"
 )
@@ -18,16 +18,22 @@ type Source struct {
 }
 
 // logCacheStatus logs the cache status for a fetched source
-func logCacheStatus(sourceName string, fromCache, stale bool) {
+func logCacheStatus(logger *logging.Logger, sourceName string, fromCache, stale bool) {
 	if !fromCache {
-		log.Printf("Using fresh content for %s in unified playlist", sourceName)
+		logger.Info("Using fresh content in unified playlist", map[string]interface{}{
+			"source": sourceName,
+		})
 		return
 	}
 
 	if stale {
-		log.Printf("Using stale cache for %s in unified playlist", sourceName)
+		logger.Warn("Using stale cache in unified playlist", map[string]interface{}{
+			"source": sourceName,
+		})
 	} else {
-		log.Printf("Using fresh cache for %s in unified playlist", sourceName)
+		logger.Info("Using fresh cache in unified playlist", map[string]interface{}{
+			"source": sourceName,
+		})
 	}
 }
 
@@ -42,17 +48,20 @@ func stripM3UHeader(content []byte) string {
 }
 
 // MergeSources merges multiple playlist sources into a single M3U
-func MergeSources(sources []Source) string {
+func MergeSources(logger *logging.Logger, sources []Source) string {
 	var merged strings.Builder
 	merged.WriteString("#EXTM3U\n")
 
 	for _, source := range sources {
 		if source.Err != nil {
-			log.Printf("Skipping %s source in unified playlist: %v", source.Name, source.Err)
+			logger.Warn("Skipping source in unified playlist", map[string]interface{}{
+				"source": source.Name,
+				"error":  source.Err.Error(),
+			})
 			continue
 		}
 
-		logCacheStatus(source.Name, source.FromCache, source.Stale)
+		logCacheStatus(logger, source.Name, source.FromCache, source.Stale)
 
 		// Add newline separator if we're appending to existing content
 		if merged.Len() > len("#EXTM3U\n") {
@@ -65,7 +74,7 @@ func MergeSources(sources []Source) string {
 }
 
 // CleanOrphanedOverrides removes overrides for channels no longer in the playlists
-func CleanOrphanedOverrides(overridesMgr overrides.Interface, sources []Source) {
+func CleanOrphanedOverrides(logger *logging.Logger, overridesMgr overrides.Interface, sources []Source) {
 	// Only clean if we have fresh data from at least one source
 	hasFreshData := false
 	for _, source := range sources {
@@ -76,7 +85,7 @@ func CleanOrphanedOverrides(overridesMgr overrides.Interface, sources []Source) 
 	}
 
 	if !hasFreshData {
-		log.Printf("Skipping orphan cleanup - using only stale cache data")
+		logger.Info("Skipping orphan cleanup - using only stale cache data", nil)
 		return
 	}
 
@@ -92,9 +101,13 @@ func CleanOrphanedOverrides(overridesMgr overrides.Interface, sources []Source) 
 	// Clean orphaned overrides
 	deletedCount, err := overridesMgr.CleanOrphans(validIDs)
 	if err != nil {
-		log.Printf("WARNING: Failed to clean orphaned overrides: %v", err)
+		logger.Warn("Failed to clean orphaned overrides", map[string]interface{}{
+			"error": err.Error(),
+		})
 	} else if deletedCount > 0 {
-		log.Printf("Cleaned up %d orphaned override(s)", deletedCount)
+		logger.Info("Cleaned up orphaned overrides", map[string]interface{}{
+			"count": deletedCount,
+		})
 	}
 }
 

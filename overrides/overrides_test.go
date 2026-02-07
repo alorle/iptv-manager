@@ -4,7 +4,13 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/alorle/iptv-manager/logging"
 )
+
+func newTestLogger() *logging.Logger {
+	return logging.New(logging.INFO, "[test]")
+}
 
 const testChannelTvgID = "test-channel"
 
@@ -369,7 +375,7 @@ func TestNewManager_NonExistentFile(t *testing.T) {
 	tmpDir := t.TempDir()
 	tmpFile := filepath.Join(tmpDir, "nonexistent.yaml")
 
-	manager, err := NewManager(tmpFile)
+	manager, err := NewManager(tmpFile, newTestLogger())
 	if err != nil {
 		t.Fatalf("NewManager() should not fail for non-existent file: %v", err)
 	}
@@ -402,7 +408,7 @@ func TestNewManager_ExistingFile(t *testing.T) {
 	}
 
 	// Load manager
-	manager, err := NewManager(tmpFile)
+	manager, err := NewManager(tmpFile, newTestLogger())
 	if err != nil {
 		t.Fatalf("NewManager() failed: %v", err)
 	}
@@ -429,7 +435,7 @@ func TestManager_Get_NonExistent(t *testing.T) {
 	tmpDir := t.TempDir()
 	tmpFile := filepath.Join(tmpDir, "test.yaml")
 
-	manager, err := NewManager(tmpFile)
+	manager, err := NewManager(tmpFile, newTestLogger())
 	if err != nil {
 		t.Fatalf("NewManager() failed: %v", err)
 	}
@@ -444,7 +450,7 @@ func TestManager_Set_NewOverride(t *testing.T) {
 	tmpDir := t.TempDir()
 	tmpFile := filepath.Join(tmpDir, "test.yaml")
 
-	manager, err := NewManager(tmpFile)
+	manager, err := NewManager(tmpFile, newTestLogger())
 	if err != nil {
 		t.Fatalf("NewManager() failed: %v", err)
 	}
@@ -474,7 +480,7 @@ func TestManager_Set_NewOverride(t *testing.T) {
 	}
 
 	// Verify it was persisted
-	reloaded, err := NewManager(tmpFile)
+	reloaded, err := NewManager(tmpFile, newTestLogger())
 	if err != nil {
 		t.Fatalf("Failed to reload manager: %v", err)
 	}
@@ -492,7 +498,7 @@ func TestManager_Set_UpdateExisting(t *testing.T) {
 	tmpDir := t.TempDir()
 	tmpFile := filepath.Join(tmpDir, "test.yaml")
 
-	manager, err := NewManager(tmpFile)
+	manager, err := NewManager(tmpFile, newTestLogger())
 	if err != nil {
 		t.Fatalf("NewManager() failed: %v", err)
 	}
@@ -536,7 +542,7 @@ func TestManager_Delete(t *testing.T) {
 	tmpDir := t.TempDir()
 	tmpFile := filepath.Join(tmpDir, "test.yaml")
 
-	manager, err := NewManager(tmpFile)
+	manager, err := NewManager(tmpFile, newTestLogger())
 	if err != nil {
 		t.Fatalf("NewManager() failed: %v", err)
 	}
@@ -566,7 +572,7 @@ func TestManager_Delete(t *testing.T) {
 	}
 
 	// Verify deletion was persisted
-	reloaded, err := NewManager(tmpFile)
+	reloaded, err := NewManager(tmpFile, newTestLogger())
 	if err != nil {
 		t.Fatalf("Failed to reload manager: %v", err)
 	}
@@ -579,7 +585,7 @@ func TestManager_Delete_NonExistent(t *testing.T) {
 	tmpDir := t.TempDir()
 	tmpFile := filepath.Join(tmpDir, "test.yaml")
 
-	manager, err := NewManager(tmpFile)
+	manager, err := NewManager(tmpFile, newTestLogger())
 	if err != nil {
 		t.Fatalf("NewManager() failed: %v", err)
 	}
@@ -594,7 +600,7 @@ func TestManager_List(t *testing.T) {
 	tmpDir := t.TempDir()
 	tmpFile := filepath.Join(tmpDir, "test.yaml")
 
-	manager, err := NewManager(tmpFile)
+	manager, err := NewManager(tmpFile, newTestLogger())
 	if err != nil {
 		t.Fatalf("NewManager() failed: %v", err)
 	}
@@ -640,7 +646,7 @@ func TestManager_List_EmptyReturnsEmpty(t *testing.T) {
 	tmpDir := t.TempDir()
 	tmpFile := filepath.Join(tmpDir, "test.yaml")
 
-	manager, err := NewManager(tmpFile)
+	manager, err := NewManager(tmpFile, newTestLogger())
 	if err != nil {
 		t.Fatalf("NewManager() failed: %v", err)
 	}
@@ -655,7 +661,7 @@ func TestManager_List_IsolationCopy(t *testing.T) {
 	tmpDir := t.TempDir()
 	tmpFile := filepath.Join(tmpDir, "test.yaml")
 
-	manager, err := NewManager(tmpFile)
+	manager, err := NewManager(tmpFile, newTestLogger())
 	if err != nil {
 		t.Fatalf("NewManager() failed: %v", err)
 	}
@@ -685,7 +691,7 @@ func TestManager_Get_IsolationCopy(t *testing.T) {
 	tmpDir := t.TempDir()
 	tmpFile := filepath.Join(tmpDir, "test.yaml")
 
-	manager, err := NewManager(tmpFile)
+	manager, err := NewManager(tmpFile, newTestLogger())
 	if err != nil {
 		t.Fatalf("NewManager() failed: %v", err)
 	}

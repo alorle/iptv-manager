@@ -3,7 +3,6 @@ package multiplexer
 import (
 	"context"
 	"fmt"
-	"log"
 	"net/http"
 	"sync"
 	"time"
@@ -19,6 +18,7 @@ type Multiplexer struct {
 	cfg     Config
 	client  *http.Client
 	ctx     context.Context // Independent context for upstream connections
+	logger  *Config         // Store config to access ResilienceLogger
 }
 
 // updateGlobalMetrics updates global metrics based on all streams
@@ -39,7 +39,8 @@ func New(cfg Config) *Multiplexer {
 		client: &http.Client{
 			Timeout: 0, // No timeout for streaming
 		},
-		ctx: context.Background(), // Independent context for upstream connections
+		ctx:    context.Background(), // Independent context for upstream connections
+		logger: &cfg,
 	}
 }
 
@@ -50,7 +51,11 @@ func (m *Multiplexer) GetOrCreateStream(ctx context.Context, contentID string, u
 
 	// Check if stream already exists
 	if stream, exists := m.streams[contentID]; exists {
-		log.Printf("Multiplexer: Reusing existing stream for content ID %s", contentID)
+		if m.cfg.ResilienceLogger != nil {
+			m.cfg.ResilienceLogger.Info("Reusing existing stream", map[string]interface{}{
+				"content_id": contentID,
+			})
+		}
 		return stream, true, nil
 	}
 
@@ -81,12 +86,20 @@ func (m *Multiplexer) GetOrCreateStream(ctx context.Context, contentID string, u
 
 	if resp.StatusCode != http.StatusOK {
 		if closeErr := resp.Body.Close(); closeErr != nil {
-			log.Printf("Multiplexer: warning: failed to close response body: %v", closeErr)
+			if m.cfg.ResilienceLogger != nil {
+				m.cfg.ResilienceLogger.Warn("Failed to close response body", map[string]interface{}{
+					"error": closeErr.Error(),
+				})
+			}
 		}
 		return nil, false, fmt.Errorf("upstream returned status %d", resp.StatusCode)
 	}
 
-	log.Printf("Multiplexer: Created new stream for content ID %s", contentID)
+	if m.cfg.ResilienceLogger != nil {
+		m.cfg.ResilienceLogger.Info("Created new stream", map[string]interface{}{
+			"content_id": contentID,
+		})
+	}
 
 	// Start the stream with multiplexer's independent context
 	// This ensures the upstream reading loop is not canceled when a client disconnects
@@ -108,7 +121,11 @@ func (m *Multiplexer) RemoveStream(contentID string) {
 
 	if stream, exists := m.streams[contentID]; exists {
 		if stream.ClientCount() == 0 {
-			log.Printf("Multiplexer: Removing stream %s (no clients)", contentID)
+			if m.cfg.ResilienceLogger != nil {
+				m.cfg.ResilienceLogger.Info("Removing stream - no clients", map[string]interface{}{
+					"content_id": contentID,
+				})
+			}
 			stream.Stop()
 			delete(m.streams, contentID)
 
@@ -142,7 +159,7 @@ func startClientWriter(ctx context.Context, client *Client, contentID, clientID 
 
 				// Write data to client
 				if _, err := client.Writer.Write(data); err != nil {
-					log.Printf("Stream %s: Client %s write error: %v", contentID, clientID, err)
+					// Note: Cannot access logger here directly, client write errors are expected
 					client.Close()
 					return
 				}
@@ -169,9 +186,19 @@ func sendBufferedDataIfReconnecting(stream *Stream, client *Client, contentID, c
 		return
 	}
 
-	log.Printf("Stream %s: New client %s joining during reconnection - sending buffered data", contentID, clientID)
+	if stream.resLogger != nil {
+		stream.resLogger.Info("New client joining during reconnection - sending buffered data", map[string]interface{}{
+			"content_id": contentID,
+			"client_id":  clientID,
+		})
+	}
 	if !stream.sendBufferToClient(client, contentID) {
-		log.Printf("Stream %s: Failed to send buffer to new client %s", contentID, clientID)
+		if stream.resLogger != nil {
+			stream.resLogger.Warn("Failed to send buffer to new client", map[string]interface{}{
+				"content_id": contentID,
+				"client_id":  clientID,
+			})
+		}
 	}
 }
 
@@ -198,7 +225,11 @@ func (m *Multiplexer) ServeStream(ctx context.Context, w http.ResponseWriter, co
 	// Disable write deadline for streaming - this is essential for long-running video streams
 	rc := http.NewResponseController(w)
 	if err := rc.SetWriteDeadline(time.Time{}); err != nil {
-		log.Printf("Warning: Failed to disable write deadline: %v", err)
+		if m.cfg.ResilienceLogger != nil {
+			m.cfg.ResilienceLogger.Warn("Failed to disable write deadline", map[string]interface{}{
+				"error": err.Error(),
+			})
+		}
 	}
 
 	// Get or create stream

@@ -2,13 +2,13 @@ package handlers
 
 import (
 	"fmt"
-	"log"
 	"net/http"
 
 	"github.com/alorle/iptv-manager/api"
 	"github.com/alorle/iptv-manager/config"
 	"github.com/alorle/iptv-manager/epg"
 	"github.com/alorle/iptv-manager/fetcher"
+	"github.com/alorle/iptv-manager/logging"
 	"github.com/alorle/iptv-manager/multiplexer"
 	"github.com/alorle/iptv-manager/overrides"
 	"github.com/alorle/iptv-manager/pidmanager"
@@ -19,6 +19,7 @@ import (
 
 // Dependencies holds all the dependencies needed by the handlers
 type Dependencies struct {
+	Logger       *logging.Logger
 	Fetcher      fetcher.Interface
 	OverridesMgr overrides.Interface
 	EPGCache     *epg.Cache
@@ -34,7 +35,9 @@ func SetupRoutes(cfg *config.Config, deps Dependencies) http.Handler {
 	handler.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 		if _, err := w.Write([]byte("OK")); err != nil {
-			log.Printf("Error writing health response: %v", err)
+			deps.Logger.Warn("Failed to write health response", map[string]interface{}{
+				"error": err.Error(),
+			})
 		}
 	})
 
@@ -43,6 +46,7 @@ func SetupRoutes(cfg *config.Config, deps Dependencies) http.Handler {
 
 	// Stream handler - shared by /stream and /ace/getstream
 	streamDeps := StreamDependencies{
+		Logger:      deps.Logger,
 		Multiplexer: deps.Multiplexer,
 		PidMgr:      deps.PidMgr,
 	}
@@ -52,6 +56,7 @@ func SetupRoutes(cfg *config.Config, deps Dependencies) http.Handler {
 
 	// Individual playlist endpoints - one for each configured source
 	playlistDeps := PlaylistDependencies{
+		Logger:       deps.Logger,
 		Fetcher:      deps.Fetcher,
 		OverridesMgr: deps.OverridesMgr,
 		Rewriter:     deps.Rewriter,
@@ -69,19 +74,19 @@ func SetupRoutes(cfg *config.Config, deps Dependencies) http.Handler {
 	for i, pl := range cfg.Playlists {
 		playlistURLs[i] = pl.URL
 	}
-	channelsHandler := api.NewChannelsHandler(deps.Fetcher, deps.OverridesMgr, playlistURLs...)
+	channelsHandler := api.NewChannelsHandler(deps.Fetcher, deps.OverridesMgr, deps.Logger, playlistURLs...)
 	// Handle both /api/channels and /api/channels/{id}
 	handler.Handle("/api/channels", channelsHandler)
 	handler.Handle("/api/channels/", channelsHandler)
 
 	// API endpoint for TVG-ID validation
 	if deps.EPGCache != nil {
-		validateHandler := api.NewValidateHandler(deps.EPGCache)
+		validateHandler := api.NewValidateHandler(deps.EPGCache, deps.Logger)
 		handler.Handle("/api/validate/tvg-id", validateHandler)
 	}
 
 	// API endpoints for overrides CRUD
-	overridesHandler := api.NewOverridesHandler(deps.OverridesMgr, deps.EPGCache)
+	overridesHandler := api.NewOverridesHandler(deps.OverridesMgr, deps.EPGCache, deps.Logger)
 	handler.Handle("/api/overrides", overridesHandler)
 	handler.Handle("/api/overrides/", overridesHandler)
 

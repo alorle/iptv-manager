@@ -12,6 +12,7 @@ import (
 	"github.com/alorle/iptv-manager/cache"
 	"github.com/alorle/iptv-manager/config"
 	"github.com/alorle/iptv-manager/fetcher"
+	"github.com/alorle/iptv-manager/logging"
 	"github.com/alorle/iptv-manager/rewriter"
 )
 
@@ -33,6 +34,11 @@ func setupTestEnvironment(t *testing.T) (string, func()) {
 	t.Helper()
 	tempDir := t.TempDir()
 	return tempDir, func() {}
+}
+
+// newTestLogger creates a logger for tests
+func newTestLogger() *logging.Logger {
+	return logging.New(logging.INFO, "[test]")
 }
 
 // createMockIPFSServer creates an HTTP server that simulates IPFS behavior
@@ -66,7 +72,7 @@ func TestIntegration_FreshFetchFromMockIPFS(t *testing.T) {
 		t.Fatalf("Failed to create storage: %v", err)
 	}
 
-	fetch := fetcher.New(5*time.Second, storage, 1*time.Hour)
+	fetch := fetcher.New(5*time.Second, storage, 1*time.Hour, newTestLogger())
 	rw := rewriter.New()
 
 	// Create test server
@@ -163,7 +169,7 @@ func TestIntegration_CacheHit(t *testing.T) {
 		t.Fatalf("Failed to create storage: %v", err)
 	}
 
-	fetch := fetcher.New(5*time.Second, storage, 1*time.Hour)
+	fetch := fetcher.New(5*time.Second, storage, 1*time.Hour, newTestLogger())
 	rw := rewriter.New()
 
 	// Create test server
@@ -269,7 +275,7 @@ func TestIntegration_ExpiredCacheRefresh(t *testing.T) {
 		t.Fatalf("Failed to create storage: %v", err)
 	}
 
-	fetch := fetcher.New(5*time.Second, storage, 100*time.Millisecond) // 100ms TTL
+	fetch := fetcher.New(5*time.Second, storage, 100*time.Millisecond, newTestLogger()) // 100ms TTL
 	rw := rewriter.New()
 
 	// Create test server
@@ -371,7 +377,7 @@ func TestIntegration_IPFSFailureWithStaleCacheFallback(t *testing.T) {
 		t.Fatalf("Failed to create storage: %v", err)
 	}
 
-	fetch := fetcher.New(5*time.Second, storage, 100*time.Millisecond)
+	fetch := fetcher.New(5*time.Second, storage, 100*time.Millisecond, newTestLogger())
 	rw := rewriter.New()
 
 	// Create test server
@@ -459,7 +465,7 @@ func TestIntegration_URLRewritingOutput(t *testing.T) {
 		t.Fatalf("Failed to create storage: %v", err)
 	}
 
-	fetch := fetcher.New(5*time.Second, storage, 1*time.Hour)
+	fetch := fetcher.New(5*time.Second, storage, 1*time.Hour, newTestLogger())
 	rw := rewriter.New()
 
 	// Create test server
@@ -562,7 +568,7 @@ func TestIntegration_ContentTypeHeaders(t *testing.T) {
 		t.Fatalf("Failed to create storage: %v", err)
 	}
 
-	fetch := fetcher.New(5*time.Second, storage, 1*time.Hour)
+	fetch := fetcher.New(5*time.Second, storage, 1*time.Hour, newTestLogger())
 	rw := rewriter.New()
 
 	// Create test server
@@ -669,7 +675,7 @@ func TestIntegration_HTTPStatusCodes(t *testing.T) {
 				_ = storage.Set(cacheKey, []byte(mockM3UContent))
 			}
 
-			fetch := fetcher.New(5*time.Second, storage, 1*time.Hour)
+			fetch := fetcher.New(5*time.Second, storage, 1*time.Hour, newTestLogger())
 			rw := rewriter.New()
 
 			// Create test server
@@ -723,7 +729,7 @@ func TestIntegration_MethodNotAllowed(t *testing.T) {
 		t.Fatalf("Failed to create storage: %v", err)
 	}
 
-	fetch := fetcher.New(5*time.Second, storage, 1*time.Hour)
+	fetch := fetcher.New(5*time.Second, storage, 1*time.Hour, newTestLogger())
 	rw := rewriter.New()
 
 	mux := http.NewServeMux()
@@ -865,7 +871,7 @@ func TestIntegration_RealEndpoints(t *testing.T) {
 		t.Fatalf("Failed to initialize storage: %v", err)
 	}
 
-	fetch := fetcher.New(30*time.Second, storage, cfg.Cache.TTL)
+	fetch := fetcher.New(30*time.Second, storage, cfg.Cache.TTL, newTestLogger())
 	rw := rewriter.New()
 
 	mockServer := createMockIPFSServer(t, false, mockM3UContent)
@@ -1018,7 +1024,7 @@ acestream://4444444444444444444444444444444444444444
 		t.Fatalf("Failed to create storage: %v", err)
 	}
 
-	fetch := fetcher.New(5*time.Second, storage, 1*time.Hour)
+	fetch := fetcher.New(5*time.Second, storage, 1*time.Hour, newTestLogger())
 	rw := rewriter.New()
 
 	mux := http.NewServeMux()
@@ -1102,7 +1108,7 @@ acestream://3333333333333333333333333333333333333333
 		t.Fatalf("Failed to create storage: %v", err)
 	}
 
-	fetch := fetcher.New(5*time.Second, storage, 1*time.Hour)
+	fetch := fetcher.New(5*time.Second, storage, 1*time.Hour, newTestLogger())
 	rw := rewriter.New()
 
 	mux := http.NewServeMux()
@@ -1190,7 +1196,7 @@ acestream://4444444444444444444444444444444444444444
 		t.Fatalf("Failed to create storage: %v", err)
 	}
 
-	fetch := fetcher.New(5*time.Second, storage, 1*time.Hour)
+	fetch := fetcher.New(5*time.Second, storage, 1*time.Hour, newTestLogger())
 	rw := rewriter.New()
 
 	mux := http.NewServeMux()
@@ -1244,7 +1250,7 @@ acestream://2222222222222222222222222222222222222222
 		t.Fatalf("Failed to create storage: %v", err)
 	}
 
-	fetch := fetcher.New(5*time.Second, storage, 1*time.Hour)
+	fetch := fetcher.New(5*time.Second, storage, 1*time.Hour, newTestLogger())
 	rw := rewriter.New()
 
 	mux := http.NewServeMux()
@@ -1296,7 +1302,7 @@ acestream://1111111111111111111111111111111111111111
 		t.Fatalf("Failed to create storage: %v", err)
 	}
 
-	fetch := fetcher.New(5*time.Second, storage, 1*time.Hour)
+	fetch := fetcher.New(5*time.Second, storage, 1*time.Hour, newTestLogger())
 	rw := rewriter.New()
 
 	mux := http.NewServeMux()
@@ -1390,7 +1396,7 @@ acestream://1111111111111111111111111111111111111111
 		t.Fatalf("Failed to create storage: %v", err)
 	}
 
-	fetch := fetcher.New(5*time.Second, storage, 100*time.Millisecond) // Short TTL
+	fetch := fetcher.New(5*time.Second, storage, 100*time.Millisecond, newTestLogger()) // Short TTL
 	rw := rewriter.New()
 
 	mux := http.NewServeMux()

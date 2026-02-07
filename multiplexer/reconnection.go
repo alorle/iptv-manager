@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"log"
 	"net/http"
 	"time"
 
@@ -32,7 +31,12 @@ func (s *Stream) fanOut(ctx context.Context, cfg Config) {
 		s.mu.Lock()
 		if s.upstream != nil {
 			if closeErr := s.upstream.Close(); closeErr != nil {
-				log.Printf("Stream %s: warning: failed to close upstream: %v", s.ContentID, closeErr)
+				if s.resLogger != nil {
+					s.resLogger.Warn("Failed to close upstream", map[string]interface{}{
+						"content_id": s.ContentID,
+						"error":      closeErr.Error(),
+					})
+				}
 			}
 		}
 		// Close all clients
@@ -41,7 +45,11 @@ func (s *Stream) fanOut(ctx context.Context, cfg Config) {
 		}
 		s.mu.Unlock()
 		close(s.done)
-		log.Printf("Stream %s: Fan-out stopped", s.ContentID)
+		if s.resLogger != nil {
+			s.resLogger.Info("Fan-out stopped", map[string]interface{}{
+				"content_id": s.ContentID,
+			})
+		}
 	}()
 
 	buffer := make([]byte, 32*1024) // 32KB read buffer
@@ -62,13 +70,23 @@ func (s *Stream) fanOut(ctx context.Context, cfg Config) {
 
 			if !shouldReconnect {
 				if err != io.EOF {
-					log.Printf("Stream %s: Error reading from upstream: %v", s.ContentID, err)
+					if s.resLogger != nil {
+						s.resLogger.Error("Error reading from upstream", map[string]interface{}{
+							"content_id": s.ContentID,
+							"error":      err.Error(),
+						})
+					}
 				}
 				return
 			}
 
 			// Attempt reconnection with exponential backoff
-			log.Printf("Stream %s: Upstream connection lost: %v", s.ContentID, err)
+			if s.resLogger != nil {
+				s.resLogger.Warn("Upstream connection lost", map[string]interface{}{
+					"content_id": s.ContentID,
+					"error":      err.Error(),
+				})
+			}
 
 			// Record upstream error
 			metrics.RecordUpstreamError(s.ContentID, "connection_lost")
@@ -76,12 +94,21 @@ func (s *Stream) fanOut(ctx context.Context, cfg Config) {
 			// Mark as reconnecting
 			s.setReconnecting(true)
 			s.reconnectStart = time.Now()
-			log.Printf("Stream %s: Entering reconnection mode - clients will use buffer", s.ContentID)
+			if s.resLogger != nil {
+				s.resLogger.Info("Entering reconnection mode - clients will use buffer", map[string]interface{}{
+					"content_id": s.ContentID,
+				})
+			}
 
 			// Close current upstream connection
 			if s.upstream != nil {
 				if closeErr := s.upstream.Close(); closeErr != nil {
-					log.Printf("Stream %s: warning: failed to close upstream: %v", s.ContentID, closeErr)
+					if s.resLogger != nil {
+						s.resLogger.Warn("Failed to close upstream", map[string]interface{}{
+							"content_id": s.ContentID,
+							"error":      closeErr.Error(),
+						})
+					}
 				}
 				s.upstream = nil
 			}
@@ -115,7 +142,12 @@ func (s *Stream) shouldStopReconnecting(ctx context.Context, attemptNumber int) 
 		reason = "no clients remaining"
 	}
 
-	log.Printf("Stream %s: Stopping reconnection - no clients or context canceled", s.ContentID)
+	if s.resLogger != nil {
+		s.resLogger.Info("Stopping reconnection", map[string]interface{}{
+			"content_id": s.ContentID,
+			"reason":     reason,
+		})
+	}
 	if s.resLogger != nil {
 		s.resLogger.LogReconnectFailed(s.ContentID, reason, attemptNumber)
 	}
@@ -130,7 +162,12 @@ func (s *Stream) waitForCircuitBreaker(ctx context.Context, cfg Config, attemptN
 		return true
 	}
 
-	log.Printf("Stream %s: Circuit breaker is OPEN, skipping reconnection attempt %d", s.ContentID, attemptNumber)
+	if s.resLogger != nil {
+		s.resLogger.Info("Circuit breaker is OPEN - skipping reconnection attempt", map[string]interface{}{
+			"content_id":     s.ContentID,
+			"attempt_number": attemptNumber,
+		})
+	}
 
 	// Wait for circuit breaker timeout before checking again
 	select {
@@ -158,7 +195,12 @@ func (s *Stream) connectToUpstream(ctx context.Context) (io.ReadCloser, error) {
 
 		if resp.StatusCode != http.StatusOK {
 			if closeErr := resp.Body.Close(); closeErr != nil {
-				log.Printf("Stream %s: warning: failed to close response body: %v", s.ContentID, closeErr)
+				if s.resLogger != nil {
+					s.resLogger.Warn("Failed to close response body", map[string]interface{}{
+						"content_id": s.ContentID,
+						"error":      closeErr.Error(),
+					})
+				}
 			}
 			return fmt.Errorf("upstream returned status %d", resp.StatusCode)
 		}
@@ -173,9 +215,12 @@ func (s *Stream) connectToUpstream(ctx context.Context) (io.ReadCloser, error) {
 // handleReconnectionSuccess processes a successful reconnection
 func (s *Stream) handleReconnectionSuccess(newUpstream io.ReadCloser, attemptNumber int) {
 	downtime := time.Since(s.reconnectStart)
-	log.Printf("Stream %s: Reconnection attempt #%d succeeded - resuming normal streaming", s.ContentID, attemptNumber)
-
 	if s.resLogger != nil {
+		s.resLogger.Info("Reconnection succeeded - resuming normal streaming", map[string]interface{}{
+			"content_id":     s.ContentID,
+			"attempt_number": attemptNumber,
+			"downtime":       downtime.String(),
+		})
 		s.resLogger.LogReconnectSuccess(s.ContentID, downtime)
 	}
 
@@ -212,9 +257,13 @@ func (s *Stream) attemptReconnection(ctx context.Context, cfg Config, attemptNum
 		}
 
 		// Log reconnection attempt
-		log.Printf("Stream %s: Reconnection attempt #%d (backoff: %v, buffer available: %d bytes)",
-			s.ContentID, *attemptNumber, backoff, s.ringBuffer.Available())
 		if s.resLogger != nil {
+			s.resLogger.Info("Reconnection attempt", map[string]interface{}{
+				"content_id":       s.ContentID,
+				"attempt_number":   *attemptNumber,
+				"backoff":          backoff.String(),
+				"buffer_available": s.ringBuffer.Available(),
+			})
 			s.resLogger.LogReconnectAttempt(s.ContentID, *attemptNumber, backoff)
 		}
 
@@ -228,7 +277,13 @@ func (s *Stream) attemptReconnection(ctx context.Context, cfg Config, attemptNum
 		// Attempt to reconnect
 		newUpstream, reconnectErr := s.connectToUpstream(ctx)
 		if reconnectErr != nil {
-			log.Printf("Stream %s: Reconnection attempt #%d failed: %v", s.ContentID, *attemptNumber, reconnectErr)
+			if s.resLogger != nil {
+				s.resLogger.Warn("Reconnection attempt failed", map[string]interface{}{
+					"content_id":     s.ContentID,
+					"attempt_number": *attemptNumber,
+					"error":          reconnectErr.Error(),
+				})
+			}
 			backoff = calculateNextBackoff(backoff, cfg.ResilienceConfig.ReconnectMaxBackoff)
 			*attemptNumber++
 			continue

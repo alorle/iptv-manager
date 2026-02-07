@@ -1,11 +1,13 @@
 package api
 
 import (
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 
 	"github.com/alorle/iptv-manager/fetcher"
+	"github.com/alorle/iptv-manager/logging"
 	"github.com/alorle/iptv-manager/overrides"
 )
 
@@ -32,8 +34,11 @@ acestream://1234567890abcdef1234567890abcdef12345678
 		},
 	}
 
+	// Create test logger
+	logger := logging.NewWithWriter(logging.INFO, "test", io.Discard)
+
 	// Create handler with mocks
-	handler := NewChannelsHandler(mockFetcher, mockOverrides, "test-url")
+	handler := NewChannelsHandler(mockFetcher, mockOverrides, logger, "test-url")
 
 	// Create test request
 	req := httptest.NewRequest(http.MethodGet, "/api/channels", nil)
@@ -71,8 +76,11 @@ func TestChannelsHandlerWithFailedFetch(t *testing.T) {
 		},
 	}
 
+	// Create test logger
+	logger := logging.NewWithWriter(logging.INFO, "test", io.Discard)
+
 	// Create handler with mocks
-	handler := NewChannelsHandler(mockFetcher, mockOverrides, "test-url")
+	handler := NewChannelsHandler(mockFetcher, mockOverrides, logger, "test-url")
 
 	// Create test request
 	req := httptest.NewRequest(http.MethodGet, "/api/channels", nil)

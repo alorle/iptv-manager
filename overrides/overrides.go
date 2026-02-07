@@ -3,11 +3,11 @@ package overrides
 import (
 	"errors"
 	"fmt"
-	"log"
 	"os"
 	"path/filepath"
 	"sync"
 
+	"github.com/alorle/iptv-manager/logging"
 	"gopkg.in/yaml.v3"
 )
 
@@ -104,12 +104,13 @@ type Manager struct {
 	mu     sync.RWMutex
 	config Config
 	path   string
+	logger *logging.Logger
 }
 
 // NewManager creates a new OverridesManager and loads the configuration
 // from the specified path. If the file doesn't exist, it starts with an
 // empty configuration.
-func NewManager(path string) (Interface, error) {
+func NewManager(path string, logger *logging.Logger) (Interface, error) {
 	config, err := Load(path)
 	if err != nil {
 		return nil, fmt.Errorf("failed to load overrides: %w", err)
@@ -118,16 +119,17 @@ func NewManager(path string) (Interface, error) {
 	return &Manager{
 		config: *config,
 		path:   path,
+		logger: logger,
 	}, nil
 }
 
-// Get retrieves the override configuration for a specific acestream ID.
+// Get retrieves the override configuration for a specific content ID.
 // Returns nil if no override exists for the given ID.
-func (m *Manager) Get(acestreamID string) *ChannelOverride {
+func (m *Manager) Get(contentID string) *ChannelOverride {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
-	override, exists := m.config[acestreamID]
+	override, exists := m.config[contentID]
 	if !exists {
 		return nil
 	}
@@ -136,13 +138,13 @@ func (m *Manager) Get(acestreamID string) *ChannelOverride {
 	return &override
 }
 
-// Set updates or creates an override for a specific acestream ID
+// Set updates or creates an override for a specific content ID
 // and immediately persists the changes to disk.
-func (m *Manager) Set(acestreamID string, override ChannelOverride) error {
+func (m *Manager) Set(contentID string, override ChannelOverride) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	m.config[acestreamID] = override
+	m.config[contentID] = override
 
 	if err := m.config.Save(m.path); err != nil {
 		return fmt.Errorf("failed to save overrides: %w", err)
@@ -151,13 +153,13 @@ func (m *Manager) Set(acestreamID string, override ChannelOverride) error {
 	return nil
 }
 
-// Delete removes an override for a specific acestream ID
+// Delete removes an override for a specific content ID
 // and immediately persists the changes to disk.
-func (m *Manager) Delete(acestreamID string) error {
+func (m *Manager) Delete(contentID string) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	delete(m.config, acestreamID)
+	delete(m.config, contentID)
 
 	if err := m.config.Save(m.path); err != nil {
 		return fmt.Errorf("failed to save overrides: %w", err)
@@ -182,7 +184,7 @@ func (m *Manager) List() map[string]ChannelOverride {
 	return result
 }
 
-// CleanOrphans removes overrides for acestream IDs that are not in the provided validIDs list.
+// CleanOrphans removes overrides for content IDs that are not in the provided validIDs list.
 // This function should only be called when fresh data is available from upstream sources
 // to avoid accidentally deleting overrides during cache fallback scenarios.
 // Returns the number of orphaned overrides that were deleted, or an error if the operation fails.
@@ -211,7 +213,9 @@ func (m *Manager) CleanOrphans(validIDs []string) (int, error) {
 			// Log error but continue with other deletions
 			return deletedCount, fmt.Errorf("failed to delete orphaned override %s: %w", id, err)
 		}
-		log.Printf("Cleaned up orphaned override for acestream ID: %s", id)
+		m.logger.Info("Cleaned up orphaned override", map[string]interface{}{
+			"content_id": id,
+		})
 		deletedCount++
 	}
 
@@ -220,8 +224,8 @@ func (m *Manager) CleanOrphans(validIDs []string) (int, error) {
 
 // BulkUpdateError represents an error that occurred during a bulk update operation
 type BulkUpdateError struct {
-	AcestreamID string
-	Error       string
+	ContentID string
+	Error     string
 }
 
 // BulkUpdateResult contains the result of a bulk update operation
@@ -231,11 +235,11 @@ type BulkUpdateResult struct {
 	Errors  []BulkUpdateError
 }
 
-// BulkUpdate updates a specific field across multiple acestream IDs.
+// BulkUpdate updates a specific field across multiple content IDs.
 // If atomic is true, all updates succeed or none (rollback on any error).
 // If atomic is false, partial updates are allowed (best effort).
 // Returns a BulkUpdateResult with counts and any errors encountered.
-func (m *Manager) BulkUpdate(acestreamIDs []string, field string, value interface{}, atomic bool) (*BulkUpdateResult, error) {
+func (m *Manager) BulkUpdate(contentIDs []string, field string, value interface{}, atomic bool) (*BulkUpdateResult, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
@@ -259,8 +263,8 @@ func (m *Manager) BulkUpdate(acestreamIDs []string, field string, value interfac
 	// Store original state for rollback if atomic
 	var originalState map[string]ChannelOverride
 	if atomic {
-		originalState = make(map[string]ChannelOverride, len(acestreamIDs))
-		for _, id := range acestreamIDs {
+		originalState = make(map[string]ChannelOverride, len(contentIDs))
+		for _, id := range contentIDs {
 			if override, exists := m.config[id]; exists {
 				originalState[id] = override
 			}
@@ -268,7 +272,7 @@ func (m *Manager) BulkUpdate(acestreamIDs []string, field string, value interfac
 	}
 
 	// Apply updates
-	for _, id := range acestreamIDs {
+	for _, id := range contentIDs {
 		// Get existing override or create new one
 		override, exists := m.config[id]
 		if !exists {
@@ -279,8 +283,8 @@ func (m *Manager) BulkUpdate(acestreamIDs []string, field string, value interfac
 		if err := updateOverrideField(&override, field, value); err != nil {
 			result.Failed++
 			result.Errors = append(result.Errors, BulkUpdateError{
-				AcestreamID: id,
-				Error:       err.Error(),
+				ContentID: id,
+				Error:     err.Error(),
 			})
 
 			if atomic {

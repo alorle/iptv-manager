@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"context"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -10,11 +11,21 @@ import (
 
 	"github.com/alorle/iptv-manager/config"
 	"github.com/alorle/iptv-manager/domain"
+	"github.com/alorle/iptv-manager/logging"
 	"github.com/alorle/iptv-manager/multiplexer"
 	"github.com/alorle/iptv-manager/pidmanager"
 )
 
 const testRemoteAddr = "192.168.1.100:12345"
+
+// Helper to create test dependencies with a no-op logger
+func createTestDeps() StreamDependencies {
+	return StreamDependencies{
+		Logger:      logging.NewWithWriter(logging.INFO, "test", io.Discard),
+		Multiplexer: multiplexer.New(multiplexer.DefaultConfig()),
+		PidMgr:      pidmanager.NewManager(),
+	}
+}
 
 func TestIsValidContentID(t *testing.T) {
 	tests := []struct {
@@ -66,7 +77,7 @@ func TestIsValidContentID(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := domain.IsValidAcestreamID(tt.id)
+			result := domain.IsValidContentID(tt.id)
 			if result != tt.expected {
 				t.Errorf("isValidContentID(%s) = %v, expected %v", tt.id, result, tt.expected)
 			}
@@ -75,12 +86,9 @@ func TestIsValidContentID(t *testing.T) {
 }
 
 func TestStreamHandler_MissingID(t *testing.T) {
-	pidMgr := pidmanager.NewManager()
-	mux := multiplexer.New(multiplexer.DefaultConfig())
-
 	cfg := &config.Config{}
 	cfg.Acestream.EngineURL = "http://localhost:6878"
-	deps := StreamDependencies{Multiplexer: mux, PidMgr: pidMgr}
+	deps := createTestDeps()
 	handler := CreateStreamHandler(cfg, deps)
 
 	req := httptest.NewRequest(http.MethodGet, "/stream", nil)
@@ -98,12 +106,9 @@ func TestStreamHandler_MissingID(t *testing.T) {
 }
 
 func TestStreamHandler_InvalidID(t *testing.T) {
-	pidMgr := pidmanager.NewManager()
-	mux := multiplexer.New(multiplexer.DefaultConfig())
-
 	cfg := &config.Config{}
 	cfg.Acestream.EngineURL = "http://localhost:6878"
-	deps := StreamDependencies{Multiplexer: mux, PidMgr: pidMgr}
+	deps := createTestDeps()
 	handler := CreateStreamHandler(cfg, deps)
 
 	tests := []struct {
@@ -134,12 +139,9 @@ func TestStreamHandler_InvalidID(t *testing.T) {
 }
 
 func TestStreamHandler_MethodNotAllowed(t *testing.T) {
-	pidMgr := pidmanager.NewManager()
-	mux := multiplexer.New(multiplexer.DefaultConfig())
-
 	cfg := &config.Config{}
 	cfg.Acestream.EngineURL = "http://localhost:6878"
-	deps := StreamDependencies{Multiplexer: mux, PidMgr: pidMgr}
+	deps := createTestDeps()
 	handler := CreateStreamHandler(cfg, deps)
 
 	methods := []string{http.MethodPost, http.MethodPut, http.MethodDelete}
@@ -180,12 +182,9 @@ func TestStreamHandler_WithMockEngine(t *testing.T) {
 	}))
 	defer mockEngine.Close()
 
-	pidMgr := pidmanager.NewManager()
-	mux := multiplexer.New(multiplexer.DefaultConfig())
-
 	cfg := &config.Config{}
 	cfg.Acestream.EngineURL = mockEngine.URL
-	deps := StreamDependencies{Multiplexer: mux, PidMgr: pidMgr}
+	deps := createTestDeps()
 	handler := CreateStreamHandler(cfg, deps)
 
 	req := httptest.NewRequest(http.MethodGet, "/stream?id=0123456789abcdef0123456789abcdef01234567", nil)
@@ -207,13 +206,10 @@ func TestStreamHandler_WithMockEngine(t *testing.T) {
 }
 
 func TestStreamHandler_EngineConnectionError(t *testing.T) {
-	pidMgr := pidmanager.NewManager()
-	mux := multiplexer.New(multiplexer.DefaultConfig())
-
 	// Use invalid engine URL
 	cfg := &config.Config{}
 	cfg.Acestream.EngineURL = "http://localhost:99999"
-	deps := StreamDependencies{Multiplexer: mux, PidMgr: pidMgr}
+	deps := createTestDeps()
 	handler := CreateStreamHandler(cfg, deps)
 
 	req := httptest.NewRequest(http.MethodGet, "/stream?id=0123456789abcdef0123456789abcdef01234567", nil)
@@ -250,12 +246,9 @@ func TestStreamHandler_TranscodeParameters(t *testing.T) {
 	}))
 	defer mockEngine.Close()
 
-	pidMgr := pidmanager.NewManager()
-	mux := multiplexer.New(multiplexer.DefaultConfig())
-
 	cfg := &config.Config{}
 	cfg.Acestream.EngineURL = mockEngine.URL
-	deps := StreamDependencies{Multiplexer: mux, PidMgr: pidMgr}
+	deps := createTestDeps()
 	handler := CreateStreamHandler(cfg, deps)
 
 	req := httptest.NewRequest(http.MethodGet, "/stream?id=0123456789abcdef0123456789abcdef01234567&transcode_audio=mp3", nil)

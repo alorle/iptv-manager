@@ -2,12 +2,12 @@ package api
 
 import (
 	"encoding/json"
-	"log"
 	"net/http"
 	"sort"
 	"strings"
 
 	"github.com/alorle/iptv-manager/epg"
+	"github.com/alorle/iptv-manager/logging"
 )
 
 // ValidateRequest represents the request body for validating a TVG-ID
@@ -30,26 +30,35 @@ type TVGValidator interface {
 // ValidateHandler handles the POST /api/validate/tvg-id endpoint
 type ValidateHandler struct {
 	epgCache TVGValidator
+	logger   *logging.Logger
 }
 
 // NewValidateHandler creates a new handler for the validation API
-func NewValidateHandler(epgCache TVGValidator) *ValidateHandler {
+func NewValidateHandler(epgCache TVGValidator, logger *logging.Logger) *ValidateHandler {
 	return &ValidateHandler{
 		epgCache: epgCache,
+		logger:   logger,
 	}
 }
 
 // ServeHTTP handles the POST /api/validate/tvg-id request
 func (h *ValidateHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		logging.WriteJSONError(w, h.logger, "Method not allowed", http.StatusMethodNotAllowed, map[string]interface{}{
+			"method": r.Method,
+			"path":   r.URL.Path,
+		})
 		return
 	}
 
 	// Parse request body
 	var req ValidateRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		logging.WriteJSONError(w, h.logger, "Invalid request body", http.StatusBadRequest, map[string]interface{}{
+			"method": r.Method,
+			"path":   r.URL.Path,
+			"error":  err.Error(),
+		})
 		return
 	}
 
@@ -57,7 +66,11 @@ func (h *ValidateHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if strings.TrimSpace(req.TvgID) == "" {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
-		_ = json.NewEncoder(w).Encode(ValidateResponse{Valid: true})
+		if err := json.NewEncoder(w).Encode(ValidateResponse{Valid: true}); err != nil {
+			h.logger.Warn("Failed to encode validation response", map[string]interface{}{
+				"error": err.Error(),
+			})
+		}
 		return
 	}
 
@@ -78,7 +91,11 @@ func (h *ValidateHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 
 	if err := json.NewEncoder(w).Encode(response); err != nil {
-		log.Printf("Failed to encode validation response: %v", err)
+		h.logger.Warn("Failed to encode validation response", map[string]interface{}{
+			"method": r.Method,
+			"path":   r.URL.Path,
+			"error":  err.Error(),
+		})
 	}
 }
 

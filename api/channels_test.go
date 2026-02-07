@@ -12,11 +12,12 @@ import (
 
 	"github.com/alorle/iptv-manager/cache"
 	"github.com/alorle/iptv-manager/fetcher"
+	"github.com/alorle/iptv-manager/logging"
 	"github.com/alorle/iptv-manager/overrides"
 )
 
 const (
-	testChannelAcestreamID = "1234567890abcdef1234567890abcdef12345678"
+	testChannelContentID = "1234567890abcdef1234567890abcdef12345678"
 
 	// Mock M3U content for testing
 	mockM3U = `#EXTM3U
@@ -28,12 +29,15 @@ acestream://abcdef1234567890abcdef1234567890abcdef12
 )
 
 func setupTestHandler(t *testing.T) (*ChannelsHandler, func()) {
+	// Create test logger
+	logger := logging.New(logging.INFO, "[test]")
+
 	// Create temporary directory for overrides
 	tmpDir := t.TempDir()
 	overridesPath := filepath.Join(tmpDir, "overrides.yaml")
 
 	// Create overrides manager
-	mgr, err := overrides.NewManager(overridesPath)
+	mgr, err := overrides.NewManager(overridesPath, logger)
 	if err != nil {
 		t.Fatalf("Failed to create overrides manager: %v", err)
 	}
@@ -52,10 +56,10 @@ func setupTestHandler(t *testing.T) (*ChannelsHandler, func()) {
 		t.Fatalf("Failed to create cache storage: %v", err)
 	}
 
-	fetch := fetcher.New(5*time.Second, storage, 1*time.Hour)
+	fetch := fetcher.New(5*time.Second, storage, 1*time.Hour, logger)
 
 	// Create handler
-	handler := NewChannelsHandler(fetch, mgr, server.URL, server.URL)
+	handler := NewChannelsHandler(fetch, mgr, logger, server.URL, server.URL)
 
 	cleanup := func() {
 		server.Close()
@@ -69,7 +73,7 @@ func TestDeleteOverride_Success(t *testing.T) {
 	handler, cleanup := setupTestHandler(t)
 	defer cleanup()
 
-	acestreamID := testChannelAcestreamID
+	contentID := testChannelContentID
 
 	// First, create an override using PATCH
 	patchBody := UpdateChannelRequest{
@@ -77,7 +81,7 @@ func TestDeleteOverride_Success(t *testing.T) {
 		TvgName: stringPtr("Modified Channel"),
 	}
 	patchJSON, _ := json.Marshal(patchBody)
-	patchReq := httptest.NewRequest(http.MethodPatch, "/api/channels/"+acestreamID, bytes.NewReader(patchJSON))
+	patchReq := httptest.NewRequest(http.MethodPatch, "/api/channels/"+contentID, bytes.NewReader(patchJSON))
 	patchW := httptest.NewRecorder()
 	handler.ServeHTTP(patchW, patchReq)
 
@@ -86,12 +90,12 @@ func TestDeleteOverride_Success(t *testing.T) {
 	}
 
 	// Verify override was created
-	if override := handler.overridesMgr.Get(acestreamID); override == nil {
+	if override := handler.overridesMgr.Get(contentID); override == nil {
 		t.Fatal("Override was not created")
 	}
 
 	// Now delete the override
-	req := httptest.NewRequest(http.MethodDelete, "/api/channels/"+acestreamID+"/override", nil)
+	req := httptest.NewRequest(http.MethodDelete, "/api/channels/"+contentID+"/override", nil)
 	w := httptest.NewRecorder()
 
 	handler.ServeHTTP(w, req)
@@ -111,8 +115,8 @@ func TestDeleteOverride_Success(t *testing.T) {
 	if stream.HasOverride {
 		t.Error("Expected HasOverride to be false")
 	}
-	if stream.AcestreamID != acestreamID {
-		t.Errorf("Expected acestream_id %s, got %s", acestreamID, stream.AcestreamID)
+	if stream.ContentID != contentID {
+		t.Errorf("Expected content_id %s, got %s", contentID, stream.ContentID)
 	}
 	if stream.Name != "Test Channel 1" {
 		t.Errorf("Expected original name 'Test Channel 1', got %s", stream.Name)
@@ -122,7 +126,7 @@ func TestDeleteOverride_Success(t *testing.T) {
 	}
 
 	// Verify override was deleted from manager
-	if override := handler.overridesMgr.Get(acestreamID); override != nil {
+	if override := handler.overridesMgr.Get(contentID); override != nil {
 		t.Error("Override should have been deleted")
 	}
 }
@@ -131,10 +135,10 @@ func TestDeleteOverride_NoOverride(t *testing.T) {
 	handler, cleanup := setupTestHandler(t)
 	defer cleanup()
 
-	acestreamID := testChannelAcestreamID
+	contentID := testChannelContentID
 
 	// Try to delete override that doesn't exist
-	req := httptest.NewRequest(http.MethodDelete, "/api/channels/"+acestreamID+"/override", nil)
+	req := httptest.NewRequest(http.MethodDelete, "/api/channels/"+contentID+"/override", nil)
 	w := httptest.NewRecorder()
 
 	handler.ServeHTTP(w, req)
@@ -144,9 +148,15 @@ func TestDeleteOverride_NoOverride(t *testing.T) {
 		t.Errorf("Expected status 404, got %d", w.Code)
 	}
 
-	body := w.Body.String()
-	if body != "No override found for this acestream_id\n" {
-		t.Errorf("Expected 'No override found' error, got: %s", body)
+	// Check JSON error response
+	var errResp struct {
+		Error string `json:"error"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &errResp); err != nil {
+		t.Fatalf("Failed to parse JSON response: %v", err)
+	}
+	if errResp.Error != "No override found for this content_id" {
+		t.Errorf("Expected 'No override found' error, got: %s", errResp.Error)
 	}
 }
 
@@ -164,19 +174,19 @@ func TestDeleteOverride_InvalidID(t *testing.T) {
 			name:       "too short",
 			id:         "1234567890abcdef",
 			expectCode: http.StatusBadRequest,
-			expectBody: "Invalid acestream_id: must be 40 hexadecimal characters",
+			expectBody: "Invalid content_id: must be 40 hexadecimal characters",
 		},
 		{
 			name:       "too long",
 			id:         "1234567890abcdef1234567890abcdef123456789",
 			expectCode: http.StatusBadRequest,
-			expectBody: "Invalid acestream_id: must be 40 hexadecimal characters",
+			expectBody: "Invalid content_id: must be 40 hexadecimal characters",
 		},
 		{
 			name:       "non-hex characters",
 			id:         "1234567890abcdef1234567890abcdef1234567g",
 			expectCode: http.StatusBadRequest,
-			expectBody: "Invalid acestream_id: must be 40 hexadecimal characters",
+			expectBody: "Invalid content_id: must be 40 hexadecimal characters",
 		},
 	}
 
@@ -191,9 +201,15 @@ func TestDeleteOverride_InvalidID(t *testing.T) {
 				t.Errorf("Expected status %d, got %d", tt.expectCode, w.Code)
 			}
 
-			body := w.Body.String()
-			if body != tt.expectBody+"\n" {
-				t.Errorf("Expected body '%s', got '%s'", tt.expectBody, body)
+			// Check JSON error response
+			var errResp struct {
+				Error string `json:"error"`
+			}
+			if err := json.Unmarshal(w.Body.Bytes(), &errResp); err != nil {
+				t.Fatalf("Failed to parse JSON response: %v", err)
+			}
+			if errResp.Error != tt.expectBody {
+				t.Errorf("Expected error '%s', got '%s'", tt.expectBody, errResp.Error)
 			}
 		})
 	}
@@ -204,17 +220,17 @@ func TestDeleteOverride_ChannelNotFound(t *testing.T) {
 	defer cleanup()
 
 	// Valid ID but not in sources
-	acestreamID := "ffffffffffffffffffffffffffffffffffffffff"
+	contentID := "ffffffffffffffffffffffffffffffffffffffff"
 
 	// First create an override for this non-existent channel
 	// (This simulates an orphaned override)
 	override := overrides.ChannelOverride{
 		Enabled: boolPtr(false),
 	}
-	_ = handler.overridesMgr.Set(acestreamID, override)
+	_ = handler.overridesMgr.Set(contentID, override)
 
 	// Try to delete it
-	req := httptest.NewRequest(http.MethodDelete, "/api/channels/"+acestreamID+"/override", nil)
+	req := httptest.NewRequest(http.MethodDelete, "/api/channels/"+contentID+"/override", nil)
 	w := httptest.NewRecorder()
 
 	handler.ServeHTTP(w, req)
@@ -224,9 +240,15 @@ func TestDeleteOverride_ChannelNotFound(t *testing.T) {
 		t.Errorf("Expected status 404, got %d", w.Code)
 	}
 
-	body := w.Body.String()
-	if body != "Stream not found\n" {
-		t.Errorf("Expected 'Stream not found' error, got: %s", body)
+	// Check JSON error response
+	var errResp struct {
+		Error string `json:"error"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &errResp); err != nil {
+		t.Fatalf("Failed to parse JSON response: %v", err)
+	}
+	if errResp.Error != "Stream not found" {
+		t.Errorf("Expected 'Stream not found' error, got: %s", errResp.Error)
 	}
 }
 
@@ -234,10 +256,10 @@ func TestDeleteOverride_MethodNotAllowed(t *testing.T) {
 	handler, cleanup := setupTestHandler(t)
 	defer cleanup()
 
-	acestreamID := testChannelAcestreamID
+	contentID := testChannelContentID
 
 	// Try POST (not allowed)
-	req := httptest.NewRequest(http.MethodPost, "/api/channels/"+acestreamID+"/override", nil)
+	req := httptest.NewRequest(http.MethodPost, "/api/channels/"+contentID+"/override", nil)
 	w := httptest.NewRecorder()
 
 	handler.ServeHTTP(w, req)

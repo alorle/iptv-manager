@@ -1,6 +1,10 @@
 package overrides
 
-import "testing"
+import (
+	"testing"
+
+	"github.com/alorle/iptv-manager/logging"
+)
 
 // TestManagerImplementsInterface ensures Manager implements Interface
 func TestManagerImplementsInterface(t *testing.T) {
@@ -8,7 +12,8 @@ func TestManagerImplementsInterface(t *testing.T) {
 
 	// Create a temporary test directory
 	tempDir := t.TempDir()
-	mgr, err := NewManager(tempDir + "/test-overrides.yaml")
+	logger := logging.New(logging.INFO, "[test]")
+	mgr, err := NewManager(tempDir+"/test-overrides.yaml", logger)
 	if err != nil {
 		t.Fatalf("Failed to create manager: %v", err)
 	}
@@ -32,8 +37,8 @@ func TestMockManagerGet(t *testing.T) {
 	tvgID := "test-channel"
 
 	mock := &MockManager{
-		GetFunc: func(acestreamID string) *ChannelOverride {
-			if acestreamID == testID {
+		GetFunc: func(contentID string) *ChannelOverride {
+			if contentID == testID {
 				return &ChannelOverride{
 					Enabled: &enabled,
 					TvgID:   &tvgID,

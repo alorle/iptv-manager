@@ -3,11 +3,13 @@ package api
 import (
 	"bytes"
 	"encoding/json"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 
 	"github.com/alorle/iptv-manager/epg"
+	"github.com/alorle/iptv-manager/logging"
 )
 
 // mockEPGCache is a mock implementation of EPGCache for testing
@@ -50,7 +52,8 @@ func newMockEPGCache() *mockEPGCache {
 
 func TestValidateHandler_ValidTvgID(t *testing.T) {
 	cache := newMockEPGCache()
-	handler := NewValidateHandler(cache)
+	logger := logging.NewWithWriter(logging.INFO, "test", io.Discard)
+	handler := NewValidateHandler(cache, logger)
 
 	reqBody := ValidateRequest{TvgID: "La1.TV"}
 	body, _ := json.Marshal(reqBody)
@@ -81,7 +84,8 @@ func TestValidateHandler_ValidTvgID(t *testing.T) {
 
 func TestValidateHandler_InvalidTvgID(t *testing.T) {
 	cache := newMockEPGCache()
-	handler := NewValidateHandler(cache)
+	logger := logging.NewWithWriter(logging.INFO, "test", io.Discard)
+	handler := NewValidateHandler(cache, logger)
 
 	reqBody := ValidateRequest{TvgID: "InvalidChannel.TV"}
 	body, _ := json.Marshal(reqBody)
@@ -116,7 +120,8 @@ func TestValidateHandler_InvalidTvgID(t *testing.T) {
 
 func TestValidateHandler_EmptyTvgID(t *testing.T) {
 	cache := newMockEPGCache()
-	handler := NewValidateHandler(cache)
+	logger := logging.NewWithWriter(logging.INFO, "test", io.Discard)
+	handler := NewValidateHandler(cache, logger)
 
 	reqBody := ValidateRequest{TvgID: ""}
 	body, _ := json.Marshal(reqBody)
@@ -147,7 +152,8 @@ func TestValidateHandler_EmptyTvgID(t *testing.T) {
 
 func TestValidateHandler_WhitespaceTvgID(t *testing.T) {
 	cache := newMockEPGCache()
-	handler := NewValidateHandler(cache)
+	logger := logging.NewWithWriter(logging.INFO, "test", io.Discard)
+	handler := NewValidateHandler(cache, logger)
 
 	reqBody := ValidateRequest{TvgID: "   "}
 	body, _ := json.Marshal(reqBody)
@@ -174,7 +180,8 @@ func TestValidateHandler_WhitespaceTvgID(t *testing.T) {
 
 func TestValidateHandler_MethodNotAllowed(t *testing.T) {
 	cache := newMockEPGCache()
-	handler := NewValidateHandler(cache)
+	logger := logging.NewWithWriter(logging.INFO, "test", io.Discard)
+	handler := NewValidateHandler(cache, logger)
 
 	req := httptest.NewRequest(http.MethodGet, "/api/validate/tvg-id", nil)
 	w := httptest.NewRecorder()
@@ -188,7 +195,8 @@ func TestValidateHandler_MethodNotAllowed(t *testing.T) {
 
 func TestValidateHandler_InvalidJSON(t *testing.T) {
 	cache := newMockEPGCache()
-	handler := NewValidateHandler(cache)
+	logger := logging.NewWithWriter(logging.INFO, "test", io.Discard)
+	handler := NewValidateHandler(cache, logger)
 
 	req := httptest.NewRequest(http.MethodPost, "/api/validate/tvg-id", bytes.NewReader([]byte("invalid json")))
 	req.Header.Set("Content-Type", "application/json")
@@ -203,7 +211,8 @@ func TestValidateHandler_InvalidJSON(t *testing.T) {
 
 func TestGetSuggestions_PrefixMatch(t *testing.T) {
 	cache := newMockEPGCache()
-	handler := NewValidateHandler(cache)
+	logger := logging.NewWithWriter(logging.INFO, "test", io.Discard)
+	handler := NewValidateHandler(cache, logger)
 
 	suggestions := handler.getSuggestions("La", 10)
 
@@ -227,7 +236,8 @@ func TestGetSuggestions_PrefixMatch(t *testing.T) {
 
 func TestGetSuggestions_MaxResults(t *testing.T) {
 	cache := newMockEPGCache()
-	handler := NewValidateHandler(cache)
+	logger := logging.NewWithWriter(logging.INFO, "test", io.Discard)
+	handler := NewValidateHandler(cache, logger)
 
 	suggestions := handler.getSuggestions("TV", 3)
 

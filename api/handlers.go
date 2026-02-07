@@ -2,16 +2,16 @@ package api
 
 import (
 	"encoding/json"
-	"log"
 	"net/http"
 	"sort"
 	"strings"
 
 	"github.com/alorle/iptv-manager/domain"
+	"github.com/alorle/iptv-manager/logging"
 	"github.com/alorle/iptv-manager/overrides"
 )
 
-// ServeHTTP handles the GET /api/channels request, PATCH /api/channels/{acestream_id}, and DELETE /api/channels/{acestream_id}/override
+// ServeHTTP handles the GET /api/channels request, PATCH /api/channels/{content_id}, and DELETE /api/channels/{content_id}/override
 func (h *ChannelsHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if r.Method == http.MethodGet {
 		h.handleList(w, r)
@@ -28,7 +28,10 @@ func (h *ChannelsHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+	logging.WriteJSONError(w, h.logger, "Method not allowed", http.StatusMethodNotAllowed, map[string]interface{}{
+		"method": r.Method,
+		"path":   r.URL.Path,
+	})
 }
 
 // handleList handles the GET /api/channels request
@@ -50,14 +53,22 @@ func (h *ChannelsHandler) handleList(w http.ResponseWriter, r *http.Request) {
 			allStreams = append(allStreams, streams...)
 			allFailed = false
 		} else {
-			log.Printf("Skipping %s source: %v", sourceName, err)
+			h.logger.Warn("Skipping source", map[string]interface{}{
+				"method": r.Method,
+				"path":   r.URL.Path,
+				"source": sourceName,
+				"error":  err.Error(),
+			})
 		}
 	}
 
 	// Check if all sources failed
 	if allFailed {
-		log.Printf("Failed to fetch channels - all sources failed")
-		http.Error(w, "Bad Gateway", http.StatusBadGateway)
+		logging.WriteJSONError(w, h.logger, "Bad Gateway", http.StatusBadGateway, map[string]interface{}{
+			"method": r.Method,
+			"path":   r.URL.Path,
+			"reason": "all sources failed",
+		})
 		return
 	}
 
@@ -82,7 +93,11 @@ func (h *ChannelsHandler) handleList(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 
 	if err := json.NewEncoder(w).Encode(allChannels); err != nil {
-		log.Printf("Failed to encode channels response: %v", err)
+		h.logger.Warn("Failed to encode channels response", map[string]interface{}{
+			"method": r.Method,
+			"path":   r.URL.Path,
+			"error":  err.Error(),
+		})
 	}
 }
 
@@ -126,7 +141,7 @@ func (h *ChannelsHandler) fetchSourcesContent() []struct {
 }
 
 // findStreamByID searches for a stream by acestream ID in the provided sources
-func findStreamByID(acestreamID string, sources []struct {
+func findStreamByID(contentID string, sources []struct {
 	content []byte
 	err     error
 	name    string
@@ -135,7 +150,7 @@ func findStreamByID(acestreamID string, sources []struct {
 		if source.err == nil {
 			streams := parseM3UStreams(source.content, source.name)
 			for _, s := range streams {
-				if s.AcestreamID == acestreamID {
+				if s.ContentID == contentID {
 					return &s
 				}
 			}
@@ -192,26 +207,39 @@ func applyOverrideToStream(stream *streamData, override overrides.ChannelOverrid
 	}
 }
 
-// handleToggle handles the PATCH /api/channels/{acestream_id} request
+// handleToggle handles the PATCH /api/channels/{content_id} request
 func (h *ChannelsHandler) handleToggle(w http.ResponseWriter, r *http.Request) {
-	// Extract and validate acestream_id
+	// Extract and validate content_id
 	path := strings.TrimPrefix(r.URL.Path, "/api/channels/")
-	acestreamID := strings.TrimSpace(path)
+	contentID := strings.TrimSpace(path)
 
-	if !domain.IsValidAcestreamID(acestreamID) {
-		http.Error(w, "Invalid acestream_id: must be 40 hexadecimal characters", http.StatusBadRequest)
+	if !domain.IsValidAcestreamID(contentID) {
+		logging.WriteJSONError(w, h.logger, "Invalid content_id: must be 40 hexadecimal characters", http.StatusBadRequest, map[string]interface{}{
+			"method":     r.Method,
+			"path":       r.URL.Path,
+			"content_id": contentID,
+		})
 		return
 	}
 
 	// Parse and validate request body
 	var req UpdateChannelRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		logging.WriteJSONError(w, h.logger, "Invalid request body", http.StatusBadRequest, map[string]interface{}{
+			"method":     r.Method,
+			"path":       r.URL.Path,
+			"content_id": contentID,
+			"error":      err.Error(),
+		})
 		return
 	}
 
 	if !validateUpdateRequest(&req) {
-		http.Error(w, "tvg_id and tvg_name cannot be empty", http.StatusBadRequest)
+		logging.WriteJSONError(w, h.logger, "tvg_id and tvg_name cannot be empty", http.StatusBadRequest, map[string]interface{}{
+			"method":     r.Method,
+			"path":       r.URL.Path,
+			"content_id": contentID,
+		})
 		return
 	}
 
@@ -226,31 +254,47 @@ func (h *ChannelsHandler) handleToggle(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if allFailed {
-		log.Printf("Failed to fetch channels - all sources failed")
-		http.Error(w, "Bad Gateway", http.StatusBadGateway)
+		logging.WriteJSONError(w, h.logger, "Bad Gateway", http.StatusBadGateway, map[string]interface{}{
+			"method":     r.Method,
+			"path":       r.URL.Path,
+			"content_id": contentID,
+			"reason":     "all sources failed",
+		})
 		return
 	}
 
 	// Verify stream exists
-	if stream := findStreamByID(acestreamID, sources); stream == nil {
-		http.Error(w, "Stream not found", http.StatusNotFound)
+	if stream := findStreamByID(contentID, sources); stream == nil {
+		logging.WriteJSONError(w, h.logger, "Stream not found", http.StatusNotFound, map[string]interface{}{
+			"method":     r.Method,
+			"path":       r.URL.Path,
+			"content_id": contentID,
+		})
 		return
 	}
 
 	// Merge and save override
-	existingOverride := h.overridesMgr.Get(acestreamID)
+	existingOverride := h.overridesMgr.Get(contentID)
 	override := mergeOverrideWithRequest(existingOverride, &req)
 
-	if err := h.overridesMgr.Set(acestreamID, override); err != nil {
-		log.Printf("Failed to save override for %s: %v", acestreamID, err)
-		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+	if err := h.overridesMgr.Set(contentID, override); err != nil {
+		logging.WriteJSONError(w, h.logger, "Internal Server Error", http.StatusInternalServerError, map[string]interface{}{
+			"method":     r.Method,
+			"path":       r.URL.Path,
+			"content_id": contentID,
+			"error":      err.Error(),
+		})
 		return
 	}
 
-	log.Printf("Updated stream %s with overrides", acestreamID)
+	h.logger.Info("Updated stream with overrides", map[string]interface{}{
+		"method":     r.Method,
+		"path":       r.URL.Path,
+		"content_id": contentID,
+	})
 
 	// Build and return response
-	updatedStream := findStreamByID(acestreamID, sources)
+	updatedStream := findStreamByID(contentID, sources)
 	if updatedStream != nil {
 		applyOverrideToStream(updatedStream, override)
 	}
@@ -259,26 +303,39 @@ func (h *ChannelsHandler) handleToggle(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 
 	if err := json.NewEncoder(w).Encode(updatedStream); err != nil {
-		log.Printf("Failed to encode stream response: %v", err)
+		h.logger.Warn("Failed to encode stream response", map[string]interface{}{
+			"method":     r.Method,
+			"path":       r.URL.Path,
+			"content_id": contentID,
+			"error":      err.Error(),
+		})
 	}
 }
 
-// handleDelete handles the DELETE /api/channels/{acestream_id}/override request
+// handleDelete handles the DELETE /api/channels/{content_id}/override request
 func (h *ChannelsHandler) handleDelete(w http.ResponseWriter, r *http.Request) {
-	// Extract and validate acestream_id
+	// Extract and validate content_id
 	path := strings.TrimPrefix(r.URL.Path, "/api/channels/")
 	path = strings.TrimSuffix(path, "/override")
-	acestreamID := strings.TrimSpace(path)
+	contentID := strings.TrimSpace(path)
 
-	if !domain.IsValidAcestreamID(acestreamID) {
-		http.Error(w, "Invalid acestream_id: must be 40 hexadecimal characters", http.StatusBadRequest)
+	if !domain.IsValidAcestreamID(contentID) {
+		logging.WriteJSONError(w, h.logger, "Invalid content_id: must be 40 hexadecimal characters", http.StatusBadRequest, map[string]interface{}{
+			"method":     r.Method,
+			"path":       r.URL.Path,
+			"content_id": contentID,
+		})
 		return
 	}
 
 	// Check if override exists
-	existingOverride := h.overridesMgr.Get(acestreamID)
+	existingOverride := h.overridesMgr.Get(contentID)
 	if existingOverride == nil {
-		http.Error(w, "No override found for this acestream_id", http.StatusNotFound)
+		logging.WriteJSONError(w, h.logger, "No override found for this content_id", http.StatusNotFound, map[string]interface{}{
+			"method":     r.Method,
+			"path":       r.URL.Path,
+			"content_id": contentID,
+		})
 		return
 	}
 
@@ -293,25 +350,41 @@ func (h *ChannelsHandler) handleDelete(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if allFailed {
-		log.Printf("Failed to fetch channels - all sources failed")
-		http.Error(w, "Bad Gateway", http.StatusBadGateway)
+		logging.WriteJSONError(w, h.logger, "Bad Gateway", http.StatusBadGateway, map[string]interface{}{
+			"method":     r.Method,
+			"path":       r.URL.Path,
+			"content_id": contentID,
+			"reason":     "all sources failed",
+		})
 		return
 	}
 
-	originalStream := findStreamByID(acestreamID, sources)
+	originalStream := findStreamByID(contentID, sources)
 	if originalStream == nil {
-		http.Error(w, "Stream not found", http.StatusNotFound)
+		logging.WriteJSONError(w, h.logger, "Stream not found", http.StatusNotFound, map[string]interface{}{
+			"method":     r.Method,
+			"path":       r.URL.Path,
+			"content_id": contentID,
+		})
 		return
 	}
 
 	// Delete the override
-	if err := h.overridesMgr.Delete(acestreamID); err != nil {
-		log.Printf("Failed to delete override for %s: %v", acestreamID, err)
-		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+	if err := h.overridesMgr.Delete(contentID); err != nil {
+		logging.WriteJSONError(w, h.logger, "Internal Server Error", http.StatusInternalServerError, map[string]interface{}{
+			"method":     r.Method,
+			"path":       r.URL.Path,
+			"content_id": contentID,
+			"error":      err.Error(),
+		})
 		return
 	}
 
-	log.Printf("Deleted override for stream %s", acestreamID)
+	h.logger.Info("Deleted override for stream", map[string]interface{}{
+		"method":     r.Method,
+		"path":       r.URL.Path,
+		"content_id": contentID,
+	})
 
 	// Return the stream in its original state
 	originalStream.HasOverride = false
@@ -320,6 +393,11 @@ func (h *ChannelsHandler) handleDelete(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 
 	if err := json.NewEncoder(w).Encode(originalStream); err != nil {
-		log.Printf("Failed to encode stream response: %v", err)
+		h.logger.Warn("Failed to encode stream response", map[string]interface{}{
+			"method":     r.Method,
+			"path":       r.URL.Path,
+			"content_id": contentID,
+			"error":      err.Error(),
+		})
 	}
 }

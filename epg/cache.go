@@ -4,10 +4,11 @@ import (
 	"encoding/xml"
 	"fmt"
 	"io"
-	"log"
 	"net/http"
 	"strings"
 	"time"
+
+	"github.com/alorle/iptv-manager/logging"
 )
 
 // Channel represents a channel element in the EPG XML
@@ -33,10 +34,11 @@ type Cache struct {
 	channels    map[string]ChannelInfo // Map of channel ID -> ChannelInfo for O(1) lookup
 	channelList []ChannelInfo          // List of all channels for search/suggestion
 	epgURL      string
+	logger      *logging.Logger
 }
 
 // New creates a new Cache and initializes it by fetching and parsing the EPG XML
-func New(epgURL string, timeout time.Duration) (*Cache, error) {
+func New(epgURL string, timeout time.Duration, logger *logging.Logger) (*Cache, error) {
 	if epgURL == "" {
 		return nil, fmt.Errorf("EPG URL is required")
 	}
@@ -44,6 +46,7 @@ func New(epgURL string, timeout time.Duration) (*Cache, error) {
 	cache := &Cache{
 		channels: make(map[string]ChannelInfo),
 		epgURL:   epgURL,
+		logger:   logger,
 	}
 
 	if err := cache.fetch(timeout); err != nil {
@@ -65,7 +68,9 @@ func (c *Cache) fetch(timeout time.Duration) error {
 	}
 	defer func() {
 		if closeErr := resp.Body.Close(); closeErr != nil {
-			log.Printf("warning: failed to close EPG response body: %v", closeErr)
+			c.logger.Warn("Failed to close EPG response body", map[string]interface{}{
+				"error": closeErr.Error(),
+			})
 		}
 	}()
 

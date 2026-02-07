@@ -2,11 +2,11 @@ package api
 
 import (
 	"encoding/json"
-	"log"
 	"net/http"
 	"strings"
 
 	"github.com/alorle/iptv-manager/domain"
+	"github.com/alorle/iptv-manager/logging"
 	"github.com/alorle/iptv-manager/overrides"
 )
 
@@ -14,13 +14,15 @@ import (
 type OverridesHandler struct {
 	overridesMgr overrides.Interface
 	epgCache     TVGValidator
+	logger       *logging.Logger
 }
 
 // NewOverridesHandler creates a new handler for the overrides API
-func NewOverridesHandler(overridesMgr overrides.Interface, epgCache TVGValidator) *OverridesHandler {
+func NewOverridesHandler(overridesMgr overrides.Interface, epgCache TVGValidator, logger *logging.Logger) *OverridesHandler {
 	return &OverridesHandler{
 		overridesMgr: overridesMgr,
 		epgCache:     epgCache,
+		logger:       logger,
 	}
 }
 
@@ -37,7 +39,10 @@ func (h *OverridesHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			h.handleList(w, r)
 			return
 		}
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		logging.WriteJSONError(w, h.logger, "Method not allowed", http.StatusMethodNotAllowed, map[string]interface{}{
+			"method": r.Method,
+			"path":   r.URL.Path,
+		})
 		return
 	}
 
@@ -47,54 +52,74 @@ func (h *OverridesHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			h.handleBulkUpdate(w, r)
 			return
 		}
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		logging.WriteJSONError(w, h.logger, "Method not allowed", http.StatusMethodNotAllowed, map[string]interface{}{
+			"method": r.Method,
+			"path":   r.URL.Path,
+		})
 		return
 	}
 
-	// /api/overrides/:acestreamId - single override operations
-	acestreamID := path
+	// /api/overrides/:contentId - single override operations
+	contentID := path
 
-	// Validate acestream ID format
-	if !domain.IsValidAcestreamID(acestreamID) {
-		http.Error(w, "Invalid acestream_id: must be 40 hexadecimal characters", http.StatusBadRequest)
+	// Validate content ID format
+	if !domain.IsValidAcestreamID(contentID) {
+		logging.WriteJSONError(w, h.logger, "Invalid content_id: must be 40 hexadecimal characters", http.StatusBadRequest, map[string]interface{}{
+			"method":     r.Method,
+			"path":       r.URL.Path,
+			"content_id": contentID,
+		})
 		return
 	}
 
 	switch r.Method {
 	case http.MethodGet:
-		h.handleGet(w, r, acestreamID)
+		h.handleGet(w, r, contentID)
 	case http.MethodPut:
-		h.handlePut(w, r, acestreamID)
+		h.handlePut(w, r, contentID)
 	case http.MethodDelete:
-		h.handleDelete(w, r, acestreamID)
+		h.handleDelete(w, r, contentID)
 	default:
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		logging.WriteJSONError(w, h.logger, "Method not allowed", http.StatusMethodNotAllowed, map[string]interface{}{
+			"method":     r.Method,
+			"path":       r.URL.Path,
+			"content_id": contentID,
+		})
 	}
 }
 
 // OverrideResponse represents the response for a single override
 type OverrideResponse struct {
-	AcestreamID string                     `json:"acestream_id"`
-	Override    *overrides.ChannelOverride `json:"override"`
+	ContentID string                     `json:"acestream_id"`
+	Override  *overrides.ChannelOverride `json:"override"`
 }
 
-// handleGet handles GET /api/overrides/:acestreamId
-func (h *OverridesHandler) handleGet(w http.ResponseWriter, _ *http.Request, acestreamID string) {
-	override := h.overridesMgr.Get(acestreamID)
+// handleGet handles GET /api/overrides/:contentId
+func (h *OverridesHandler) handleGet(w http.ResponseWriter, r *http.Request, contentID string) {
+	override := h.overridesMgr.Get(contentID)
 	if override == nil {
-		http.Error(w, "Override not found", http.StatusNotFound)
+		logging.WriteJSONError(w, h.logger, "Override not found", http.StatusNotFound, map[string]interface{}{
+			"method":     r.Method,
+			"path":       r.URL.Path,
+			"content_id": contentID,
+		})
 		return
 	}
 
 	response := OverrideResponse{
-		AcestreamID: acestreamID,
-		Override:    override,
+		ContentID: contentID,
+		Override:  override,
 	}
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
 	if err := json.NewEncoder(w).Encode(response); err != nil {
-		log.Printf("Failed to encode override response: %v", err)
+		h.logger.Warn("Failed to encode override response", map[string]interface{}{
+			"method":     r.Method,
+			"path":       r.URL.Path,
+			"content_id": contentID,
+			"error":      err.Error(),
+		})
 	}
 }
 
@@ -106,15 +131,20 @@ type ValidationError struct {
 	Suggestions []string `json:"suggestions,omitempty"`
 }
 
-// handlePut handles PUT /api/overrides/:acestreamId
-func (h *OverridesHandler) handlePut(w http.ResponseWriter, r *http.Request, acestreamID string) {
+// handlePut handles PUT /api/overrides/:contentId
+func (h *OverridesHandler) handlePut(w http.ResponseWriter, r *http.Request, contentID string) {
 	// Check for force parameter
 	force := r.URL.Query().Get("force") == "true"
 
 	// Parse request body
 	var override overrides.ChannelOverride
 	if err := json.NewDecoder(r.Body).Decode(&override); err != nil {
-		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		logging.WriteJSONError(w, h.logger, "Invalid request body", http.StatusBadRequest, map[string]interface{}{
+			"method":     r.Method,
+			"path":       r.URL.Path,
+			"content_id": contentID,
+			"error":      err.Error(),
+		})
 		return
 	}
 
@@ -127,6 +157,13 @@ func (h *OverridesHandler) handlePut(w http.ResponseWriter, r *http.Request, ace
 			// Get suggestions for invalid TVG-ID
 			suggestions := h.getSuggestions(tvgID, 10)
 
+			h.logger.Warn("TVG-ID validation failed", map[string]interface{}{
+				"method":     r.Method,
+				"path":       r.URL.Path,
+				"content_id": contentID,
+				"tvg_id":     tvgID,
+			})
+
 			validationErr := ValidationError{
 				Error:       "validation_error",
 				Field:       "tvg_id",
@@ -137,73 +174,107 @@ func (h *OverridesHandler) handlePut(w http.ResponseWriter, r *http.Request, ace
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusBadRequest)
 			if err := json.NewEncoder(w).Encode(validationErr); err != nil {
-				log.Printf("Failed to encode validation error: %v", err)
+				h.logger.Warn("Failed to encode validation error", map[string]interface{}{
+					"method":     r.Method,
+					"path":       r.URL.Path,
+					"content_id": contentID,
+					"error":      err.Error(),
+				})
 			}
 			return
 		}
 	}
 
 	// Save the override
-	if err := h.overridesMgr.Set(acestreamID, override); err != nil {
-		log.Printf("Failed to save override for %s: %v", acestreamID, err)
-		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+	if err := h.overridesMgr.Set(contentID, override); err != nil {
+		logging.WriteJSONError(w, h.logger, "Internal Server Error", http.StatusInternalServerError, map[string]interface{}{
+			"method":     r.Method,
+			"path":       r.URL.Path,
+			"content_id": contentID,
+			"error":      err.Error(),
+		})
 		return
 	}
 
-	log.Printf("Created/updated override for %s", acestreamID)
+	h.logger.Info("Created/updated override", map[string]interface{}{
+		"method":     r.Method,
+		"path":       r.URL.Path,
+		"content_id": contentID,
+	})
 
 	// Return the created/updated override
 	response := OverrideResponse{
-		AcestreamID: acestreamID,
-		Override:    &override,
+		ContentID: contentID,
+		Override:  &override,
 	}
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
 	if err := json.NewEncoder(w).Encode(response); err != nil {
-		log.Printf("Failed to encode override response: %v", err)
+		h.logger.Warn("Failed to encode override response", map[string]interface{}{
+			"method":     r.Method,
+			"path":       r.URL.Path,
+			"content_id": contentID,
+			"error":      err.Error(),
+		})
 	}
 }
 
-// handleDelete handles DELETE /api/overrides/:acestreamId
-func (h *OverridesHandler) handleDelete(w http.ResponseWriter, _ *http.Request, acestreamID string) {
+// handleDelete handles DELETE /api/overrides/:contentId
+func (h *OverridesHandler) handleDelete(w http.ResponseWriter, r *http.Request, contentID string) {
 	// Check if override exists
-	if h.overridesMgr.Get(acestreamID) == nil {
-		http.Error(w, "Override not found", http.StatusNotFound)
+	if h.overridesMgr.Get(contentID) == nil {
+		logging.WriteJSONError(w, h.logger, "Override not found", http.StatusNotFound, map[string]interface{}{
+			"method":     r.Method,
+			"path":       r.URL.Path,
+			"content_id": contentID,
+		})
 		return
 	}
 
 	// Delete the override
-	if err := h.overridesMgr.Delete(acestreamID); err != nil {
-		log.Printf("Failed to delete override for %s: %v", acestreamID, err)
-		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+	if err := h.overridesMgr.Delete(contentID); err != nil {
+		logging.WriteJSONError(w, h.logger, "Internal Server Error", http.StatusInternalServerError, map[string]interface{}{
+			"method":     r.Method,
+			"path":       r.URL.Path,
+			"content_id": contentID,
+			"error":      err.Error(),
+		})
 		return
 	}
 
-	log.Printf("Deleted override for %s", acestreamID)
+	h.logger.Info("Deleted override", map[string]interface{}{
+		"method":     r.Method,
+		"path":       r.URL.Path,
+		"content_id": contentID,
+	})
 
 	w.WriteHeader(http.StatusNoContent)
 }
 
 // handleList handles GET /api/overrides
-func (h *OverridesHandler) handleList(w http.ResponseWriter, _ *http.Request) {
+func (h *OverridesHandler) handleList(w http.ResponseWriter, r *http.Request) {
 	allOverrides := h.overridesMgr.List()
 
 	// Convert map to array of responses
 	var responses []OverrideResponse
-	for acestreamID, override := range allOverrides {
+	for contentID, override := range allOverrides {
 		// Create a copy of the override for the response
 		overrideCopy := override
 		responses = append(responses, OverrideResponse{
-			AcestreamID: acestreamID,
-			Override:    &overrideCopy,
+			ContentID: contentID,
+			Override:  &overrideCopy,
 		})
 	}
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
 	if err := json.NewEncoder(w).Encode(responses); err != nil {
-		log.Printf("Failed to encode overrides list: %v", err)
+		h.logger.Warn("Failed to encode overrides list", map[string]interface{}{
+			"method": r.Method,
+			"path":   r.URL.Path,
+			"error":  err.Error(),
+		})
 	}
 }
 
@@ -223,9 +294,9 @@ func (h *OverridesHandler) getSuggestions(tvgID string, maxResults int) []string
 
 // BulkUpdateRequest represents a request to update multiple overrides
 type BulkUpdateRequest struct {
-	AcestreamIDs []string    `json:"acestream_ids"`
-	Field        string      `json:"field"`
-	Value        interface{} `json:"value"`
+	ContentIDs []string    `json:"acestream_ids"` // Note: keep JSON tag as acestream_ids for API compatibility
+	Field      string      `json:"field"`
+	Value      interface{} `json:"value"`
 }
 
 // BulkUpdateResponse represents the response for a bulk update operation
@@ -238,11 +309,11 @@ type BulkUpdateResponse struct {
 // handleBulkUpdate handles PATCH /api/overrides/bulk
 // validateBulkRequest validates the bulk update request
 func validateBulkRequest(req *BulkUpdateRequest) bool {
-	if len(req.AcestreamIDs) == 0 || req.Field == "" {
+	if len(req.ContentIDs) == 0 || req.Field == "" {
 		return false
 	}
 
-	for _, id := range req.AcestreamIDs {
+	for _, id := range req.ContentIDs {
 		if !domain.IsValidAcestreamID(id) {
 			return false
 		}
@@ -266,7 +337,7 @@ func (h *OverridesHandler) validateTVGID(tvgID string) (bool, []string) {
 }
 
 // respondWithValidationError sends a validation error response
-func respondWithValidationError(w http.ResponseWriter, field, message string, suggestions []string) {
+func (h *OverridesHandler) respondWithValidationError(w http.ResponseWriter, r *http.Request, field, message string, suggestions []string) {
 	validationErr := ValidationError{
 		Error:       "validation_error",
 		Field:       field,
@@ -274,15 +345,25 @@ func respondWithValidationError(w http.ResponseWriter, field, message string, su
 		Suggestions: suggestions,
 	}
 
+	h.logger.Warn("Validation error", map[string]interface{}{
+		"method": r.Method,
+		"path":   r.URL.Path,
+		"field":  field,
+	})
+
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusBadRequest)
 	if err := json.NewEncoder(w).Encode(validationErr); err != nil {
-		log.Printf("Failed to encode validation error: %v", err)
+		h.logger.Warn("Failed to encode validation error", map[string]interface{}{
+			"method": r.Method,
+			"path":   r.URL.Path,
+			"error":  err.Error(),
+		})
 	}
 }
 
 // respondWithBulkResult sends a bulk update result response
-func respondWithBulkResult(w http.ResponseWriter, result *overrides.BulkUpdateResult) {
+func (h *OverridesHandler) respondWithBulkResult(w http.ResponseWriter, r *http.Request, result *overrides.BulkUpdateResult) {
 	response := BulkUpdateResponse{
 		Updated: result.Updated,
 		Failed:  result.Failed,
@@ -297,7 +378,11 @@ func respondWithBulkResult(w http.ResponseWriter, result *overrides.BulkUpdateRe
 	}
 
 	if err := json.NewEncoder(w).Encode(response); err != nil {
-		log.Printf("Failed to encode bulk update response: %v", err)
+		h.logger.Warn("Failed to encode bulk update response", map[string]interface{}{
+			"method": r.Method,
+			"path":   r.URL.Path,
+			"error":  err.Error(),
+		})
 	}
 }
 
@@ -307,12 +392,19 @@ func (h *OverridesHandler) handleBulkUpdate(w http.ResponseWriter, r *http.Reque
 
 	var req BulkUpdateRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		logging.WriteJSONError(w, h.logger, "Invalid request body", http.StatusBadRequest, map[string]interface{}{
+			"method": r.Method,
+			"path":   r.URL.Path,
+			"error":  err.Error(),
+		})
 		return
 	}
 
 	if !validateBulkRequest(&req) {
-		http.Error(w, "acestream_ids cannot be empty and must be valid; field cannot be empty", http.StatusBadRequest)
+		logging.WriteJSONError(w, h.logger, "acestream_ids cannot be empty and must be valid; field cannot be empty", http.StatusBadRequest, map[string]interface{}{
+			"method": r.Method,
+			"path":   r.URL.Path,
+		})
 		return
 	}
 
@@ -321,24 +413,39 @@ func (h *OverridesHandler) handleBulkUpdate(w http.ResponseWriter, r *http.Reque
 		if strVal, ok := req.Value.(string); ok {
 			tvgID := strings.TrimSpace(strVal)
 			if valid, suggestions := h.validateTVGID(tvgID); !valid {
-				respondWithValidationError(w, "tvg_id", "TVG-ID not found in EPG data", suggestions)
+				h.respondWithValidationError(w, r, "tvg_id", "TVG-ID not found in EPG data", suggestions)
 				return
 			}
 		}
 	}
 
-	result, err := h.overridesMgr.BulkUpdate(req.AcestreamIDs, req.Field, req.Value, atomic)
+	result, err := h.overridesMgr.BulkUpdate(req.ContentIDs, req.Field, req.Value, atomic)
 	if err != nil {
-		log.Printf("Bulk update failed: %v", err)
 		if result != nil {
+			h.logger.Error("Bulk update partially failed", map[string]interface{}{
+				"method":  r.Method,
+				"path":    r.URL.Path,
+				"updated": result.Updated,
+				"failed":  result.Failed,
+				"error":   err.Error(),
+			})
 			w.WriteHeader(http.StatusInternalServerError)
-			respondWithBulkResult(w, result)
+			h.respondWithBulkResult(w, r, result)
 			return
 		}
-		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		logging.WriteJSONError(w, h.logger, "Internal Server Error", http.StatusInternalServerError, map[string]interface{}{
+			"method": r.Method,
+			"path":   r.URL.Path,
+			"error":  err.Error(),
+		})
 		return
 	}
 
-	log.Printf("Bulk update completed: %d updated, %d failed", result.Updated, result.Failed)
-	respondWithBulkResult(w, result)
+	h.logger.Info("Bulk update completed", map[string]interface{}{
+		"method":  r.Method,
+		"path":    r.URL.Path,
+		"updated": result.Updated,
+		"failed":  result.Failed,
+	})
+	h.respondWithBulkResult(w, r, result)
 }

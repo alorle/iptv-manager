@@ -1,4 +1,4 @@
 package domain
 
-// AcestreamIDLength is the expected length of a valid acestream content ID
-const AcestreamIDLength = 40
+// ContentIDLength is the expected length of a valid acestream content ID
+const ContentIDLength = 40

@@ -1,8 +1,8 @@
 package domain
 
-// IsValidAcestreamID validates that a content ID is exactly 40 hexadecimal characters
-func IsValidAcestreamID(id string) bool {
-	if len(id) != AcestreamIDLength {
+// IsValidContentID validates that a content ID is exactly 40 hexadecimal characters
+func IsValidContentID(id string) bool {
+	if len(id) != ContentIDLength {
 		return false
 	}
 	for _, c := range id {
@@ -11,4 +11,9 @@ func IsValidAcestreamID(id string) bool {
 		}
 	}
 	return true
+}
+
+// IsValidAcestreamID is deprecated. Use IsValidContentID instead.
+func IsValidAcestreamID(id string) bool {
+	return IsValidContentID(id)
 }

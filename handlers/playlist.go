@@ -2,12 +2,12 @@ package handlers
 
 import (
 	"fmt"
-	"log"
 	"net/http"
 	"strings"
 
 	"github.com/alorle/iptv-manager/config"
 	"github.com/alorle/iptv-manager/fetcher"
+	"github.com/alorle/iptv-manager/logging"
 	"github.com/alorle/iptv-manager/overrides"
 	"github.com/alorle/iptv-manager/playlist"
 	"github.com/alorle/iptv-manager/rewriter"
@@ -15,6 +15,7 @@ import (
 
 // PlaylistDependencies holds the dependencies needed by playlist handlers
 type PlaylistDependencies struct {
+	Logger       *logging.Logger
 	Fetcher      fetcher.Interface
 	OverridesMgr overrides.Interface
 	Rewriter     rewriter.Interface
@@ -24,9 +25,17 @@ type PlaylistDependencies struct {
 func CreateUnifiedPlaylistHandler(cfg *config.Config, deps PlaylistDependencies) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {
-			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+			logging.WriteJSONError(w, deps.Logger, "Method not allowed", http.StatusMethodNotAllowed, map[string]interface{}{
+				"method": r.Method,
+				"path":   r.URL.Path,
+			})
 			return
 		}
+
+		deps.Logger.Info("Unified playlist request", map[string]interface{}{
+			"method": r.Method,
+			"path":   r.URL.Path,
+		})
 
 		baseURL := GetBaseURL(r)
 
@@ -56,16 +65,20 @@ func CreateUnifiedPlaylistHandler(cfg *config.Config, deps PlaylistDependencies)
 					errMsgs = append(errMsgs, fmt.Sprintf("%s=%v", src.Name, src.Err))
 				}
 			}
-			log.Printf("Failed to fetch unified playlist - all sources failed: %s", strings.Join(errMsgs, ", "))
-			http.Error(w, "Bad Gateway", http.StatusBadGateway)
+			deps.Logger.Error("Failed to fetch unified playlist - all sources failed", map[string]interface{}{
+				"errors": strings.Join(errMsgs, ", "),
+			})
+			logging.WriteJSONError(w, deps.Logger, "Bad Gateway", http.StatusBadGateway, map[string]interface{}{
+				"path": r.URL.Path,
+			})
 			return
 		}
 
 		// Merge playlist sources
-		mergedContent := playlist.MergeSources(sources)
+		mergedContent := playlist.MergeSources(deps.Logger, sources)
 
 		// Clean up orphaned overrides
-		playlist.CleanOrphanedOverrides(deps.OverridesMgr, sources)
+		playlist.CleanOrphanedOverrides(deps.Logger, deps.OverridesMgr, sources)
 
 		// Process playlist through full pipeline
 		rewrittenContent := playlist.Process(deps.OverridesMgr, deps.Rewriter, mergedContent, baseURL)
@@ -74,7 +87,9 @@ func CreateUnifiedPlaylistHandler(cfg *config.Config, deps PlaylistDependencies)
 		w.Header().Set("Content-Type", "audio/x-mpegurl")
 		w.WriteHeader(http.StatusOK)
 		if _, err := w.Write(rewrittenContent); err != nil {
-			log.Printf("Error writing unified playlist: %v", err)
+			deps.Logger.Warn("Failed to write unified playlist response", map[string]interface{}{
+				"error": err.Error(),
+			})
 		}
 	}
 }
@@ -83,7 +98,10 @@ func CreateUnifiedPlaylistHandler(cfg *config.Config, deps PlaylistDependencies)
 func CreatePlaylistHandler(deps PlaylistDependencies, sourceURL string, sourceName string) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {
-			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+			logging.WriteJSONError(w, deps.Logger, "Method not allowed", http.StatusMethodNotAllowed, map[string]interface{}{
+				"method": r.Method,
+				"path":   r.URL.Path,
+			})
 			return
 		}
 
@@ -92,20 +110,32 @@ func CreatePlaylistHandler(deps PlaylistDependencies, sourceURL string, sourceNa
 		// Fetch with cache fallback
 		content, fromCache, stale, err := deps.Fetcher.FetchWithCache(sourceURL)
 		if err != nil {
-			log.Printf("Failed to fetch %s playlist: %v", sourceName, err)
-			http.Error(w, "Bad Gateway", http.StatusBadGateway)
+			deps.Logger.Error("Failed to fetch playlist", map[string]interface{}{
+				"source": sourceName,
+				"error":  err.Error(),
+			})
+			logging.WriteJSONError(w, deps.Logger, "Bad Gateway", http.StatusBadGateway, map[string]interface{}{
+				"source": sourceName,
+				"path":   r.URL.Path,
+			})
 			return
 		}
 
 		// Log cache status
 		if fromCache {
 			if stale {
-				log.Printf("Serving stale cache for %s playlist", sourceName)
+				deps.Logger.Info("Serving stale cache for playlist", map[string]interface{}{
+					"source": sourceName,
+				})
 			} else {
-				log.Printf("Serving fresh cache for %s playlist", sourceName)
+				deps.Logger.Info("Serving fresh cache for playlist", map[string]interface{}{
+					"source": sourceName,
+				})
 			}
 		} else {
-			log.Printf("Serving fresh content for %s playlist", sourceName)
+			deps.Logger.Info("Serving fresh content for playlist", map[string]interface{}{
+				"source": sourceName,
+			})
 		}
 
 		// Apply channel overrides
@@ -118,7 +148,10 @@ func CreatePlaylistHandler(deps PlaylistDependencies, sourceURL string, sourceNa
 		w.Header().Set("Content-Type", "audio/x-mpegurl")
 		w.WriteHeader(http.StatusOK)
 		if _, err := w.Write(rewrittenContent); err != nil {
-			log.Printf("Error writing %s playlist: %v", sourceName, err)
+			deps.Logger.Warn("Failed to write playlist response", map[string]interface{}{
+				"source": sourceName,
+				"error":  err.Error(),
+			})
 		}
 	}
 }

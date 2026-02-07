@@ -2,7 +2,7 @@ package domain
 
 import "testing"
 
-func TestIsValidAcestreamID(t *testing.T) {
+func TestIsValidContentID(t *testing.T) {
 	tests := []struct {
 		name  string
 		id    string
@@ -77,9 +77,9 @@ func TestIsValidAcestreamID(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := IsValidAcestreamID(tt.id)
+			result := IsValidContentID(tt.id)
 			if result != tt.valid {
-				t.Errorf("IsValidAcestreamID(%q) = %v, want %v", tt.id, result, tt.valid)
+				t.Errorf("IsValidContentID(%q) = %v, want %v", tt.id, result, tt.valid)
 			}
 		})
 	}
