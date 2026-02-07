@@ -39,12 +39,12 @@ func createMockIPFSServer(t *testing.T, shouldFail bool, content string) *httpte
 	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if shouldFail {
 			w.WriteHeader(http.StatusServiceUnavailable)
-			w.Write([]byte("IPFS node unavailable"))
+			_, _ = w.Write([]byte("IPFS node unavailable"))
 			return
 		}
 		w.Header().Set("Content-Type", "audio/x-mpegurl")
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte(content))
+		_, _ = w.Write([]byte(content))
 	}))
 }
 
@@ -91,7 +91,7 @@ func TestIntegration_FreshFetchFromMockIPFS(t *testing.T) {
 		rewrittenContent := rw.RewriteM3U(content, "http://127.0.0.1:8080")
 		w.Header().Set("Content-Type", "audio/x-mpegurl")
 		w.WriteHeader(http.StatusOK)
-		w.Write(rewrittenContent)
+		_, _ = w.Write(rewrittenContent)
 	})
 
 	testServer := httptest.NewServer(mux)
@@ -102,7 +102,11 @@ func TestIntegration_FreshFetchFromMockIPFS(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to make request: %v", err)
 	}
-	defer resp.Body.Close()
+	defer func() {
+		if closeErr := resp.Body.Close(); closeErr != nil {
+			t.Errorf("failed to close response body: %v", closeErr)
+		}
+	}()
 
 	// Verify HTTP status code
 	if resp.StatusCode != http.StatusOK {
@@ -177,7 +181,7 @@ func TestIntegration_CacheHit(t *testing.T) {
 		rewrittenContent := rw.RewriteM3U(content, "http://127.0.0.1:8080")
 		w.Header().Set("Content-Type", "audio/x-mpegurl")
 		w.WriteHeader(http.StatusOK)
-		w.Write(rewrittenContent)
+		_, _ = w.Write(rewrittenContent)
 
 		// Store cache status for verification
 		w.Header().Set("X-From-Cache", fmt.Sprintf("%v", fromCache))
@@ -274,7 +278,7 @@ func TestIntegration_ExpiredCacheRefresh(t *testing.T) {
 		rewrittenContent := rw.RewriteM3U(content, "http://127.0.0.1:8080")
 		w.Header().Set("Content-Type", "audio/x-mpegurl")
 		w.WriteHeader(http.StatusOK)
-		w.Write(rewrittenContent)
+		_, _ = w.Write(rewrittenContent)
 	})
 
 	testServer := httptest.NewServer(mux)
@@ -346,7 +350,7 @@ func TestIntegration_IPFSFailureWithStaleCacheFallback(t *testing.T) {
 	mockServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if !ipfsAvailable {
 			w.WriteHeader(http.StatusServiceUnavailable)
-			w.Write([]byte("IPFS node unavailable"))
+			_, _ = w.Write([]byte("IPFS node unavailable"))
 			return
 		}
 		w.Header().Set("Content-Type", "audio/x-mpegurl")
@@ -378,7 +382,7 @@ func TestIntegration_IPFSFailureWithStaleCacheFallback(t *testing.T) {
 		w.Header().Set("X-From-Cache", fmt.Sprintf("%v", fromCache))
 		w.Header().Set("X-Stale", fmt.Sprintf("%v", stale))
 		w.WriteHeader(http.StatusOK)
-		w.Write(rewrittenContent)
+		_, _ = w.Write(rewrittenContent)
 	})
 
 	testServer := httptest.NewServer(mux)
@@ -460,7 +464,7 @@ func TestIntegration_URLRewritingOutput(t *testing.T) {
 		rewrittenContent := rw.RewriteM3U(content, "http://127.0.0.1:8080")
 		w.Header().Set("Content-Type", "audio/x-mpegurl")
 		w.WriteHeader(http.StatusOK)
-		w.Write(rewrittenContent)
+		_, _ = w.Write(rewrittenContent)
 	})
 
 	testServer := httptest.NewServer(mux)
@@ -471,7 +475,11 @@ func TestIntegration_URLRewritingOutput(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to make request: %v", err)
 	}
-	defer resp.Body.Close()
+	defer func() {
+		if closeErr := resp.Body.Close(); closeErr != nil {
+			t.Errorf("failed to close response body: %v", closeErr)
+		}
+	}()
 
 	// Read response body
 	body := make([]byte, 4096)
@@ -559,7 +567,7 @@ func TestIntegration_ContentTypeHeaders(t *testing.T) {
 		rewrittenContent := rw.RewriteM3U(content, "http://127.0.0.1:8080")
 		w.Header().Set("Content-Type", "audio/x-mpegurl")
 		w.WriteHeader(http.StatusOK)
-		w.Write(rewrittenContent)
+		_, _ = w.Write(rewrittenContent)
 	})
 
 	testServer := httptest.NewServer(mux)
@@ -570,7 +578,11 @@ func TestIntegration_ContentTypeHeaders(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to make request: %v", err)
 	}
-	defer resp.Body.Close()
+	defer func() {
+		if closeErr := resp.Body.Close(); closeErr != nil {
+			t.Errorf("failed to close response body: %v", closeErr)
+		}
+	}()
 
 	// Verify Content-Type header
 	contentType := resp.Header.Get("Content-Type")
@@ -662,7 +674,7 @@ func TestIntegration_HTTPStatusCodes(t *testing.T) {
 				rewrittenContent := rw.RewriteM3U(content, "http://127.0.0.1:8080")
 				w.Header().Set("Content-Type", "audio/x-mpegurl")
 				w.WriteHeader(http.StatusOK)
-				w.Write(rewrittenContent)
+				_, _ = w.Write(rewrittenContent)
 			})
 
 			testServer := httptest.NewServer(mux)
@@ -673,7 +685,11 @@ func TestIntegration_HTTPStatusCodes(t *testing.T) {
 			if err != nil {
 				t.Fatalf("Failed to make request: %v", err)
 			}
-			defer resp.Body.Close()
+			defer func() {
+		if closeErr := resp.Body.Close(); closeErr != nil {
+			t.Errorf("failed to close response body: %v", closeErr)
+		}
+	}()
 
 			// Verify status code
 			if resp.StatusCode != tt.expectedStatusCode {
@@ -716,7 +732,7 @@ func TestIntegration_MethodNotAllowed(t *testing.T) {
 		rewrittenContent := rw.RewriteM3U(content, "http://127.0.0.1:8080")
 		w.Header().Set("Content-Type", "audio/x-mpegurl")
 		w.WriteHeader(http.StatusOK)
-		w.Write(rewrittenContent)
+		_, _ = w.Write(rewrittenContent)
 	})
 
 	testServer := httptest.NewServer(mux)
@@ -727,7 +743,11 @@ func TestIntegration_MethodNotAllowed(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to make POST request: %v", err)
 	}
-	defer resp.Body.Close()
+	defer func() {
+		if closeErr := resp.Body.Close(); closeErr != nil {
+			t.Errorf("failed to close response body: %v", closeErr)
+		}
+	}()
 
 	if resp.StatusCode != http.StatusMethodNotAllowed {
 		t.Errorf("Expected status code %d for POST, got %d", http.StatusMethodNotAllowed, resp.StatusCode)
@@ -803,7 +823,7 @@ func TestIntegration_RealEndpoints(t *testing.T) {
 		rewrittenContent := rw.RewriteM3U(content, "http://127.0.0.1:8080")
 		w.Header().Set("Content-Type", "audio/x-mpegurl")
 		w.WriteHeader(http.StatusOK)
-		w.Write(rewrittenContent)
+		_, _ = w.Write(rewrittenContent)
 	})
 
 	// NewEra endpoint (modified to use mock server)
@@ -822,7 +842,7 @@ func TestIntegration_RealEndpoints(t *testing.T) {
 		rewrittenContent := rw.RewriteM3U(content, "http://127.0.0.1:8080")
 		w.Header().Set("Content-Type", "audio/x-mpegurl")
 		w.WriteHeader(http.StatusOK)
-		w.Write(rewrittenContent)
+		_, _ = w.Write(rewrittenContent)
 	})
 
 	testServer := httptest.NewServer(mux)
@@ -834,7 +854,11 @@ func TestIntegration_RealEndpoints(t *testing.T) {
 		if err != nil {
 			t.Fatalf("Failed to request health endpoint: %v", err)
 		}
-		defer resp.Body.Close()
+		defer func() {
+		if closeErr := resp.Body.Close(); closeErr != nil {
+			t.Errorf("failed to close response body: %v", closeErr)
+		}
+	}()
 
 		if resp.StatusCode != http.StatusOK {
 			t.Errorf("Expected status code %d, got %d", http.StatusOK, resp.StatusCode)
@@ -853,7 +877,11 @@ func TestIntegration_RealEndpoints(t *testing.T) {
 		if err != nil {
 			t.Fatalf("Failed to request elcano endpoint: %v", err)
 		}
-		defer resp.Body.Close()
+		defer func() {
+		if closeErr := resp.Body.Close(); closeErr != nil {
+			t.Errorf("failed to close response body: %v", closeErr)
+		}
+	}()
 
 		if resp.StatusCode != http.StatusOK {
 			t.Errorf("Expected status code %d, got %d", http.StatusOK, resp.StatusCode)
@@ -879,7 +907,11 @@ func TestIntegration_RealEndpoints(t *testing.T) {
 		if err != nil {
 			t.Fatalf("Failed to request newera endpoint: %v", err)
 		}
-		defer resp.Body.Close()
+		defer func() {
+		if closeErr := resp.Body.Close(); closeErr != nil {
+			t.Errorf("failed to close response body: %v", closeErr)
+		}
+	}()
 
 		if resp.StatusCode != http.StatusOK {
 			t.Errorf("Expected status code %d, got %d", http.StatusOK, resp.StatusCode)
@@ -989,7 +1021,7 @@ acestream://4444444444444444444444444444444444444444
 
 		w.Header().Set("Content-Type", "audio/x-mpegurl")
 		w.WriteHeader(http.StatusOK)
-		w.Write(rewrittenContent)
+		_, _ = w.Write(rewrittenContent)
 	})
 
 	testServer := httptest.NewServer(mux)
@@ -1000,7 +1032,11 @@ acestream://4444444444444444444444444444444444444444
 	if err != nil {
 		t.Fatalf("Failed to make request: %v", err)
 	}
-	defer resp.Body.Close()
+	defer func() {
+		if closeErr := resp.Body.Close(); closeErr != nil {
+			t.Errorf("failed to close response body: %v", closeErr)
+		}
+	}()
 
 	if resp.StatusCode != http.StatusOK {
 		t.Errorf("Expected status code %d, got %d", http.StatusOK, resp.StatusCode)
@@ -1113,7 +1149,7 @@ acestream://3333333333333333333333333333333333333333
 
 		w.Header().Set("Content-Type", "audio/x-mpegurl")
 		w.WriteHeader(http.StatusOK)
-		w.Write(rewrittenContent)
+		_, _ = w.Write(rewrittenContent)
 	})
 
 	testServer := httptest.NewServer(mux)
@@ -1123,7 +1159,11 @@ acestream://3333333333333333333333333333333333333333
 	if err != nil {
 		t.Fatalf("Failed to make request: %v", err)
 	}
-	defer resp.Body.Close()
+	defer func() {
+		if closeErr := resp.Body.Close(); closeErr != nil {
+			t.Errorf("failed to close response body: %v", closeErr)
+		}
+	}()
 
 	body := make([]byte, 8192)
 	n, _ := resp.Body.Read(body)
@@ -1234,7 +1274,7 @@ acestream://4444444444444444444444444444444444444444
 
 		w.Header().Set("Content-Type", "audio/x-mpegurl")
 		w.WriteHeader(http.StatusOK)
-		w.Write(rewrittenContent)
+		_, _ = w.Write(rewrittenContent)
 	})
 
 	testServer := httptest.NewServer(mux)
@@ -1244,7 +1284,11 @@ acestream://4444444444444444444444444444444444444444
 	if err != nil {
 		t.Fatalf("Failed to make request: %v", err)
 	}
-	defer resp.Body.Close()
+	defer func() {
+		if closeErr := resp.Body.Close(); closeErr != nil {
+			t.Errorf("failed to close response body: %v", closeErr)
+		}
+	}()
 
 	body := make([]byte, 8192)
 	n, _ := resp.Body.Read(body)
@@ -1342,7 +1386,7 @@ acestream://2222222222222222222222222222222222222222
 
 		w.Header().Set("Content-Type", "audio/x-mpegurl")
 		w.WriteHeader(http.StatusOK)
-		w.Write(rewrittenContent)
+		_, _ = w.Write(rewrittenContent)
 	})
 
 	testServer := httptest.NewServer(mux)
@@ -1352,7 +1396,11 @@ acestream://2222222222222222222222222222222222222222
 	if err != nil {
 		t.Fatalf("Failed to make request: %v", err)
 	}
-	defer resp.Body.Close()
+	defer func() {
+		if closeErr := resp.Body.Close(); closeErr != nil {
+			t.Errorf("failed to close response body: %v", closeErr)
+		}
+	}()
 
 	body := make([]byte, 8192)
 	n, _ := resp.Body.Read(body)
@@ -1436,7 +1484,7 @@ acestream://1111111111111111111111111111111111111111
 
 		w.Header().Set("Content-Type", "audio/x-mpegurl")
 		w.WriteHeader(http.StatusOK)
-		w.Write(rewrittenContent)
+		_, _ = w.Write(rewrittenContent)
 	})
 
 	testServer := httptest.NewServer(mux)
@@ -1446,7 +1494,11 @@ acestream://1111111111111111111111111111111111111111
 	if err != nil {
 		t.Fatalf("Failed to make request: %v", err)
 	}
-	defer resp.Body.Close()
+	defer func() {
+		if closeErr := resp.Body.Close(); closeErr != nil {
+			t.Errorf("failed to close response body: %v", closeErr)
+		}
+	}()
 
 	body := make([]byte, 8192)
 	n, _ := resp.Body.Read(body)
@@ -1526,7 +1578,7 @@ acestream://1111111111111111111111111111111111111111
 
 		w.Header().Set("Content-Type", "audio/x-mpegurl")
 		w.WriteHeader(http.StatusOK)
-		w.Write(rewrittenContent)
+		_, _ = w.Write(rewrittenContent)
 	})
 
 	testServer := httptest.NewServer(mux)
