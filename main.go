@@ -45,6 +45,17 @@ type Config struct {
 	ProxyBufferSize        int
 }
 
+// dependencies holds all initialized application components
+type dependencies struct {
+	storage      *cache.FileStorage
+	overridesMgr *overrides.Manager
+	epgCache     *epg.Cache
+	fetch        *fetcher.Fetcher
+	rewriter     *rewriter.Rewriter
+	multiplexer  *multiplexer.Multiplexer
+	pidMgr       *pidmanager.Manager
+}
+
 // isValidContentID validates that a content ID is exactly 40 hexadecimal characters
 func isValidContentID(id string) bool {
 	if len(id) != 40 {
@@ -191,24 +202,8 @@ func loadConfig() (*Config, error) {
 	return cfg, nil
 }
 
-func main() {
-	// Load and validate configuration
-	cfg, err := loadConfig()
-	if err != nil {
-		log.Fatalf("Configuration error: %v", err)
-	}
-
-	// Load resilience configuration
-	resCfg, err := config.LoadFromEnv()
-	if err != nil {
-		log.Fatalf("Failed to load resilience configuration: %v", err)
-	}
-
-	// Create resilience logger
-	logLevel := logging.ParseLogLevel(resCfg.LogLevel)
-	resLogger := logging.New(logLevel, "[resilience]")
-
-	// Print configuration
+// printConfig outputs the configuration to stdout
+func printConfig(cfg *Config, resCfg *config.ResilienceConfig) {
 	fmt.Printf("httpAddress: %v\n", cfg.HTTPAddress)
 	fmt.Printf("httpPort: %v\n", cfg.HTTPPort)
 	fmt.Printf("acestreamPlayerBaseUrl: %v\n", cfg.AcestreamPlayerBaseURL)
@@ -221,18 +216,21 @@ func main() {
 	fmt.Printf("proxyWriteTimeout: %v\n", cfg.ProxyWriteTimeout)
 	fmt.Printf("proxyBufferSize: %v bytes\n", cfg.ProxyBufferSize)
 	fmt.Printf("logLevel: %v\n", resCfg.LogLevel)
+}
 
+// initDependencies initializes all application components
+func initDependencies(cfg *Config, resCfg *config.ResilienceConfig, resLogger *logging.Logger) (*dependencies, error) {
 	// Initialize cache storage
 	storage, err := cache.NewFileStorage(cfg.CacheDir)
 	if err != nil {
-		log.Fatalf("Failed to initialize cache storage: %v", err)
+		return nil, fmt.Errorf("failed to initialize cache storage: %w", err)
 	}
 
 	// Initialize overrides manager
 	overridesPath := filepath.Join(cfg.CacheDir, "overrides.yaml")
 	overridesMgr, err := overrides.NewManager(overridesPath)
 	if err != nil {
-		log.Fatalf("Failed to initialize overrides manager: %v", err)
+		return nil, fmt.Errorf("failed to initialize overrides manager: %w", err)
 	}
 	log.Printf("Loaded %d channel overrides from %s", len(overridesMgr.List()), overridesPath)
 
@@ -268,6 +266,66 @@ func main() {
 	// Initialize PID manager
 	pidMgr := pidmanager.NewManager()
 
+	return &dependencies{
+		storage:      storage,
+		overridesMgr: overridesMgr,
+		epgCache:     epgCache,
+		fetch:        fetch,
+		rewriter:     rw,
+		multiplexer:  mux,
+		pidMgr:       pidMgr,
+	}, nil
+}
+
+func main() {
+	// Load and validate configuration
+	cfg, err := loadConfig()
+	if err != nil {
+		log.Fatalf("Configuration error: %v", err)
+	}
+
+	// Load resilience configuration
+	resCfg, err := config.LoadFromEnv()
+	if err != nil {
+		log.Fatalf("Failed to load resilience configuration: %v", err)
+	}
+
+	// Create resilience logger
+	logLevel := logging.ParseLogLevel(resCfg.LogLevel)
+	resLogger := logging.New(logLevel, "[resilience]")
+
+	// Print configuration
+	printConfig(cfg, resCfg)
+
+	// Initialize all dependencies
+	deps, err := initDependencies(cfg, resCfg, resLogger)
+	if err != nil {
+		log.Fatalf("Failed to initialize dependencies: %v", err)
+	}
+
+	// Initialize metrics to ensure they appear in /metrics output
+	metrics.SetStreamsActive(0)
+	metrics.SetClientsConnected(0)
+
+	// Setup HTTP handlers
+	handler := setupHandlers(cfg, deps)
+
+	s := &http.Server{
+		Handler:      handler,
+		Addr:         fmt.Sprintf("%s:%s", cfg.HTTPAddress, cfg.HTTPPort),
+		ReadTimeout:  cfg.ProxyReadTimeout,
+		WriteTimeout: cfg.ProxyWriteTimeout,
+		ErrorLog:     log.Default(),
+	}
+
+	if err := s.ListenAndServe(); err != nil {
+		fmt.Printf("Error starting server: %v\n", err)
+		return
+	}
+}
+
+// setupHandlers configures all HTTP routes and handlers
+func setupHandlers(cfg *Config, deps *dependencies) http.Handler {
 	handler := http.NewServeMux()
 
 	handler.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
@@ -279,10 +337,6 @@ func main() {
 
 	// Prometheus metrics endpoint
 	handler.Handle("/metrics", promhttp.Handler())
-
-	// Initialize metrics to ensure they appear in /metrics output
-	metrics.SetStreamsActive(0)
-	metrics.SetClientsConnected(0)
 
 	// Stream handler function - shared by /stream and /ace/getstream
 	streamHandler := func(w http.ResponseWriter, r *http.Request) {
@@ -316,7 +370,7 @@ func main() {
 
 		// Extract client identifier
 		clientInfo := pidmanager.ExtractClientIdentifier(r)
-		pid := pidMgr.GetOrCreatePID(contentID, clientInfo)
+		pid := deps.pidMgr.GetOrCreatePID(contentID, clientInfo)
 		clientID := fmt.Sprintf("%s-%d", clientInfo.IP, pid)
 
 		log.Printf("Stream request: contentID=%s, clientID=%s, pid=%d", contentID, clientID, pid)
@@ -337,7 +391,7 @@ func main() {
 
 		// Serve the stream through multiplexer
 		// Note: multiplexer sets Content-Type to video/mp2t automatically
-		if err := mux.ServeStream(r.Context(), w, contentID, upstreamURL, clientID); err != nil {
+		if err := deps.multiplexer.ServeStream(r.Context(), w, contentID, upstreamURL, clientID); err != nil {
 			log.Printf("Failed to serve stream for contentID=%s: %v", contentID, err)
 			// Check if it's a connection error to Engine
 			if strings.Contains(err.Error(), "connect") || strings.Contains(err.Error(), "upstream") {
@@ -347,12 +401,12 @@ func main() {
 		}
 
 		// Release PID when client disconnects
-		if err := pidMgr.ReleasePID(pid); err != nil {
+		if err := deps.pidMgr.ReleasePID(pid); err != nil {
 			log.Printf("Failed to release PID %d: %v", pid, err)
 		}
 
 		// Cleanup disconnected sessions periodically
-		if cleaned := pidMgr.CleanupDisconnected(); cleaned > 0 {
+		if cleaned := deps.pidMgr.CleanupDisconnected(); cleaned > 0 {
 			log.Printf("Cleaned up %d disconnected sessions", cleaned)
 		}
 	}
@@ -375,7 +429,7 @@ func main() {
 		sourceURL := elcanoIPFSURL
 
 		// Fetch with cache fallback
-		content, fromCache, stale, err := fetch.FetchWithCache(sourceURL)
+		content, fromCache, stale, err := deps.fetch.FetchWithCache(sourceURL)
 		if err != nil {
 			log.Printf("Failed to fetch elcano playlist: %v", err)
 			http.Error(w, "Bad Gateway", http.StatusBadGateway)
@@ -394,10 +448,10 @@ func main() {
 		}
 
 		// Apply channel overrides (US-007)
-		content = rewriter.ApplyOverrides(content, overridesMgr)
+		content = rewriter.ApplyOverrides(content, deps.overridesMgr)
 
 		// Rewrite acestream:// URLs
-		rewrittenContent := rw.RewriteM3U(content, baseURL)
+		rewrittenContent := deps.rewriter.RewriteM3U(content, baseURL)
 
 		// Set content type
 		w.Header().Set("Content-Type", "audio/x-mpegurl")
@@ -419,7 +473,7 @@ func main() {
 		sourceURL := neweraIPFSURL
 
 		// Fetch with cache fallback
-		content, fromCache, stale, err := fetch.FetchWithCache(sourceURL)
+		content, fromCache, stale, err := deps.fetch.FetchWithCache(sourceURL)
 		if err != nil {
 			log.Printf("Failed to fetch newera playlist: %v", err)
 			http.Error(w, "Bad Gateway", http.StatusBadGateway)
@@ -438,10 +492,10 @@ func main() {
 		}
 
 		// Apply channel overrides (US-007)
-		content = rewriter.ApplyOverrides(content, overridesMgr)
+		content = rewriter.ApplyOverrides(content, deps.overridesMgr)
 
 		// Rewrite acestream:// URLs
-		rewrittenContent := rw.RewriteM3U(content, baseURL)
+		rewrittenContent := deps.rewriter.RewriteM3U(content, baseURL)
 
 		// Set content type
 		w.Header().Set("Content-Type", "audio/x-mpegurl")
@@ -464,8 +518,8 @@ func main() {
 		neweraURL := neweraIPFSURL
 
 		// Fetch both sources
-		elcanoContent, elcanoFromCache, elcanoStale, elcanoErr := fetch.FetchWithCache(elcanoURL)
-		neweraContent, neweraFromCache, neweraStale, neweraErr := fetch.FetchWithCache(neweraURL)
+		elcanoContent, elcanoFromCache, elcanoStale, elcanoErr := deps.fetch.FetchWithCache(elcanoURL)
+		neweraContent, neweraFromCache, neweraStale, neweraErr := deps.fetch.FetchWithCache(neweraURL)
 
 		// Check if both sources failed
 		if elcanoErr != nil && neweraErr != nil {
@@ -544,7 +598,7 @@ func main() {
 			}
 
 			// Clean orphaned overrides
-			if deletedCount, err := overridesMgr.CleanOrphans(validIDs); err != nil {
+			if deletedCount, err := deps.overridesMgr.CleanOrphans(validIDs); err != nil {
 				log.Printf("WARNING: Failed to clean orphaned overrides: %v", err)
 			} else if deletedCount > 0 {
 				log.Printf("Cleaned up %d orphaned override(s)", deletedCount)
@@ -555,7 +609,7 @@ func main() {
 
 		// Apply channel overrides BEFORE deduplication and sorting (US-007)
 		mergedBytes := []byte(mergedContent.String())
-		overriddenContent := rewriter.ApplyOverrides(mergedBytes, overridesMgr)
+		overriddenContent := rewriter.ApplyOverrides(mergedBytes, deps.overridesMgr)
 
 		// Apply deduplication by acestream ID (US-003)
 		deduplicatedContent := rewriter.DeduplicateStreams(overriddenContent)
@@ -564,7 +618,7 @@ func main() {
 		sortedContent := rewriter.SortStreamsByName(deduplicatedContent)
 
 		// Rewrite acestream:// URLs and remove logos (US-005)
-		rewrittenContent := rw.RewriteM3U(sortedContent, baseURL)
+		rewrittenContent := deps.rewriter.RewriteM3U(sortedContent, baseURL)
 
 		// Set content type
 		w.Header().Set("Content-Type", "audio/x-mpegurl")
@@ -577,35 +631,24 @@ func main() {
 	// API endpoints for channels
 	elcanoURL := elcanoIPFSURL
 	neweraURL := neweraIPFSURL
-	channelsHandler := api.NewChannelsHandler(fetch, overridesMgr, elcanoURL, neweraURL)
+	channelsHandler := api.NewChannelsHandler(deps.fetch, deps.overridesMgr, elcanoURL, neweraURL)
 	// Handle both /api/channels and /api/channels/{id}
 	handler.Handle("/api/channels", channelsHandler)
 	handler.Handle("/api/channels/", channelsHandler)
 
 	// API endpoint for TVG-ID validation
-	if epgCache != nil {
-		validateHandler := api.NewValidateHandler(epgCache)
+	if deps.epgCache != nil {
+		validateHandler := api.NewValidateHandler(deps.epgCache)
 		handler.Handle("/api/validate/tvg-id", validateHandler)
 	}
 
 	// API endpoints for overrides CRUD
-	overridesHandler := api.NewOverridesHandler(overridesMgr, epgCache)
+	overridesHandler := api.NewOverridesHandler(deps.overridesMgr, deps.epgCache)
 	handler.Handle("/api/overrides", overridesHandler)
 	handler.Handle("/api/overrides/", overridesHandler)
 
 	// Mount embedded UI at /ui/ path
 	handler.Handle("/", ui.Handler("/"))
 
-	s := &http.Server{
-		Handler:      handler,
-		Addr:         fmt.Sprintf("%s:%s", cfg.HTTPAddress, cfg.HTTPPort),
-		ReadTimeout:  cfg.ProxyReadTimeout,
-		WriteTimeout: cfg.ProxyWriteTimeout,
-		ErrorLog:     log.Default(),
-	}
-
-	if err := s.ListenAndServe(); err != nil {
-		fmt.Printf("Error starting server: %v\n", err)
-		return
-	}
+	return handler
 }
