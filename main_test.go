@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
-	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -764,38 +763,102 @@ func TestIntegration_MethodNotAllowed(t *testing.T) {
 	}
 }
 
-// TestIntegration_RealEndpoints tests the actual elcano and newera endpoints
-func TestIntegration_RealEndpoints(t *testing.T) {
-	// Setup test environment
-	cacheDir := t.TempDir()
+// createPlaylistHandlerForTest creates a handler that fetches and rewrites M3U content
+func createPlaylistHandlerForTest(fetch *fetcher.Fetcher, rw *rewriter.Rewriter, mockURL string) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
 
-	// Set environment variables
-	_ = os.Setenv("CACHE_DIR", cacheDir)
-	_ = os.Setenv("CACHE_TTL", "1h")
-	_ = os.Setenv("HTTP_ADDRESS", "127.0.0.1")
-	_ = os.Setenv("HTTP_PORT", "0") // Use random port
-	_ = os.Setenv("ACESTREAM_PLAYER_BASE_URL", "http://127.0.0.1:6878/ace/getstream")
+		content, _, _, err := fetch.FetchWithCache(mockURL)
+		if err != nil {
+			http.Error(w, "Bad Gateway", http.StatusBadGateway)
+			return
+		}
 
+		rewrittenContent := rw.RewriteM3U(content, "http://127.0.0.1:8080")
+		w.Header().Set("Content-Type", contentTypeM3U)
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write(rewrittenContent)
+	}
+}
+
+// setupEndpointsTestServer creates a test server with health and playlist endpoints
+func setupEndpointsTestServer(fetch *fetcher.Fetcher, rw *rewriter.Rewriter, mockURL string) *httptest.Server {
+	mux := http.NewServeMux()
+
+	mux.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte("OK"))
+	})
+
+	mux.HandleFunc("/playlists/elcano.m3u", createPlaylistHandlerForTest(fetch, rw, mockURL))
+	mux.HandleFunc("/playlists/newera.m3u", createPlaylistHandlerForTest(fetch, rw, mockURL))
+
+	return httptest.NewServer(mux)
+}
+
+// testM3UEndpoint tests a playlist endpoint for correct response
+func testM3UEndpoint(t *testing.T, url string) {
+	t.Helper()
+
+	resp, err := http.Get(url)
+	if err != nil {
+		t.Fatalf("Failed to request endpoint: %v", err)
+	}
 	defer func() {
-		_ = os.Unsetenv("CACHE_DIR")
-		_ = os.Unsetenv("CACHE_TTL")
-		_ = os.Unsetenv("HTTP_ADDRESS")
-		_ = os.Unsetenv("HTTP_PORT")
-		_ = os.Unsetenv("ACESTREAM_PLAYER_BASE_URL")
+		if closeErr := resp.Body.Close(); closeErr != nil {
+			t.Errorf("failed to close response body: %v", closeErr)
+		}
 	}()
 
-	// Load configuration
+	if resp.StatusCode != http.StatusOK {
+		t.Errorf("Expected status code %d, got %d", http.StatusOK, resp.StatusCode)
+	}
+
+	contentType := resp.Header.Get("Content-Type")
+	if contentType != contentTypeM3U {
+		t.Errorf("Expected Content-Type 'audio/x-mpegurl', got '%s'", contentType)
+	}
+
+	body := make([]byte, 4096)
+	n, _ := resp.Body.Read(body)
+	bodyStr := string(body[:n])
+
+	if !strings.Contains(bodyStr, "http://127.0.0.1:8080/stream?id=") {
+		t.Error("Expected rewritten acestream URLs")
+	}
+}
+
+// setupRealEndpointsTestEnv sets up environment variables and returns cleanup function
+func setupRealEndpointsTestEnv(t *testing.T, cacheDir string) func() {
+	t.Helper()
+
+	t.Setenv("CACHE_DIR", cacheDir)
+	t.Setenv("CACHE_TTL", "1h")
+	t.Setenv("HTTP_ADDRESS", "127.0.0.1")
+	t.Setenv("HTTP_PORT", "0")
+	t.Setenv("ACESTREAM_PLAYER_BASE_URL", "http://127.0.0.1:6878/ace/getstream")
+
+	return func() {}
+}
+
+// TestIntegration_RealEndpoints tests the actual elcano and newera endpoints
+func TestIntegration_RealEndpoints(t *testing.T) {
+	cacheDir := t.TempDir()
+	cleanup := setupRealEndpointsTestEnv(t, cacheDir)
+	defer cleanup()
+
 	cfg, err := loadConfig()
 	if err != nil {
 		t.Fatalf("Failed to load config: %v", err)
 	}
 
-	// Ensure cache directory is valid
 	if !filepath.IsAbs(cfg.CacheDir) {
 		t.Fatalf("Cache directory must be absolute path, got: %s", cfg.CacheDir)
 	}
 
-	// Initialize components
 	storage, err := cache.NewFileStorage(cfg.CacheDir)
 	if err != nil {
 		t.Fatalf("Failed to initialize storage: %v", err)
@@ -804,61 +867,12 @@ func TestIntegration_RealEndpoints(t *testing.T) {
 	fetch := fetcher.New(30*time.Second, storage, cfg.CacheTTL)
 	rw := rewriter.New()
 
-	// Create mock IPFS server
 	mockServer := createMockIPFSServer(t, false, mockM3UContent)
 	defer mockServer.Close()
 
-	// Create test server with real endpoint handlers
-	mux := http.NewServeMux()
-
-	// Health endpoint
-	mux.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write([]byte("OK"))
-	})
-
-	// Elcano endpoint (modified to use mock server)
-	mux.HandleFunc("/playlists/elcano.m3u", func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodGet {
-			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-			return
-		}
-
-		content, _, _, err := fetch.FetchWithCache(mockServer.URL)
-		if err != nil {
-			http.Error(w, "Bad Gateway", http.StatusBadGateway)
-			return
-		}
-
-		rewrittenContent := rw.RewriteM3U(content, "http://127.0.0.1:8080")
-		w.Header().Set("Content-Type", contentTypeM3U)
-		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write(rewrittenContent)
-	})
-
-	// NewEra endpoint (modified to use mock server)
-	mux.HandleFunc("/playlists/newera.m3u", func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodGet {
-			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-			return
-		}
-
-		content, _, _, err := fetch.FetchWithCache(mockServer.URL)
-		if err != nil {
-			http.Error(w, "Bad Gateway", http.StatusBadGateway)
-			return
-		}
-
-		rewrittenContent := rw.RewriteM3U(content, "http://127.0.0.1:8080")
-		w.Header().Set("Content-Type", contentTypeM3U)
-		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write(rewrittenContent)
-	})
-
-	testServer := httptest.NewServer(mux)
+	testServer := setupEndpointsTestServer(fetch, rw, mockServer.URL)
 	defer testServer.Close()
 
-	// Test health endpoint
 	t.Run("Health endpoint", func(t *testing.T) {
 		resp, err := http.Get(testServer.URL + "/health")
 		if err != nil {
@@ -881,64 +895,12 @@ func TestIntegration_RealEndpoints(t *testing.T) {
 		}
 	})
 
-	// Test elcano endpoint
 	t.Run("Elcano endpoint", func(t *testing.T) {
-		resp, err := http.Get(testServer.URL + "/playlists/elcano.m3u")
-		if err != nil {
-			t.Fatalf("Failed to request elcano endpoint: %v", err)
-		}
-		defer func() {
-			if closeErr := resp.Body.Close(); closeErr != nil {
-				t.Errorf("failed to close response body: %v", closeErr)
-			}
-		}()
-
-		if resp.StatusCode != http.StatusOK {
-			t.Errorf("Expected status code %d, got %d", http.StatusOK, resp.StatusCode)
-		}
-
-		contentType := resp.Header.Get("Content-Type")
-		if contentType != contentTypeM3U {
-			t.Errorf("Expected Content-Type 'audio/x-mpegurl', got '%s'", contentType)
-		}
-
-		body := make([]byte, 4096)
-		n, _ := resp.Body.Read(body)
-		bodyStr := string(body[:n])
-
-		if !strings.Contains(bodyStr, "http://127.0.0.1:8080/stream?id=") {
-			t.Error("Expected rewritten acestream URLs")
-		}
+		testM3UEndpoint(t, testServer.URL+"/playlists/elcano.m3u")
 	})
 
-	// Test newera endpoint
 	t.Run("NewEra endpoint", func(t *testing.T) {
-		resp, err := http.Get(testServer.URL + "/playlists/newera.m3u")
-		if err != nil {
-			t.Fatalf("Failed to request newera endpoint: %v", err)
-		}
-		defer func() {
-			if closeErr := resp.Body.Close(); closeErr != nil {
-				t.Errorf("failed to close response body: %v", closeErr)
-			}
-		}()
-
-		if resp.StatusCode != http.StatusOK {
-			t.Errorf("Expected status code %d, got %d", http.StatusOK, resp.StatusCode)
-		}
-
-		contentType := resp.Header.Get("Content-Type")
-		if contentType != contentTypeM3U {
-			t.Errorf("Expected Content-Type 'audio/x-mpegurl', got '%s'", contentType)
-		}
-
-		body := make([]byte, 4096)
-		n, _ := resp.Body.Read(body)
-		bodyStr := string(body[:n])
-
-		if !strings.Contains(bodyStr, "http://127.0.0.1:8080/stream?id=") {
-			t.Error("Expected rewritten acestream URLs")
-		}
+		testM3UEndpoint(t, testServer.URL+"/playlists/newera.m3u")
 	})
 }
 
