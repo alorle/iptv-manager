@@ -726,15 +726,41 @@ func TestStream_Stop(t *testing.T) {
 	}
 }
 
+// verifyClientReceivesData checks that a client receives expected data within timeout
+func verifyClientReceivesData(t *testing.T, client *Client, expected []byte, description string) {
+	t.Helper()
+
+	select {
+	case data := <-client.buffer:
+		if string(data) != string(expected) {
+			t.Errorf("%s: received wrong data: %s", description, string(data))
+		}
+	case <-time.After(1 * time.Second):
+		t.Fatalf("%s: timeout receiving data", description)
+	}
+}
+
+// verifyClientBufferClosed checks that a client's buffer is closed
+func verifyClientBufferClosed(t *testing.T, client *Client) {
+	t.Helper()
+
+	select {
+	case _, ok := <-client.buffer:
+		if ok {
+			t.Error("Client buffer should be closed after disconnect")
+		}
+	default:
+		// Buffer might be closed but not yet drained, this is acceptable
+	}
+}
+
 // TestClientDisconnectDoesNotAffectOtherClients verifies that when one client
 // disconnects from a stream, the other clients continue to receive data
 // without interruption. This tests that client contexts are isolated from
 // the upstream context.
 func TestClientDisconnectDoesNotAffectOtherClients(t *testing.T) {
-	// Create a pipe to simulate upstream
 	pr, pw := io.Pipe()
 
-	// Create stream with independent context
 	stream := newTestStream()
 	w1 := newMockResponseWriter()
 	w2 := newMockResponseWriter()
@@ -744,40 +770,20 @@ func TestClientDisconnectDoesNotAffectOtherClients(t *testing.T) {
 	stream.AddClient(client1)
 	stream.AddClient(client2)
 
-	// Start the stream with background context (simulating multiplexer's independent context)
 	ctx := context.Background()
 	stream.Start(ctx, pr, "http://test-upstream", DefaultConfig())
-
-	// Give stream time to start
 	time.Sleep(50 * time.Millisecond)
 
-	// Send first chunk of data - both clients should receive it
+	// Send first chunk - both clients should receive it
 	testData1 := []byte("first chunk")
 	_, _ = pw.Write(testData1)
 
-	// Verify both clients received first chunk
-	select {
-	case data := <-client1.buffer:
-		if string(data) != string(testData1) {
-			t.Errorf("Client 1 received wrong data: %s", string(data))
-		}
-	case <-time.After(1 * time.Second):
-		t.Fatal("Client 1 timeout receiving first chunk")
-	}
-
-	select {
-	case data := <-client2.buffer:
-		if string(data) != string(testData1) {
-			t.Errorf("Client 2 received wrong data: %s", string(data))
-		}
-	case <-time.After(1 * time.Second):
-		t.Fatal("Client 2 timeout receiving first chunk")
-	}
+	verifyClientReceivesData(t, client1, testData1, "Client 1 first chunk")
+	verifyClientReceivesData(t, client2, testData1, "Client 2 first chunk")
 
 	// Disconnect client 1
 	stream.RemoveClient("client-1")
 
-	// Verify client 1 is disconnected
 	if stream.ClientCount() != 1 {
 		t.Errorf("Expected 1 client after removing client-1, got %d", stream.ClientCount())
 	}
@@ -786,40 +792,15 @@ func TestClientDisconnectDoesNotAffectOtherClients(t *testing.T) {
 	testData2 := []byte("second chunk after client1 disconnected")
 	_, _ = pw.Write(testData2)
 
-	// Verify client 2 still receives data
-	select {
-	case data := <-client2.buffer:
-		if string(data) != string(testData2) {
-			t.Errorf("Client 2 received wrong data after client 1 disconnect: %s", string(data))
-		}
-	case <-time.After(1 * time.Second):
-		t.Fatal("Client 2 timeout receiving second chunk - upstream may have been canceled")
-	}
-
-	// Verify client 1's buffer is closed (it was disconnected)
-	select {
-	case _, ok := <-client1.buffer:
-		if ok {
-			t.Error("Client 1 buffer should be closed after disconnect")
-		}
-	default:
-		// Buffer might be closed but not yet drained, this is acceptable
-	}
+	verifyClientReceivesData(t, client2, testData2, "Client 2 after disconnect")
+	verifyClientBufferClosed(t, client1)
 
 	// Send third chunk to ensure stream continues working
 	testData3 := []byte("third chunk")
 	_, _ = pw.Write(testData3)
 
-	select {
-	case data := <-client2.buffer:
-		if string(data) != string(testData3) {
-			t.Errorf("Client 2 received wrong data on third chunk: %s", string(data))
-		}
-	case <-time.After(1 * time.Second):
-		t.Fatal("Client 2 timeout receiving third chunk")
-	}
+	verifyClientReceivesData(t, client2, testData3, "Client 2 third chunk")
 
-	// Cleanup
 	_ = pw.Close()
 	stream.Stop()
 }
