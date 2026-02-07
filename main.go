@@ -13,6 +13,7 @@ import (
 	"github.com/alorle/iptv-manager/api"
 	"github.com/alorle/iptv-manager/cache"
 	"github.com/alorle/iptv-manager/config"
+	"github.com/alorle/iptv-manager/domain"
 	"github.com/alorle/iptv-manager/epg"
 	"github.com/alorle/iptv-manager/fetcher"
 	"github.com/alorle/iptv-manager/logging"
@@ -56,18 +57,6 @@ type dependencies struct {
 	pidMgr       *pidmanager.Manager
 }
 
-// isValidContentID validates that a content ID is exactly 40 hexadecimal characters
-func isValidContentID(id string) bool {
-	if len(id) != 40 {
-		return false
-	}
-	for _, c := range id {
-		if !((c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F')) {
-			return false
-		}
-	}
-	return true
-}
 
 // getBaseURL returns the scheme and authority (scheme://host) from an HTTP request
 func getBaseURL(r *http.Request) string {
@@ -563,7 +552,7 @@ func createStreamHandler(cfg *Config, deps *dependencies) http.HandlerFunc {
 		}
 
 		// Validate content ID format (40 hex characters)
-		if !isValidContentID(contentID) {
+		if !domain.IsValidAcestreamID(contentID) {
 			http.Error(w, "Invalid id format: must be 40 hexadecimal characters", http.StatusBadRequest)
 			return
 		}

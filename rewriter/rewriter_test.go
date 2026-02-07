@@ -5,6 +5,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/alorle/iptv-manager/domain"
 	"github.com/alorle/iptv-manager/overrides"
 )
 
@@ -650,7 +651,7 @@ func TestExtractDisplayName(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := ExtractDisplayName(tt.input)
+			result := domain.ExtractDisplayName(tt.input)
 			if result != tt.expected {
 				t.Errorf("ExtractDisplayName() failed\nInput:    %s\nExpected: %s\nGot:      %s", tt.input, tt.expected, result)
 			}
@@ -708,7 +709,7 @@ func TestExtractGroupTitle(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := ExtractGroupTitle(tt.input)
+			result := domain.ExtractGroupTitle(tt.input)
 			if result != tt.expected {
 				t.Errorf("ExtractGroupTitle() failed\nInput:    %s\nExpected: %s\nGot:      %s", tt.input, tt.expected, result)
 			}

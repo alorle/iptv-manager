@@ -6,6 +6,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/alorle/iptv-manager/domain"
 	"github.com/alorle/iptv-manager/overrides"
 )
 
@@ -47,40 +48,6 @@ type Stream struct {
 	AceID    string
 }
 
-// ExtractDisplayName extracts the display name from an EXTINF line.
-// Display name is the text after the comma in "#EXTINF:-1 tvg-id="..." tvg-name="...",Channel Name"
-// Returns empty string if the line is not an EXTINF line or has no comma.
-func ExtractDisplayName(extinf string) string {
-	if !strings.HasPrefix(extinf, "#EXTINF:") {
-		return ""
-	}
-
-	// Find the last comma, as that separates metadata from display name
-	commaIdx := strings.LastIndex(extinf, ",")
-	if commaIdx == -1 {
-		return ""
-	}
-
-	// Extract everything after the comma and trim whitespace
-	displayName := strings.TrimSpace(extinf[commaIdx+1:])
-	return displayName
-}
-
-var groupTitleRegex = regexp.MustCompile(`group-title="([^"]*)"`)
-
-// ExtractGroupTitle extracts the group-title attribute from an EXTINF line.
-// Returns empty string if the line is not an EXTINF line or has no group-title.
-func ExtractGroupTitle(extinf string) string {
-	if !strings.HasPrefix(extinf, "#EXTINF:") {
-		return ""
-	}
-
-	matches := groupTitleRegex.FindStringSubmatch(extinf)
-	if len(matches) > 1 {
-		return matches[1]
-	}
-	return ""
-}
 
 // SortStreamsByName sorts streams alphabetically by display name (case-insensitive).
 // Header lines (lines without URLs) are kept at the top in their original order.
@@ -121,8 +88,8 @@ func SortStreamsByName(content []byte) []byte {
 	// Sort streams by group-title first, then by display name (case-insensitive)
 	// Channels without group-title are placed at the end
 	sort.SliceStable(streams, func(i, j int) bool {
-		groupI := strings.ToLower(ExtractGroupTitle(streams[i].Metadata))
-		groupJ := strings.ToLower(ExtractGroupTitle(streams[j].Metadata))
+		groupI := strings.ToLower(domain.ExtractGroupTitle(streams[i].Metadata))
+		groupJ := strings.ToLower(domain.ExtractGroupTitle(streams[j].Metadata))
 		if groupI != groupJ {
 			// Empty group-title goes to the end
 			if groupI == "" {
@@ -133,8 +100,8 @@ func SortStreamsByName(content []byte) []byte {
 			}
 			return groupI < groupJ
 		}
-		nameI := strings.ToLower(ExtractDisplayName(streams[i].Metadata))
-		nameJ := strings.ToLower(ExtractDisplayName(streams[j].Metadata))
+		nameI := strings.ToLower(domain.ExtractDisplayName(streams[i].Metadata))
+		nameJ := strings.ToLower(domain.ExtractDisplayName(streams[j].Metadata))
 		return nameI < nameJ
 	})
 

@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/alorle/iptv-manager/domain"
 	"github.com/alorle/iptv-manager/overrides"
 )
 
@@ -542,9 +543,9 @@ func TestValidateAcestreamID(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := validateAcestreamID(tt.id)
+			result := domain.IsValidAcestreamID(tt.id)
 			if result != tt.expected {
-				t.Errorf("validateAcestreamID(%q) = %v, expected %v", tt.id, result, tt.expected)
+				t.Errorf("IsValidAcestreamID(%q) = %v, expected %v", tt.id, result, tt.expected)
 			}
 		})
 	}

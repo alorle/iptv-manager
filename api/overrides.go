@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/alorle/iptv-manager/domain"
 	"github.com/alorle/iptv-manager/overrides"
 )
 
@@ -54,7 +55,7 @@ func (h *OverridesHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	acestreamID := path
 
 	// Validate acestream ID format
-	if !validateAcestreamID(acestreamID) {
+	if !domain.IsValidAcestreamID(acestreamID) {
 		http.Error(w, "Invalid acestream_id: must be 40 hexadecimal characters", http.StatusBadRequest)
 		return
 	}
@@ -242,7 +243,7 @@ func validateBulkRequest(req *BulkUpdateRequest) bool {
 	}
 
 	for _, id := range req.AcestreamIDs {
-		if !validateAcestreamID(id) {
+		if !domain.IsValidAcestreamID(id) {
 			return false
 		}
 	}

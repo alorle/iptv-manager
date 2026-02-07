@@ -4,13 +4,12 @@ import (
 	"encoding/json"
 	"log"
 	"net/http"
-	"regexp"
 	"sort"
 	"strings"
 
+	"github.com/alorle/iptv-manager/domain"
 	"github.com/alorle/iptv-manager/fetcher"
 	"github.com/alorle/iptv-manager/overrides"
-	"github.com/alorle/iptv-manager/rewriter"
 )
 
 // Stream represents a single stream within a channel
@@ -50,26 +49,6 @@ func NewChannelsHandler(fetch *fetcher.Fetcher, overridesMgr *overrides.Manager,
 	}
 }
 
-// extractMetadata extracts metadata attributes from an EXTINF line
-// Returns tvg-id, tvg-logo, and group-title
-func extractMetadata(extinf string) (tvgID, tvgLogo, groupTitle string) {
-	// Extract tvg-id
-	if matches := regexp.MustCompile(`tvg-id="([^"]*)"`).FindStringSubmatch(extinf); len(matches) > 1 {
-		tvgID = matches[1]
-	}
-
-	// Extract tvg-logo
-	if matches := regexp.MustCompile(`tvg-logo="([^"]*)"`).FindStringSubmatch(extinf); len(matches) > 1 {
-		tvgLogo = matches[1]
-	}
-
-	// Extract group-title
-	if matches := regexp.MustCompile(`group-title="([^"]*)"`).FindStringSubmatch(extinf); len(matches) > 1 {
-		groupTitle = matches[1]
-	}
-
-	return
-}
 
 // streamData holds raw parsed stream data before grouping
 type streamData struct {
@@ -106,12 +85,12 @@ func parseM3UStreams(content []byte, source string) []streamData {
 					aceID = strings.TrimSpace(aceID)
 
 					// Validate acestream ID (40 hex characters)
-					if len(aceID) == 40 {
+					if domain.IsValidAcestreamID(aceID) {
 						// Extract display name
-						name := rewriter.ExtractDisplayName(metadata)
+						name := domain.ExtractDisplayName(metadata)
 
 						// Extract metadata attributes
-						tvgID, tvgLogo, groupTitle := extractMetadata(metadata)
+						tvgID, tvgLogo, groupTitle := domain.ExtractMetadata(metadata)
 
 						streams = append(streams, streamData{
 							AcestreamID: aceID,
@@ -353,18 +332,6 @@ type UpdateChannelRequest struct {
 	GroupTitle *string `json:"group_title,omitempty"`
 }
 
-// validateAcestreamID validates that an acestream ID is 40 hexadecimal characters
-func validateAcestreamID(acestreamID string) bool {
-	if len(acestreamID) != 40 {
-		return false
-	}
-	for _, c := range acestreamID {
-		if !((c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F')) {
-			return false
-		}
-	}
-	return true
-}
 
 // validateUpdateRequest validates the update channel request fields
 func validateUpdateRequest(req *UpdateChannelRequest) bool {
@@ -460,7 +427,7 @@ func (h *ChannelsHandler) handleToggle(w http.ResponseWriter, r *http.Request) {
 	path := strings.TrimPrefix(r.URL.Path, "/api/channels/")
 	acestreamID := strings.TrimSpace(path)
 
-	if !validateAcestreamID(acestreamID) {
+	if !domain.IsValidAcestreamID(acestreamID) {
 		http.Error(w, "Invalid acestream_id: must be 40 hexadecimal characters", http.StatusBadRequest)
 		return
 	}
@@ -524,7 +491,7 @@ func (h *ChannelsHandler) handleDelete(w http.ResponseWriter, r *http.Request) {
 	path = strings.TrimSuffix(path, "/override")
 	acestreamID := strings.TrimSpace(path)
 
-	if !validateAcestreamID(acestreamID) {
+	if !domain.IsValidAcestreamID(acestreamID) {
 		http.Error(w, "Invalid acestream_id: must be 40 hexadecimal characters", http.StatusBadRequest)
 		return
 	}

@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/alorle/iptv-manager/domain"
 	"github.com/alorle/iptv-manager/multiplexer"
 	"github.com/alorle/iptv-manager/pidmanager"
 )
@@ -64,7 +65,7 @@ func TestIsValidContentID(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := isValidContentID(tt.id)
+			result := domain.IsValidAcestreamID(tt.id)
 			if result != tt.expected {
 				t.Errorf("isValidContentID(%s) = %v, expected %v", tt.id, result, tt.expected)
 			}
@@ -318,7 +319,7 @@ func createTestStreamHandler(mux *multiplexer.Multiplexer, pidMgr *pidmanager.Ma
 			return
 		}
 
-		if !isValidContentID(contentID) {
+		if !domain.IsValidAcestreamID(contentID) {
 			http.Error(w, "Invalid id format: must be 40 hexadecimal characters", http.StatusBadRequest)
 			return
 		}
