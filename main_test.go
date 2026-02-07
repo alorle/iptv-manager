@@ -1177,12 +1177,33 @@ acestream://3333333333333333333333333333333333333333
 	}
 }
 
+// verifyAlphabeticalOrder checks if channels appear in alphabetical order in playlist
+func verifyAlphabeticalOrder(t *testing.T, body string, channelNames []string) {
+	t.Helper()
+
+	positions := make([]int, len(channelNames))
+	for i, name := range channelNames {
+		pos := strings.Index(body, name)
+		if pos == -1 {
+			t.Fatalf("Channel '%s' not found in response", name)
+		}
+		positions[i] = pos
+	}
+
+	// Verify positions are in ascending order (alphabetical by channel name)
+	for i := 1; i < len(positions); i++ {
+		if positions[i] <= positions[i-1] {
+			t.Errorf("Channels not in alphabetical order. %s (pos=%d) should come after %s (pos=%d)",
+				channelNames[i], positions[i], channelNames[i-1], positions[i-1])
+		}
+	}
+}
+
 // TestIntegration_UnifiedPlaylist_AlphabeticalSorting tests alphabetical sorting by display name
 func TestIntegration_UnifiedPlaylist_AlphabeticalSorting(t *testing.T) {
 	cacheDir, cleanup := setupTestEnvironment(t)
 	defer cleanup()
 
-	// Create mock content with unsorted names
 	elcanoContent := `#EXTM3U
 #EXTINF:-1 tvg-id="e1",Zebra Channel
 acestream://1111111111111111111111111111111111111111
@@ -1212,53 +1233,7 @@ acestream://4444444444444444444444444444444444444444
 	rw := rewriter.New()
 
 	mux := http.NewServeMux()
-	mux.HandleFunc("/playlist.m3u", func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodGet {
-			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-			return
-		}
-
-		elcanoContentBytes, _, _, elcanoErr := fetch.FetchWithCache(elcanoServer.URL)
-		neweraContentBytes, _, _, neweraErr := fetch.FetchWithCache(neweraServer.URL)
-
-		if elcanoErr != nil && neweraErr != nil {
-			http.Error(w, "Bad Gateway", http.StatusBadGateway)
-			return
-		}
-
-		var mergedContent strings.Builder
-		mergedContent.WriteString("#EXTM3U\n")
-
-		if elcanoErr == nil {
-			elcanoStr := string(elcanoContentBytes)
-			if strings.HasPrefix(elcanoStr, "#EXTM3U") {
-				elcanoStr = strings.TrimPrefix(elcanoStr, "#EXTM3U")
-				elcanoStr = strings.TrimLeft(elcanoStr, "\n")
-			}
-			mergedContent.WriteString(elcanoStr)
-		}
-
-		if neweraErr == nil {
-			neweraStr := string(neweraContentBytes)
-			if strings.HasPrefix(neweraStr, "#EXTM3U") {
-				neweraStr = strings.TrimPrefix(neweraStr, "#EXTM3U")
-				neweraStr = strings.TrimLeft(neweraStr, "\n")
-			}
-			if mergedContent.Len() > len("#EXTM3U\n") {
-				mergedContent.WriteString("\n")
-			}
-			mergedContent.WriteString(neweraStr)
-		}
-
-		mergedBytes := []byte(mergedContent.String())
-		deduplicatedContent := rewriter.DeduplicateStreams(mergedBytes)
-		sortedContent := rewriter.SortStreamsByName(deduplicatedContent)
-		rewrittenContent := rw.RewriteM3U(sortedContent, "http://127.0.0.1:8080")
-
-		w.Header().Set("Content-Type", contentTypeM3U)
-		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write(rewrittenContent)
-	})
+	mux.HandleFunc("/playlist.m3u", createTestUnifiedPlaylistHandler(fetch, rw, elcanoServer.URL, neweraServer.URL))
 
 	testServer := httptest.NewServer(mux)
 	defer testServer.Close()
@@ -1277,21 +1252,9 @@ acestream://4444444444444444444444444444444444444444
 	n, _ := resp.Body.Read(body)
 	bodyStr := string(body[:n])
 
-	// Find positions of channel names
-	alphaPos := strings.Index(bodyStr, "Alpha Channel")
-	betaPos := strings.Index(bodyStr, "Beta Channel")
-	gammaPos := strings.Index(bodyStr, "Gamma Channel")
-	zebraPos := strings.Index(bodyStr, "Zebra Channel")
-
-	// Verify alphabetical order
-	if alphaPos == -1 || betaPos == -1 || gammaPos == -1 || zebraPos == -1 {
-		t.Fatal("Not all channels found in response")
-	}
-
-	if !(alphaPos < betaPos && betaPos < gammaPos && gammaPos < zebraPos) {
-		t.Errorf("Channels not in alphabetical order. Positions: Alpha=%d, Beta=%d, Gamma=%d, Zebra=%d",
-			alphaPos, betaPos, gammaPos, zebraPos)
-	}
+	// Verify channels are in alphabetical order
+	channelNames := []string{"Alpha Channel", "Beta Channel", "Gamma Channel", "Zebra Channel"}
+	verifyAlphabeticalOrder(t, bodyStr, channelNames)
 }
 
 // TestIntegration_UnifiedPlaylist_LogoRemoval tests that tvg-logo attributes are removed
