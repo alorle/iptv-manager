@@ -146,7 +146,7 @@ func TestSave_NilConfig(t *testing.T) {
 	tmpDir := t.TempDir()
 	tmpFile := filepath.Join(tmpDir, "nil.yaml")
 
-	var nilConfig *OverridesConfig
+	var nilConfig *Config
 	err := nilConfig.Save(tmpFile)
 	if err == nil {
 		t.Error("Save() should return error for nil config")
@@ -157,7 +157,7 @@ func TestSave_EmptyConfig(t *testing.T) {
 	tmpDir := t.TempDir()
 	tmpFile := filepath.Join(tmpDir, "empty.yaml")
 
-	config := make(OverridesConfig)
+	config := make(Config)
 	err := config.Save(tmpFile)
 	if err != nil {
 		t.Fatalf("Save() failed: %v", err)
@@ -185,7 +185,7 @@ func TestSave_ValidConfig(t *testing.T) {
 	disabled := false
 	tvgID := "test-channel"
 	tvgName := "Test Channel"
-	config := OverridesConfig{
+	config := Config{
 		"abc123": {
 			Enabled: &enabled,
 			TvgID:   &tvgID,
@@ -235,7 +235,7 @@ func TestSave_CreatesDirectory(t *testing.T) {
 	// Use a nested path that doesn't exist
 	tmpFile := filepath.Join(tmpDir, "subdir", "nested", "config.yaml")
 
-	config := make(OverridesConfig)
+	config := make(Config)
 	err := config.Save(tmpFile)
 	if err != nil {
 		t.Fatalf("Save() failed: %v", err)
@@ -259,7 +259,7 @@ func TestSave_InvalidPath(t *testing.T) {
 
 	// Try to save to a path that uses the file as a directory
 	invalidPath := filepath.Join(tmpFile, "subdir", "config.yaml")
-	config := make(OverridesConfig)
+	config := make(Config)
 	err := config.Save(invalidPath)
 	if err == nil {
 		t.Error("Save() should return error for invalid path")
@@ -279,7 +279,7 @@ func TestRoundTrip(t *testing.T) {
 	groupTitle := "Sports"
 	emptyString := ""
 
-	original := OverridesConfig{
+	original := Config{
 		"id1": {
 			Enabled:    &enabled,
 			TvgID:      &tvgID,
@@ -389,7 +389,7 @@ func TestNewManager_ExistingFile(t *testing.T) {
 	// Create a config file
 	enabled := true
 	tvgID := "test-channel"
-	config := OverridesConfig{
+	config := Config{
 		"abc123": {
 			Enabled: &enabled,
 			TvgID:   &tvgID,

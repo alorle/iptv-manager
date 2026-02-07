@@ -36,20 +36,20 @@ type ChannelOverride struct {
 	GroupTitle *string `yaml:"group_title,omitempty"`
 }
 
-// OverridesConfig is a map from acestream content ID to channel override configuration.
+// Config is a map from acestream content ID to channel override configuration.
 // The key is the acestream content ID (hash), and the value contains the override settings.
-type OverridesConfig map[string]ChannelOverride
+type Config map[string]ChannelOverride
 
 // Load reads the overrides configuration from a YAML file.
 // If the file does not exist, it returns an empty configuration (not an error).
 // Returns an error if the file exists but cannot be read or has invalid format.
-func Load(path string) (*OverridesConfig, error) {
+func Load(path string) (*Config, error) {
 	// Check if file exists
 	data, err := os.ReadFile(path)
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
 			// File doesn't exist - return empty config, not an error
-			config := make(OverridesConfig)
+			config := make(Config)
 			return &config, nil
 		}
 		// Other errors (permissions, etc.)
@@ -57,14 +57,14 @@ func Load(path string) (*OverridesConfig, error) {
 	}
 
 	// Parse YAML
-	var config OverridesConfig
+	var config Config
 	if err := yaml.Unmarshal(data, &config); err != nil {
 		return nil, fmt.Errorf("failed to parse overrides file: %w", err)
 	}
 
 	// Handle nil map case
 	if config == nil {
-		config = make(OverridesConfig)
+		config = make(Config)
 	}
 
 	return &config, nil
@@ -73,9 +73,9 @@ func Load(path string) (*OverridesConfig, error) {
 // Save writes the overrides configuration to a YAML file.
 // It creates the directory structure if it doesn't exist.
 // Returns an error if the file cannot be written (permissions, etc.).
-func (c *OverridesConfig) Save(path string) error {
+func (c *Config) Save(path string) error {
 	if c == nil {
-		return fmt.Errorf("cannot save nil OverridesConfig")
+		return fmt.Errorf("cannot save nil Config")
 	}
 
 	// Marshal to YAML
@@ -102,7 +102,7 @@ func (c *OverridesConfig) Save(path string) error {
 // with automatic persistence to disk.
 type Manager struct {
 	mu     sync.RWMutex
-	config OverridesConfig
+	config Config
 	path   string
 }
 
@@ -285,7 +285,7 @@ func (m *Manager) BulkUpdate(acestreamIDs []string, field string, value interfac
 
 			if atomic {
 				// Rollback all changes
-				m.config = make(OverridesConfig, len(originalState))
+				m.config = make(Config, len(originalState))
 				for origID, origOverride := range originalState {
 					m.config[origID] = origOverride
 				}
@@ -303,7 +303,7 @@ func (m *Manager) BulkUpdate(acestreamIDs []string, field string, value interfac
 		if err := m.config.Save(m.path); err != nil {
 			// If atomic and save fails, rollback
 			if atomic {
-				m.config = make(OverridesConfig, len(originalState))
+				m.config = make(Config, len(originalState))
 				for origID, origOverride := range originalState {
 					m.config[origID] = origOverride
 				}
