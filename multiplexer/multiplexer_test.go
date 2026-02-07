@@ -213,11 +213,11 @@ func (m *mockCircuitBreaker) Reset() {
 }
 
 // newTestStream creates a new stream for testing with default dependencies
-func newTestStream(contentID string) *Stream {
+func newTestStream() *Stream {
 	cb := &mockCircuitBreaker{state: circuitbreaker.StateClosed}
 	httpClient := &http.Client{}
 	bufferSize := 2 * 1024 * 1024 // 2MB
-	return NewStream(contentID, cb, httpClient, bufferSize, nil)
+	return NewStream("test-content", cb, httpClient, bufferSize, nil)
 }
 
 func TestStream_AddClient(t *testing.T) {
@@ -565,7 +565,7 @@ func TestStream_FanOut(t *testing.T) {
 	pr, pw := io.Pipe()
 
 	// Create stream and clients
-	stream := newTestStream("test-content")
+	stream := newTestStream()
 	w1 := newMockResponseWriter()
 	w2 := newMockResponseWriter()
 	client1, _ := NewClient("client-1", w1, 1024*1024)
@@ -612,7 +612,7 @@ func TestStream_FanOut_ClientRemovalDuringStream(t *testing.T) {
 	testData := []byte("test data")
 	pr, pw := io.Pipe()
 
-	stream := newTestStream("test-content")
+	stream := newTestStream()
 	w := newMockResponseWriter()
 	client, _ := NewClient("client-1", w, 1024*1024)
 	stream.AddClient(client)
@@ -705,7 +705,7 @@ func TestClient_SendBufferFull(t *testing.T) {
 
 func TestStream_Stop(t *testing.T) {
 	pr, pw := io.Pipe()
-	stream := newTestStream("test-content")
+	stream := newTestStream()
 
 	ctx := context.Background()
 	stream.Start(ctx, pr, "http://test-upstream", DefaultConfig())
@@ -735,7 +735,7 @@ func TestClientDisconnectDoesNotAffectOtherClients(t *testing.T) {
 	pr, pw := io.Pipe()
 
 	// Create stream with independent context
-	stream := newTestStream("test-content")
+	stream := newTestStream()
 	w1 := newMockResponseWriter()
 	w2 := newMockResponseWriter()
 	client1, _ := NewClient("client-1", w1, 1024*1024)

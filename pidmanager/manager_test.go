@@ -365,7 +365,7 @@ func TestConcurrency(t *testing.T) {
 	// Create sessions concurrently
 	done := make(chan bool)
 	for i := 0; i < 100; i++ {
-		go func(id int) {
+		go func() {
 			clientID := ClientIdentifier{
 				IP:        "192.168.1.100",
 				UserAgent: "VLC/3.0.18",
@@ -375,7 +375,7 @@ func TestConcurrency(t *testing.T) {
 				t.Errorf("Invalid PID: %d", pid)
 			}
 			done <- true
-		}(i)
+		}()
 	}
 
 	// Wait for all goroutines

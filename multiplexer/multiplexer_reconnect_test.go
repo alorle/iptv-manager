@@ -348,13 +348,13 @@ func TestStream_ConcurrentBufferAccess(t *testing.T) {
 	// Concurrent writes
 	done := make(chan bool)
 	for i := 0; i < 10; i++ {
-		go func(id int) {
+		go func() {
 			for j := 0; j < 100; j++ {
 				data := []byte(strings.Repeat("x", 10))
 				stream.ringBuffer.Write(data)
 			}
 			done <- true
-		}(i)
+		}()
 	}
 
 	// Concurrent reads
