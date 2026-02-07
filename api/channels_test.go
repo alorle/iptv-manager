@@ -15,13 +15,17 @@ import (
 	"github.com/alorle/iptv-manager/overrides"
 )
 
-// Mock M3U content for testing
-const mockM3U = `#EXTM3U
+const (
+	testChannelAcestreamID = "1234567890abcdef1234567890abcdef12345678"
+
+	// Mock M3U content for testing
+	mockM3U = `#EXTM3U
 #EXTINF:-1 tvg-id="test1" tvg-name="Test Channel 1" tvg-logo="http://logo1.png" group-title="Sports",Test Channel 1
 acestream://1234567890abcdef1234567890abcdef12345678
 #EXTINF:-1 tvg-id="test2" tvg-name="Test Channel 2" tvg-logo="http://logo2.png" group-title="Movies",Test Channel 2
 acestream://abcdef1234567890abcdef1234567890abcdef12
 `
+)
 
 func setupTestHandler(t *testing.T) (*ChannelsHandler, func()) {
 	// Create temporary directory for overrides
@@ -65,7 +69,7 @@ func TestDeleteOverride_Success(t *testing.T) {
 	handler, cleanup := setupTestHandler(t)
 	defer cleanup()
 
-	acestreamID := "1234567890abcdef1234567890abcdef12345678"
+	acestreamID := testChannelAcestreamID
 
 	// First, create an override using PATCH
 	patchBody := UpdateChannelRequest{
@@ -127,7 +131,7 @@ func TestDeleteOverride_NoOverride(t *testing.T) {
 	handler, cleanup := setupTestHandler(t)
 	defer cleanup()
 
-	acestreamID := "1234567890abcdef1234567890abcdef12345678"
+	acestreamID := testChannelAcestreamID
 
 	// Try to delete override that doesn't exist
 	req := httptest.NewRequest(http.MethodDelete, "/api/channels/"+acestreamID+"/override", nil)
@@ -230,7 +234,7 @@ func TestDeleteOverride_MethodNotAllowed(t *testing.T) {
 	handler, cleanup := setupTestHandler(t)
 	defer cleanup()
 
-	acestreamID := "1234567890abcdef1234567890abcdef12345678"
+	acestreamID := testChannelAcestreamID
 
 	// Try POST (not allowed)
 	req := httptest.NewRequest(http.MethodPost, "/api/channels/"+acestreamID+"/override", nil)

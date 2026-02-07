@@ -6,6 +6,8 @@ import (
 	"testing"
 )
 
+const testChannelTvgID = "test-channel"
+
 func TestLoad_NonExistentFile(t *testing.T) {
 	// Load from non-existent file should return empty config, not error
 	config, err := Load("/tmp/nonexistent-test-file.yaml")
@@ -50,7 +52,7 @@ func TestLoad_ValidFile(t *testing.T) {
 
 	// Create valid YAML file
 	enabled := true
-	tvgID := "test-channel"
+	tvgID := testChannelTvgID
 	yamlContent := `abc123def456:
   enabled: true
   tvg_id: test-channel
@@ -183,7 +185,7 @@ func TestSave_ValidConfig(t *testing.T) {
 	// Create config
 	enabled := true
 	disabled := false
-	tvgID := "test-channel"
+	tvgID := testChannelTvgID
 	tvgName := "Test Channel"
 	config := Config{
 		"abc123": {
@@ -388,7 +390,7 @@ func TestNewManager_ExistingFile(t *testing.T) {
 
 	// Create a config file
 	enabled := true
-	tvgID := "test-channel"
+	tvgID := testChannelTvgID
 	config := Config{
 		"abc123": {
 			Enabled: &enabled,

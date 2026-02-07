@@ -12,6 +12,12 @@ import (
 	"github.com/alorle/iptv-manager/overrides"
 )
 
+const (
+	testAcestreamID = "0123456789abcdef0123456789abcdef01234567"
+	testTvgIDLa1    = "La1.TV"
+	testTvgIDLa2    = "La2.TV"
+)
+
 // Helper to create a temporary overrides manager for testing
 func createTestOverridesManager(t *testing.T) (*overrides.Manager, func()) {
 	t.Helper()
@@ -43,8 +49,8 @@ func TestOverridesHandler_Get_Success(t *testing.T) {
 	defer cleanup()
 
 	// Create a test override
-	acestreamID := "0123456789abcdef0123456789abcdef01234567"
-	tvgID := "La1.TV"
+	acestreamID := testAcestreamID
+	tvgID := testTvgIDLa1
 	override := overrides.ChannelOverride{
 		TvgID: &tvgID,
 	}
@@ -83,7 +89,7 @@ func TestOverridesHandler_Get_NotFound(t *testing.T) {
 
 	handler := NewOverridesHandler(mgr, nil)
 
-	acestreamID := "0123456789abcdef0123456789abcdef01234567"
+	acestreamID := testAcestreamID
 	req := httptest.NewRequest(http.MethodGet, "/api/overrides/"+acestreamID, nil)
 	w := httptest.NewRecorder()
 
@@ -116,8 +122,8 @@ func TestOverridesHandler_Put_Create(t *testing.T) {
 
 	handler := NewOverridesHandler(mgr, nil)
 
-	acestreamID := "0123456789abcdef0123456789abcdef01234567"
-	tvgID := "La1.TV"
+	acestreamID := testAcestreamID
+	tvgID := testTvgIDLa1
 	override := overrides.ChannelOverride{
 		TvgID: &tvgID,
 	}
@@ -144,7 +150,7 @@ func TestOverridesHandler_Put_Update(t *testing.T) {
 	mgr, cleanup := createTestOverridesManager(t)
 	defer cleanup()
 
-	acestreamID := "0123456789abcdef0123456789abcdef01234567"
+	acestreamID := testAcestreamID
 	tvgID1 := "La1.TV"
 	override1 := overrides.ChannelOverride{
 		TvgID: &tvgID1,
@@ -155,7 +161,7 @@ func TestOverridesHandler_Put_Update(t *testing.T) {
 
 	handler := NewOverridesHandler(mgr, nil)
 
-	tvgID2 := "La2.TV"
+	tvgID2 := testTvgIDLa2
 	override2 := overrides.ChannelOverride{
 		TvgID: &tvgID2,
 	}
@@ -185,8 +191,8 @@ func TestOverridesHandler_Put_WithValidation_Valid(t *testing.T) {
 	cache := newMockEPGCache()
 	handler := NewOverridesHandler(mgr, cache)
 
-	acestreamID := "0123456789abcdef0123456789abcdef01234567"
-	tvgID := "La1.TV"
+	acestreamID := testAcestreamID
+	tvgID := testTvgIDLa1
 	override := overrides.ChannelOverride{
 		TvgID: &tvgID,
 	}
@@ -210,7 +216,7 @@ func TestOverridesHandler_Put_WithValidation_Invalid(t *testing.T) {
 	cache := newMockEPGCache()
 	handler := NewOverridesHandler(mgr, cache)
 
-	acestreamID := "0123456789abcdef0123456789abcdef01234567"
+	acestreamID := testAcestreamID
 	tvgID := "InvalidChannel.TV"
 	override := overrides.ChannelOverride{
 		TvgID: &tvgID,
@@ -252,7 +258,7 @@ func TestOverridesHandler_Put_WithValidation_Force(t *testing.T) {
 	cache := newMockEPGCache()
 	handler := NewOverridesHandler(mgr, cache)
 
-	acestreamID := "0123456789abcdef0123456789abcdef01234567"
+	acestreamID := testAcestreamID
 	tvgID := "InvalidChannel.TV"
 	override := overrides.ChannelOverride{
 		TvgID: &tvgID,
@@ -283,7 +289,7 @@ func TestOverridesHandler_Put_EmptyTvgID(t *testing.T) {
 	cache := newMockEPGCache()
 	handler := NewOverridesHandler(mgr, cache)
 
-	acestreamID := "0123456789abcdef0123456789abcdef01234567"
+	acestreamID := testAcestreamID
 	tvgID := ""
 	override := overrides.ChannelOverride{
 		TvgID: &tvgID,
@@ -307,9 +313,9 @@ func TestOverridesHandler_Put_AllAttributes(t *testing.T) {
 
 	handler := NewOverridesHandler(mgr, nil)
 
-	acestreamID := "0123456789abcdef0123456789abcdef01234567"
+	acestreamID := testAcestreamID
 	enabled := false
-	tvgID := "La1.TV"
+	tvgID := testTvgIDLa1
 	tvgName := "La 1"
 	tvgLogo := "http://example.com/logo.png"
 	groupTitle := "Spain"
@@ -362,7 +368,7 @@ func TestOverridesHandler_Put_InvalidJSON(t *testing.T) {
 
 	handler := NewOverridesHandler(mgr, nil)
 
-	acestreamID := "0123456789abcdef0123456789abcdef01234567"
+	acestreamID := testAcestreamID
 	req := httptest.NewRequest(http.MethodPut, "/api/overrides/"+acestreamID, bytes.NewReader([]byte("invalid json")))
 	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
@@ -379,8 +385,8 @@ func TestOverridesHandler_Delete_Success(t *testing.T) {
 	defer cleanup()
 
 	// Create a test override
-	acestreamID := "0123456789abcdef0123456789abcdef01234567"
-	tvgID := "La1.TV"
+	acestreamID := testAcestreamID
+	tvgID := testTvgIDLa1
 	override := overrides.ChannelOverride{
 		TvgID: &tvgID,
 	}
@@ -411,7 +417,7 @@ func TestOverridesHandler_Delete_NotFound(t *testing.T) {
 
 	handler := NewOverridesHandler(mgr, nil)
 
-	acestreamID := "0123456789abcdef0123456789abcdef01234567"
+	acestreamID := testAcestreamID
 	req := httptest.NewRequest(http.MethodDelete, "/api/overrides/"+acestreamID, nil)
 	w := httptest.NewRecorder()
 
@@ -456,7 +462,7 @@ func TestOverridesHandler_List_WithData(t *testing.T) {
 	acestreamID2 := "fedcba9876543210fedcba9876543210fedcba98"
 
 	tvgID1 := "La1.TV"
-	tvgID2 := "La2.TV"
+	tvgID2 := testTvgIDLa2
 
 	override1 := overrides.ChannelOverride{TvgID: &tvgID1}
 	override2 := overrides.ChannelOverride{TvgID: &tvgID2}
