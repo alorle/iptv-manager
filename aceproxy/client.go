@@ -162,7 +162,11 @@ func (c *Client) GetStream(ctx context.Context, params GetStreamParams) (*GetStr
 	if err != nil {
 		return nil, fmt.Errorf("failed to connect to Ace Stream Engine at %s: %w", c.baseURL, err)
 	}
-	defer resp.Body.Close()
+	defer func() {
+		if closeErr := resp.Body.Close(); closeErr != nil {
+			c.logger.Printf("warning: failed to close response body: %v", closeErr)
+		}
+	}()
 
 	// Check for successful response
 	if resp.StatusCode != http.StatusOK {
@@ -203,7 +207,11 @@ func (c *Client) HealthCheck(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("health check failed: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() {
+		if closeErr := resp.Body.Close(); closeErr != nil {
+			c.logger.Printf("warning: failed to close response body: %v", closeErr)
+		}
+	}()
 
 	// Check for successful response
 	if resp.StatusCode != http.StatusOK {
