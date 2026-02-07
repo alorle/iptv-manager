@@ -243,7 +243,9 @@ func (s *Stream) fanOut(ctx context.Context, cfg Config) {
 	defer func() {
 		s.mu.Lock()
 		if s.upstream != nil {
-			s.upstream.Close()
+			if closeErr := s.upstream.Close(); closeErr != nil {
+				log.Printf("Stream %s: warning: failed to close upstream: %v", s.ContentID, closeErr)
+			}
 		}
 		// Close all clients
 		for _, client := range s.Clients {
@@ -290,7 +292,9 @@ func (s *Stream) fanOut(ctx context.Context, cfg Config) {
 
 			// Close current upstream connection
 			if s.upstream != nil {
-				s.upstream.Close()
+				if closeErr := s.upstream.Close(); closeErr != nil {
+					log.Printf("Stream %s: warning: failed to close upstream: %v", s.ContentID, closeErr)
+				}
 				s.upstream = nil
 			}
 
