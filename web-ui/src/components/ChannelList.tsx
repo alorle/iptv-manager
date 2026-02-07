@@ -1,10 +1,14 @@
-import { useState, useMemo, useEffect, useRef } from 'react'
+import { useState, useRef } from 'react'
 import type { Channel } from '../types'
 import { useChannels } from '../hooks/useChannels'
+import { useChannelFilters } from '../hooks/useChannelFilters'
+import { useChannelSelection } from '../hooks/useChannelSelection'
+import { useChannelExpansion } from '../hooks/useChannelExpansion'
+import { useScrollDetection } from '../hooks/useScrollDetection'
+import { useChannelBulkEdit } from '../hooks/useChannelBulkEdit'
 import { BulkEditModal } from './BulkEditModal'
 import { ErrorDisplay } from './ErrorDisplay'
 import { LoadingSpinner } from './LoadingSpinner'
-import { bulkUpdateOverrides } from '../api/channels'
 import type { useToast } from '../hooks/useToast'
 import './ChannelList.css'
 
@@ -14,43 +18,10 @@ interface ChannelListProps {
   toast: ReturnType<typeof useToast>
 }
 
-type EnabledFilter = 'all' | 'enabled' | 'disabled'
-
 export function ChannelList({ onChannelSelect, refreshTrigger, toast }: ChannelListProps) {
   const { channels, loading, error, refetch } = useChannels(refreshTrigger)
-  const [searchText, setSearchText] = useState('')
-  const [groupFilter, setGroupFilter] = useState('')
-  const [enabledFilter, setEnabledFilter] = useState<EnabledFilter>('enabled')
-  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
   const [showBulkEditModal, setShowBulkEditModal] = useState(false)
-  const [isScrolled, setIsScrolled] = useState(false)
-  const [expandedChannelId, setExpandedChannelId] = useState<string | null>(null)
   const containerRef = useRef<HTMLElement>(null)
-  const tableContainerRef = useRef<HTMLDivElement>(null)
-  const expandedRowRef = useRef<HTMLTableRowElement>(null)
-
-  // Detect scroll to show header shadow
-  useEffect(() => {
-    const tableContainer = tableContainerRef.current
-    if (!tableContainer) return
-
-    const handleScroll = () => {
-      const scrollThreshold = 20
-      setIsScrolled(tableContainer.scrollTop > scrollThreshold)
-    }
-
-    // Check initial scroll position
-    handleScroll()
-
-    tableContainer.addEventListener('scroll', handleScroll, { passive: true })
-    return () => tableContainer.removeEventListener('scroll', handleScroll)
-  }, [loading, channels.length])
-
-  // Get unique group titles for the filter dropdown
-  const uniqueGroups = useMemo(() => {
-    const groups = new Set(channels.map((ch) => ch.group_title).filter(Boolean))
-    return Array.from(groups).sort()
-  }, [channels])
 
   // Generate unique channel key
   const getChannelKey = (channel: Channel) => {
@@ -58,103 +29,41 @@ export function ChannelList({ onChannelSelect, refreshTrigger, toast }: ChannelL
     return channel.tvg_id || channel.streams[0]?.acestream_id || channel.name
   }
 
-  // Filter channels based on search, group filter, and enabled filter
-  const filteredChannels = useMemo(() => {
-    return channels.filter((channel) => {
-      const matchesSearch =
-        searchText === '' || channel.name.toLowerCase().includes(searchText.toLowerCase())
+  // Custom hooks for logic separation
+  const {
+    searchText,
+    groupFilter,
+    enabledFilter,
+    setSearchText,
+    setGroupFilter,
+    setEnabledFilter,
+    filteredChannels,
+    uniqueGroups,
+  } = useChannelFilters(channels)
 
-      const matchesGroup = groupFilter === '' || channel.group_title === groupFilter
+  const {
+    selectedIds,
+    allSelected,
+    someSelected,
+    handleSelectAll,
+    handleSelectOne,
+    clearSelection,
+  } = useChannelSelection(filteredChannels, getChannelKey)
 
-      // Channel is considered enabled if at least one stream is enabled
-      const hasEnabledStream = channel.streams.some((s) => s.enabled)
-      const matchesEnabled =
-        enabledFilter === 'all' ||
-        (enabledFilter === 'enabled' && hasEnabledStream) ||
-        (enabledFilter === 'disabled' && !hasEnabledStream)
+  const { expandedChannelId, expandedRowRef, handleRowClick } = useChannelExpansion()
 
-      return matchesSearch && matchesGroup && matchesEnabled
-    })
-  }, [channels, searchText, groupFilter, enabledFilter])
+  const { isScrolled, tableContainerRef } = useScrollDetection(20, [loading, channels.length])
 
-  // Handle select all checkbox (selects all channels in filtered list)
-  const handleSelectAll = (checked: boolean) => {
-    if (checked) {
-      const allChannelIds = filteredChannels.map((ch) => getChannelKey(ch))
-      setSelectedIds(new Set(allChannelIds))
-    } else {
-      setSelectedIds(new Set())
-    }
-  }
+  const { handleBulkEdit: bulkEditOperation } = useChannelBulkEdit(toast, () => {
+    clearSelection()
+    setShowBulkEditModal(false)
+    refetch()
+  })
 
-  // Handle individual checkbox for a channel
-  const handleSelectOne = (id: string, checked: boolean) => {
-    const newSelected = new Set(selectedIds)
-    if (checked) {
-      newSelected.add(id)
-    } else {
-      newSelected.delete(id)
-    }
-    setSelectedIds(newSelected)
-  }
-
-  // Handle row click to expand/collapse channel
-  const handleRowClick = (channel: Channel) => {
-    const channelKey = getChannelKey(channel)
-    if (expandedChannelId === channelKey) {
-      setExpandedChannelId(null)
-    } else {
-      setExpandedChannelId(channelKey)
-    }
-  }
-
-  // Scroll expanded channel into view
-  useEffect(() => {
-    if (expandedChannelId && expandedRowRef.current) {
-      expandedRowRef.current.scrollIntoView({
-        behavior: 'smooth',
-        block: 'nearest',
-      })
-    }
-  }, [expandedChannelId])
-
-  // Handle bulk edit submission
+  // Wrapper to pass selectedIds to bulk edit operation
   const handleBulkEdit = async (field: string, value: string | boolean) => {
-    try {
-      const result = await bulkUpdateOverrides(Array.from(selectedIds), field, value)
-
-      if (result.failed > 0) {
-        toast.warning(`Updated ${result.updated} channel(s), but ${result.failed} failed`, 7000)
-      } else {
-        toast.success(`Successfully updated ${result.updated} channel(s)`)
-      }
-
-      // Clear selection and close modal
-      setSelectedIds(new Set())
-      setShowBulkEditModal(false)
-
-      // Refresh channel list
-      refetch()
-    } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : 'Failed to update channels'
-      toast.error(errorMessage)
-      throw err
-    }
+    await bulkEditOperation(selectedIds, field, value)
   }
-
-  // Check if all channels in filtered list are selected (must be before early returns)
-  const allChannelIds = useMemo(
-    () => new Set(filteredChannels.map((ch) => getChannelKey(ch))),
-    [filteredChannels]
-  )
-
-  const allSelected =
-    allChannelIds.size > 0 && Array.from(allChannelIds).every((id) => selectedIds.has(id))
-
-  const someSelected =
-    selectedIds.size > 0 &&
-    !allSelected &&
-    Array.from(allChannelIds).some((id) => selectedIds.has(id))
 
   if (loading) {
     return (
@@ -306,7 +215,7 @@ export function ChannelList({ onChannelSelect, refreshTrigger, toast }: ChannelL
                       key={channelKey}
                       ref={isExpanded ? expandedRowRef : null}
                       className={`channel-row${isExpanded ? ' expanded' : ''}`}
-                      onClick={() => handleRowClick(channel)}
+                      onClick={() => handleRowClick(channel, getChannelKey)}
                       tabIndex={0}
                       role="button"
                       aria-label={`${isExpanded ? 'Collapse' : 'Expand'} ${channel.name}${!hasEnabledStream ? ' (disabled)' : ''}${hasOverride ? ', has custom overrides' : ''}`}
@@ -314,7 +223,7 @@ export function ChannelList({ onChannelSelect, refreshTrigger, toast }: ChannelL
                       onKeyDown={(e) => {
                         if (e.key === 'Enter' || e.key === ' ') {
                           e.preventDefault()
-                          handleRowClick(channel)
+                          handleRowClick(channel, getChannelKey)
                         }
                       }}
                     >
