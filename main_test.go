@@ -904,13 +904,94 @@ func TestIntegration_RealEndpoints(t *testing.T) {
 	})
 }
 
+// mergeM3UContent merges two M3U playlists, handling errors gracefully
+func mergeM3UContent(elcanoContent, neweraContent []byte, elcanoErr, neweraErr error) []byte {
+	// Both sources failed
+	if elcanoErr != nil && neweraErr != nil {
+		return nil
+	}
+
+	var mergedContent strings.Builder
+	mergedContent.WriteString("#EXTM3U\n")
+
+	if elcanoErr == nil {
+		elcanoStr := string(elcanoContent)
+		if strings.HasPrefix(elcanoStr, "#EXTM3U") {
+			elcanoStr = strings.TrimPrefix(elcanoStr, "#EXTM3U")
+			elcanoStr = strings.TrimLeft(elcanoStr, "\n")
+		}
+		mergedContent.WriteString(elcanoStr)
+	}
+
+	if neweraErr == nil {
+		neweraStr := string(neweraContent)
+		if strings.HasPrefix(neweraStr, "#EXTM3U") {
+			neweraStr = strings.TrimPrefix(neweraStr, "#EXTM3U")
+			neweraStr = strings.TrimLeft(neweraStr, "\n")
+		}
+		if mergedContent.Len() > len("#EXTM3U\n") {
+			mergedContent.WriteString("\n")
+		}
+		mergedContent.WriteString(neweraStr)
+	}
+
+	return []byte(mergedContent.String())
+}
+
+// createTestUnifiedPlaylistHandler creates handler for unified playlist endpoint in tests
+func createTestUnifiedPlaylistHandler(fetch *fetcher.Fetcher, rw *rewriter.Rewriter, elcanoURL, neweraURL string) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+
+		// Fetch both sources
+		elcanoContent, _, _, elcanoErr := fetch.FetchWithCache(elcanoURL)
+		neweraContent, _, _, neweraErr := fetch.FetchWithCache(neweraURL)
+
+		// Merge content
+		mergedBytes := mergeM3UContent(elcanoContent, neweraContent, elcanoErr, neweraErr)
+		if mergedBytes == nil {
+			http.Error(w, "Bad Gateway", http.StatusBadGateway)
+			return
+		}
+
+		// Apply deduplication, sorting, and rewriting
+		deduplicatedContent := rewriter.DeduplicateStreams(mergedBytes)
+		sortedContent := rewriter.SortStreamsByName(deduplicatedContent)
+		rewrittenContent := rw.RewriteM3U(sortedContent, "http://127.0.0.1:8080")
+
+		w.Header().Set("Content-Type", contentTypeM3U)
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write(rewrittenContent)
+	}
+}
+
+// verifyUnifiedPlaylistContains checks if playlist contains expected streams and URLs
+func verifyUnifiedPlaylistContains(t *testing.T, body string, expectedNames []string, expectedIDs []string) {
+	t.Helper()
+
+	for _, name := range expectedNames {
+		if !strings.Contains(body, name) {
+			t.Errorf("Expected '%s' in playlist", name)
+		}
+	}
+
+	for _, id := range expectedIDs {
+		expectedURL := fmt.Sprintf("http://127.0.0.1:8080/stream?id=%s", id)
+		if !strings.Contains(body, expectedURL) {
+			t.Errorf("Expected rewritten URL for stream %s", id)
+		}
+	}
+}
+
 // TestIntegration_UnifiedPlaylist_SuccessfulFetchAndMerge tests unified playlist endpoint
 // with successful fetch and merge from both sources
 func TestIntegration_UnifiedPlaylist_SuccessfulFetchAndMerge(t *testing.T) {
 	cacheDir, cleanup := setupTestEnvironment(t)
 	defer cleanup()
 
-	// Create mock content for elcano source
 	elcanoContent := `#EXTM3U
 #EXTINF:-1 tvg-id="e1" tvg-name="Elcano One" tvg-logo="http://example.com/logo1.png" group-title="Sports",Elcano One
 acestream://1111111111111111111111111111111111111111
@@ -918,7 +999,6 @@ acestream://1111111111111111111111111111111111111111
 acestream://2222222222222222222222222222222222222222
 `
 
-	// Create mock content for newera source
 	neweraContent := `#EXTM3U
 #EXTINF:-1 tvg-id="n1" tvg-name="NewEra One" tvg-logo="http://example.com/logo2.png",NewEra One
 acestream://3333333333333333333333333333333333333333
@@ -926,14 +1006,12 @@ acestream://3333333333333333333333333333333333333333
 acestream://4444444444444444444444444444444444444444
 `
 
-	// Create mock servers
 	elcanoServer := createMockIPFSServer(t, false, elcanoContent)
 	defer elcanoServer.Close()
 
 	neweraServer := createMockIPFSServer(t, false, neweraContent)
 	defer neweraServer.Close()
 
-	// Initialize components
 	storage, err := cache.NewFileStorage(cacheDir)
 	if err != nil {
 		t.Fatalf("Failed to create storage: %v", err)
@@ -942,64 +1020,12 @@ acestream://4444444444444444444444444444444444444444
 	fetch := fetcher.New(5*time.Second, storage, 1*time.Hour)
 	rw := rewriter.New()
 
-	// Create test server with unified endpoint
 	mux := http.NewServeMux()
-	mux.HandleFunc("/playlist.m3u", func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodGet {
-			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-			return
-		}
-
-		// Fetch both sources
-		elcanoContentBytes, _, _, elcanoErr := fetch.FetchWithCache(elcanoServer.URL)
-		neweraContentBytes, _, _, neweraErr := fetch.FetchWithCache(neweraServer.URL)
-
-		// Check if both sources failed
-		if elcanoErr != nil && neweraErr != nil {
-			http.Error(w, "Bad Gateway", http.StatusBadGateway)
-			return
-		}
-
-		// Build merged content
-		var mergedContent strings.Builder
-		mergedContent.WriteString("#EXTM3U\n")
-
-		if elcanoErr == nil {
-			elcanoStr := string(elcanoContentBytes)
-			if strings.HasPrefix(elcanoStr, "#EXTM3U") {
-				elcanoStr = strings.TrimPrefix(elcanoStr, "#EXTM3U")
-				elcanoStr = strings.TrimLeft(elcanoStr, "\n")
-			}
-			mergedContent.WriteString(elcanoStr)
-		}
-
-		if neweraErr == nil {
-			neweraStr := string(neweraContentBytes)
-			if strings.HasPrefix(neweraStr, "#EXTM3U") {
-				neweraStr = strings.TrimPrefix(neweraStr, "#EXTM3U")
-				neweraStr = strings.TrimLeft(neweraStr, "\n")
-			}
-			if mergedContent.Len() > len("#EXTM3U\n") {
-				mergedContent.WriteString("\n")
-			}
-			mergedContent.WriteString(neweraStr)
-		}
-
-		// Apply deduplication, sorting, and rewriting
-		mergedBytes := []byte(mergedContent.String())
-		deduplicatedContent := rewriter.DeduplicateStreams(mergedBytes)
-		sortedContent := rewriter.SortStreamsByName(deduplicatedContent)
-		rewrittenContent := rw.RewriteM3U(sortedContent, "http://127.0.0.1:8080")
-
-		w.Header().Set("Content-Type", contentTypeM3U)
-		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write(rewrittenContent)
-	})
+	mux.HandleFunc("/playlist.m3u", createTestUnifiedPlaylistHandler(fetch, rw, elcanoServer.URL, neweraServer.URL))
 
 	testServer := httptest.NewServer(mux)
 	defer testServer.Close()
 
-	// Make request
 	resp, err := http.Get(testServer.URL + "/playlist.m3u")
 	if err != nil {
 		t.Fatalf("Failed to make request: %v", err)
@@ -1018,27 +1044,12 @@ acestream://4444444444444444444444444444444444444444
 	n, _ := resp.Body.Read(body)
 	bodyStr := string(body[:n])
 
-	// Verify all streams from both sources are present
-	if !strings.Contains(bodyStr, "Elcano One") {
-		t.Error("Expected 'Elcano One' from elcano source")
+	expectedNames := []string{"Elcano One", "Elcano Two", "NewEra One", "NewEra Two"}
+	expectedIDs := []string{
+		"1111111111111111111111111111111111111111",
+		"3333333333333333333333333333333333333333",
 	}
-	if !strings.Contains(bodyStr, "Elcano Two") {
-		t.Error("Expected 'Elcano Two' from elcano source")
-	}
-	if !strings.Contains(bodyStr, "NewEra One") {
-		t.Error("Expected 'NewEra One' from newera source")
-	}
-	if !strings.Contains(bodyStr, "NewEra Two") {
-		t.Error("Expected 'NewEra Two' from newera source")
-	}
-
-	// Verify URLs are rewritten
-	if !strings.Contains(bodyStr, "http://127.0.0.1:8080/stream?id=1111111111111111111111111111111111111111") {
-		t.Error("Expected rewritten URL for stream 1")
-	}
-	if !strings.Contains(bodyStr, "http://127.0.0.1:8080/stream?id=3333333333333333333333333333333333333333") {
-		t.Error("Expected rewritten URL for stream 3")
-	}
+	verifyUnifiedPlaylistContains(t, bodyStr, expectedNames, expectedIDs)
 }
 
 // TestIntegration_UnifiedPlaylist_Deduplication tests that duplicate streams are removed
