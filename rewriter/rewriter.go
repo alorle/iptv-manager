@@ -278,31 +278,31 @@ func extractTranscodeAudio(line string) string {
 }
 
 // buildStreamURL constructs a stream URL with the given content ID, optional transcode parameter, and base URL.
-func buildStreamURL(baseUrl, contentID, transcodeAudio string) string {
+func buildStreamURL(baseURL, contentID, transcodeAudio string) string {
 	path := "/stream?id=" + contentID
 	if transcodeAudio != "" {
 		path += "&transcode_audio=" + transcodeAudio
 	}
 
-	if baseUrl == "" {
+	if baseURL == "" {
 		return path
 	}
-	return baseUrl + path
+	return baseURL + path
 }
 
 // rewriteAcestreamURL converts an acestream:// URL to the internal /stream format.
-func rewriteAcestreamURL(line, baseUrl string) string {
+func rewriteAcestreamURL(line, baseURL string) string {
 	streamID := strings.TrimPrefix(line, "acestream://")
 	streamID = strings.TrimSpace(streamID)
-	return buildStreamURL(baseUrl, streamID, "")
+	return buildStreamURL(baseURL, streamID, "")
 }
 
 // rewriteAlreadyRewrittenURL normalizes an already-rewritten stream URL to the standard format.
 // Preserves transcode_audio parameter if present.
-func rewriteAlreadyRewrittenURL(line, baseUrl string) string {
+func rewriteAlreadyRewrittenURL(line, baseURL string) string {
 	contentID := extractContentID(line)
 	transcodeAudio := extractTranscodeAudio(line)
-	return buildStreamURL(baseUrl, contentID, transcodeAudio)
+	return buildStreamURL(baseURL, contentID, transcodeAudio)
 }
 
 // isRewrittenStreamURL checks if a line is an already-rewritten stream URL.
@@ -314,7 +314,7 @@ func isRewrittenStreamURL(line string) bool {
 // RewriteM3U processes M3U content line by line and rewrites acestream:// URLs
 // to internal server URLs in the format /stream?id={content_id}
 // Preserves transcode_audio parameter if present in original URL
-func (r *Rewriter) RewriteM3U(content []byte, baseUrl string) []byte {
+func (r *Rewriter) RewriteM3U(content []byte, baseURL string) []byte {
 	lines := strings.Split(string(content), "\n")
 	var result strings.Builder
 
@@ -327,9 +327,9 @@ func (r *Rewriter) RewriteM3U(content []byte, baseUrl string) []byte {
 		// Route line processing based on type
 		switch {
 		case strings.HasPrefix(line, "acestream://"):
-			result.WriteString(rewriteAcestreamURL(line, baseUrl))
+			result.WriteString(rewriteAcestreamURL(line, baseURL))
 		case isRewrittenStreamURL(line):
-			result.WriteString(rewriteAlreadyRewrittenURL(line, baseUrl))
+			result.WriteString(rewriteAlreadyRewrittenURL(line, baseURL))
 		case strings.HasPrefix(line, "#EXTINF:"):
 			result.WriteString(RemoveLogoMetadata(line))
 		default:

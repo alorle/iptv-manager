@@ -668,6 +668,9 @@ func (m *Multiplexer) cleanupClient(stream *Stream, contentID, clientID string) 
 	}
 }
 
+// ServeStream handles an HTTP request for streaming content to a client.
+// It manages the client lifecycle, connecting them to a shared stream for the given content ID.
+// Multiple clients requesting the same content will share a single upstream connection via multiplexing.
 func (m *Multiplexer) ServeStream(ctx context.Context, w http.ResponseWriter, contentID string, upstreamURL string, clientID string) error {
 	// Disable write deadline for streaming - this is essential for long-running video streams
 	rc := http.NewResponseController(w)
