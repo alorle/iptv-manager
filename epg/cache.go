@@ -4,6 +4,7 @@ import (
 	"encoding/xml"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"strings"
 	"time"
@@ -62,7 +63,11 @@ func (c *Cache) fetch(timeout time.Duration) error {
 	if err != nil {
 		return fmt.Errorf("failed to fetch EPG XML from %s: %w", c.epgURL, err)
 	}
-	defer resp.Body.Close()
+	defer func() {
+		if closeErr := resp.Body.Close(); closeErr != nil {
+			log.Printf("warning: failed to close EPG response body: %v", closeErr)
+		}
+	}()
 
 	if resp.StatusCode != http.StatusOK {
 		return fmt.Errorf("failed to fetch EPG XML: status code %d", resp.StatusCode)

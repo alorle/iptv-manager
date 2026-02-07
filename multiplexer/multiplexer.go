@@ -361,7 +361,9 @@ func (s *Stream) fanOut(ctx context.Context, cfg Config) {
 					}
 
 					if resp.StatusCode != http.StatusOK {
-						resp.Body.Close()
+						if closeErr := resp.Body.Close(); closeErr != nil {
+							log.Printf("Stream %s: warning: failed to close response body: %v", s.ContentID, closeErr)
+						}
 						return fmt.Errorf("upstream returned status %d", resp.StatusCode)
 					}
 
@@ -512,7 +514,9 @@ func (m *Multiplexer) GetOrCreateStream(ctx context.Context, contentID string, u
 	}
 
 	if resp.StatusCode != http.StatusOK {
-		resp.Body.Close()
+		if closeErr := resp.Body.Close(); closeErr != nil {
+			log.Printf("Multiplexer: warning: failed to close response body: %v", closeErr)
+		}
 		return nil, false, fmt.Errorf("upstream returned status %d", resp.StatusCode)
 	}
 
