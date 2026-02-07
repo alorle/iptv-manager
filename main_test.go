@@ -196,7 +196,7 @@ func TestIntegration_CacheHit(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to make first request: %v", err)
 	}
-	resp1.Body.Close()
+	_ = resp1.Body.Close()
 
 	if requestCount != 1 {
 		t.Errorf("Expected 1 IPFS request after first fetch, got %d", requestCount)
@@ -207,7 +207,11 @@ func TestIntegration_CacheHit(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to make second request: %v", err)
 	}
-	defer resp2.Body.Close()
+	defer func() {
+		if closeErr := resp2.Body.Close(); closeErr != nil {
+			t.Errorf("failed to close response body: %v", closeErr)
+		}
+	}()
 
 	// Verify no additional IPFS requests were made
 	if requestCount != 1 {
@@ -291,7 +295,7 @@ func TestIntegration_ExpiredCacheRefresh(t *testing.T) {
 	}
 	body1 := make([]byte, 4096)
 	n1, _ := resp1.Body.Read(body1)
-	resp1.Body.Close()
+	_ = resp1.Body.Close()
 
 	if requestCount != 1 {
 		t.Errorf("Expected 1 IPFS request, got %d", requestCount)
@@ -307,7 +311,7 @@ func TestIntegration_ExpiredCacheRefresh(t *testing.T) {
 	}
 	body2 := make([]byte, 4096)
 	n2, _ := resp2.Body.Read(body2)
-	resp2.Body.Close()
+	_ = resp2.Body.Close()
 
 	if requestCount != 2 {
 		t.Errorf("Expected 2 IPFS requests after cache expiration, got %d", requestCount)
@@ -393,7 +397,7 @@ func TestIntegration_IPFSFailureWithStaleCacheFallback(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to make first request: %v", err)
 	}
-	resp1.Body.Close()
+	_ = resp1.Body.Close()
 
 	// Wait for cache to expire
 	time.Sleep(150 * time.Millisecond)
@@ -406,7 +410,11 @@ func TestIntegration_IPFSFailureWithStaleCacheFallback(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to make second request: %v", err)
 	}
-	defer resp2.Body.Close()
+	defer func() {
+		if closeErr := resp2.Body.Close(); closeErr != nil {
+			t.Errorf("failed to close response body: %v", closeErr)
+		}
+	}()
 
 	// Verify HTTP status code (should still be OK)
 	if resp2.StatusCode != http.StatusOK {
@@ -760,18 +768,18 @@ func TestIntegration_RealEndpoints(t *testing.T) {
 	cacheDir := t.TempDir()
 
 	// Set environment variables
-	os.Setenv("CACHE_DIR", cacheDir)
-	os.Setenv("CACHE_TTL", "1h")
-	os.Setenv("HTTP_ADDRESS", "127.0.0.1")
-	os.Setenv("HTTP_PORT", "0") // Use random port
-	os.Setenv("ACESTREAM_PLAYER_BASE_URL", "http://127.0.0.1:6878/ace/getstream")
+	_ = os.Setenv("CACHE_DIR", cacheDir)
+	_ = os.Setenv("CACHE_TTL", "1h")
+	_ = os.Setenv("HTTP_ADDRESS", "127.0.0.1")
+	_ = os.Setenv("HTTP_PORT", "0") // Use random port
+	_ = os.Setenv("ACESTREAM_PLAYER_BASE_URL", "http://127.0.0.1:6878/ace/getstream")
 
 	defer func() {
-		os.Unsetenv("CACHE_DIR")
-		os.Unsetenv("CACHE_TTL")
-		os.Unsetenv("HTTP_ADDRESS")
-		os.Unsetenv("HTTP_PORT")
-		os.Unsetenv("ACESTREAM_PLAYER_BASE_URL")
+		_ = os.Unsetenv("CACHE_DIR")
+		_ = os.Unsetenv("CACHE_TTL")
+		_ = os.Unsetenv("HTTP_ADDRESS")
+		_ = os.Unsetenv("HTTP_PORT")
+		_ = os.Unsetenv("ACESTREAM_PLAYER_BASE_URL")
 	}()
 
 	// Load configuration
@@ -1589,7 +1597,7 @@ acestream://1111111111111111111111111111111111111111
 	if err != nil {
 		t.Fatalf("Failed to make first request: %v", err)
 	}
-	resp1.Body.Close()
+	_ = resp1.Body.Close()
 
 	if resp1.StatusCode != http.StatusOK {
 		t.Errorf("Expected status code %d for first request, got %d", http.StatusOK, resp1.StatusCode)
@@ -1606,7 +1614,11 @@ acestream://1111111111111111111111111111111111111111
 	if err != nil {
 		t.Fatalf("Failed to make second request: %v", err)
 	}
-	defer resp2.Body.Close()
+	defer func() {
+		if closeErr := resp2.Body.Close(); closeErr != nil {
+			t.Errorf("failed to close response body: %v", closeErr)
+		}
+	}()
 
 	if resp2.StatusCode != http.StatusOK {
 		t.Errorf("Expected status code %d when serving stale cache, got %d", http.StatusOK, resp2.StatusCode)

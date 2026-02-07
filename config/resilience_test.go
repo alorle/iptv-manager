@@ -128,8 +128,8 @@ func TestLoadFromEnv_InvalidBufferSize(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			os.Setenv("RECONNECT_BUFFER_SIZE", tt.value)
-			defer os.Unsetenv("RECONNECT_BUFFER_SIZE")
+			_ = os.Setenv("RECONNECT_BUFFER_SIZE", tt.value)
+			defer func() { _ = os.Unsetenv("RECONNECT_BUFFER_SIZE") }()
 
 			_, err := LoadFromEnv()
 			if err == nil {
@@ -160,8 +160,8 @@ func TestLoadFromEnv_InvalidDuration(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			os.Setenv(tt.envVar, tt.value)
-			defer os.Unsetenv(tt.envVar)
+			_ = os.Setenv(tt.envVar, tt.value)
+			defer func() { _ = os.Unsetenv(tt.envVar) }()
 
 			_, err := LoadFromEnv()
 			if err == nil {
@@ -191,8 +191,8 @@ func TestLoadFromEnv_InvalidIntegers(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			os.Setenv(tt.envVar, tt.value)
-			defer os.Unsetenv(tt.envVar)
+			_ = os.Setenv(tt.envVar, tt.value)
+			defer func() { _ = os.Unsetenv(tt.envVar) }()
 
 			_, err := LoadFromEnv()
 			if err == nil {
@@ -208,8 +208,8 @@ func TestLoadFromEnv_InvalidIntegers(t *testing.T) {
 func TestLoadFromEnv_InvalidLogLevel(t *testing.T) {
 	clearEnvVars()
 
-	os.Setenv("LOG_LEVEL", "INVALID")
-	defer os.Unsetenv("LOG_LEVEL")
+	_ = os.Setenv("LOG_LEVEL", "INVALID")
+	defer func() { _ = os.Unsetenv("LOG_LEVEL") }()
 
 	_, err := LoadFromEnv()
 	if err == nil {
@@ -227,8 +227,8 @@ func TestLoadFromEnv_LogLevelCaseInsensitive(t *testing.T) {
 
 	for _, level := range tests {
 		t.Run(level, func(t *testing.T) {
-			os.Setenv("LOG_LEVEL", level)
-			defer os.Unsetenv("LOG_LEVEL")
+			_ = os.Setenv("LOG_LEVEL", level)
+			defer func() { _ = os.Unsetenv("LOG_LEVEL") }()
 
 			cfg, err := LoadFromEnv()
 			if err != nil {
@@ -245,8 +245,8 @@ func TestLoadFromEnv_BackoffRelationship(t *testing.T) {
 	clearEnvVars()
 
 	// Initial backoff > max backoff should fail
-	os.Setenv("RECONNECT_INITIAL_BACKOFF", "1m")
-	os.Setenv("RECONNECT_MAX_BACKOFF", "30s")
+	_ = os.Setenv("RECONNECT_INITIAL_BACKOFF", "1m")
+	_ = os.Setenv("RECONNECT_MAX_BACKOFF", "30s")
 	defer clearEnvVars()
 
 	_, err := LoadFromEnv()
@@ -393,12 +393,12 @@ func TestParseByteSize(t *testing.T) {
 
 // Helper function to clear all resilience-related env vars
 func clearEnvVars() {
-	os.Unsetenv("RECONNECT_BUFFER_SIZE")
-	os.Unsetenv("RECONNECT_MAX_BACKOFF")
-	os.Unsetenv("RECONNECT_INITIAL_BACKOFF")
-	os.Unsetenv("CB_FAILURE_THRESHOLD")
-	os.Unsetenv("CB_TIMEOUT")
-	os.Unsetenv("CB_HALF_OPEN_REQUESTS")
-	os.Unsetenv("HEALTH_CHECK_INTERVAL")
-	os.Unsetenv("LOG_LEVEL")
+	_ = os.Unsetenv("RECONNECT_BUFFER_SIZE")
+	_ = os.Unsetenv("RECONNECT_MAX_BACKOFF")
+	_ = os.Unsetenv("RECONNECT_INITIAL_BACKOFF")
+	_ = os.Unsetenv("CB_FAILURE_THRESHOLD")
+	_ = os.Unsetenv("CB_TIMEOUT")
+	_ = os.Unsetenv("CB_HALF_OPEN_REQUESTS")
+	_ = os.Unsetenv("HEALTH_CHECK_INTERVAL")
+	_ = os.Unsetenv("LOG_LEVEL")
 }
