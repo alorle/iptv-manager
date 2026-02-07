@@ -364,7 +364,7 @@ func main() {
 			return
 		}
 
-		baseUrl := getBaseURL(r)
+		baseURL := getBaseURL(r)
 
 		sourceURL := "https://ipfs.io/ipns/k51qzi5uqu5di462t7j4vu4akwfhvtjhy88qbupktvoacqfqe9uforjvhyi4wr/hashes_acestream.m3u"
 
@@ -391,7 +391,7 @@ func main() {
 		content = rewriter.ApplyOverrides(content, overridesMgr)
 
 		// Rewrite acestream:// URLs
-		rewrittenContent := rw.RewriteM3U(content, baseUrl)
+		rewrittenContent := rw.RewriteM3U(content, baseURL)
 
 		// Set content type
 		w.Header().Set("Content-Type", "audio/x-mpegurl")
@@ -408,7 +408,7 @@ func main() {
 			return
 		}
 
-		baseUrl := getBaseURL(r)
+		baseURL := getBaseURL(r)
 
 		sourceURL := "https://ipfs.io/ipns/k2k4r8oqlcjxsritt5mczkcn4mmvcmymbqw7113fz2flkrerfwfps004/data/listas/lista_fuera_iptv.m3u"
 
@@ -435,7 +435,7 @@ func main() {
 		content = rewriter.ApplyOverrides(content, overridesMgr)
 
 		// Rewrite acestream:// URLs
-		rewrittenContent := rw.RewriteM3U(content, baseUrl)
+		rewrittenContent := rw.RewriteM3U(content, baseURL)
 
 		// Set content type
 		w.Header().Set("Content-Type", "audio/x-mpegurl")
@@ -452,7 +452,7 @@ func main() {
 			return
 		}
 
-		baseUrl := getBaseURL(r)
+		baseURL := getBaseURL(r)
 
 		elcanoURL := "https://ipfs.io/ipns/k51qzi5uqu5di462t7j4vu4akwfhvtjhy88qbupktvoacqfqe9uforjvhyi4wr/hashes_acestream.m3u"
 		neweraURL := "https://ipfs.io/ipns/k2k4r8oqlcjxsritt5mczkcn4mmvcmymbqw7113fz2flkrerfwfps004/data/listas/lista_fuera_iptv.m3u"
@@ -558,7 +558,7 @@ func main() {
 		sortedContent := rewriter.SortStreamsByName(deduplicatedContent)
 
 		// Rewrite acestream:// URLs and remove logos (US-005)
-		rewrittenContent := rw.RewriteM3U(sortedContent, baseUrl)
+		rewrittenContent := rw.RewriteM3U(sortedContent, baseURL)
 
 		// Set content type
 		w.Header().Set("Content-Type", "audio/x-mpegurl")
