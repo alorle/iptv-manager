@@ -13,11 +13,12 @@ import (
 // LogLevel represents the severity level of a log message
 type LogLevel int
 
+// Log level constants define the severity hierarchy for filtering log output
 const (
-	DEBUG LogLevel = iota
-	INFO
-	WARN
-	ERROR
+	DEBUG LogLevel = iota // DEBUG is the lowest severity level for detailed diagnostics
+	INFO                  // INFO is for general informational messages
+	WARN                  // WARN is for warning messages that don't prevent operation
+	ERROR                 // ERROR is the highest severity for error conditions
 )
 
 func (l LogLevel) String() string {
@@ -154,12 +155,13 @@ func (l *Logger) Error(msg string, fields map[string]interface{}) {
 // ResilienceEvent represents a type of resilience-related event
 type ResilienceEvent string
 
+// Resilience event constants identify specific types of recovery and failure events
 const (
-	EventReconnectAttempt     ResilienceEvent = "reconnect_attempt"
-	EventReconnectSuccess     ResilienceEvent = "reconnect_success"
-	EventReconnectFailed      ResilienceEvent = "reconnect_failed"
-	EventCircuitBreakerChange ResilienceEvent = "circuit_breaker_change"
-	EventHealthCheckFailed    ResilienceEvent = "health_check_failed"
+	EventReconnectAttempt     ResilienceEvent = "reconnect_attempt"      // EventReconnectAttempt indicates a reconnection is being attempted
+	EventReconnectSuccess     ResilienceEvent = "reconnect_success"      // EventReconnectSuccess indicates successful reconnection
+	EventReconnectFailed      ResilienceEvent = "reconnect_failed"       // EventReconnectFailed indicates reconnection failure
+	EventCircuitBreakerChange ResilienceEvent = "circuit_breaker_change" // EventCircuitBreakerChange indicates circuit breaker state transition
+	EventHealthCheckFailed    ResilienceEvent = "health_check_failed"    // EventHealthCheckFailed indicates health check failure
 )
 
 // LogReconnectAttempt logs a reconnection attempt (INFO level)

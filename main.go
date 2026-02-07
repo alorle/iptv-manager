@@ -25,6 +25,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
 
+// Config holds the application configuration loaded from environment variables
 type Config struct {
 	HTTPAddress            string
 	HTTPPort               string
