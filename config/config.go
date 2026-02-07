@@ -348,3 +348,24 @@ func validateCacheDir(dir string) (string, error) {
 
 	return dir, nil
 }
+
+// Print outputs the configuration to stdout
+func (c *Config) Print() {
+	fmt.Printf("httpAddress: %v\n", c.HTTP.Address)
+	fmt.Printf("httpPort: %v\n", c.HTTP.Port)
+	fmt.Printf("acestreamPlayerBaseUrl: %v\n", c.Acestream.PlayerBaseURL)
+	fmt.Printf("acestreamEngineUrl: %v\n", c.Acestream.EngineURL)
+	fmt.Printf("cacheDir: %v\n", c.Cache.Dir)
+	fmt.Printf("cacheTTL: %v\n", c.Cache.TTL)
+	fmt.Printf("streamBufferSize: %v bytes\n", c.Stream.BufferSize)
+	fmt.Printf("useMultiplexing: %v\n", c.Stream.UseMultiplexing)
+	fmt.Printf("proxyReadTimeout: %v\n", c.Proxy.ReadTimeout)
+	fmt.Printf("proxyWriteTimeout: %v\n", c.Proxy.WriteTimeout)
+	fmt.Printf("proxyBufferSize: %v bytes\n", c.Proxy.BufferSize)
+	fmt.Printf("playlistSources: %d\n", len(c.Playlists))
+	for _, pl := range c.Playlists {
+		fmt.Printf("  - %s: %s\n", pl.Name, pl.URL)
+	}
+	fmt.Printf("epgUrl: %v\n", c.EPG.URL)
+	fmt.Printf("logLevel: %v\n", c.Resilience.LogLevel)
+}

@@ -1,4 +1,4 @@
-package main
+package handlers
 
 import (
 	"context"
@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/alorle/iptv-manager/config"
 	"github.com/alorle/iptv-manager/domain"
 	"github.com/alorle/iptv-manager/multiplexer"
 	"github.com/alorle/iptv-manager/pidmanager"
@@ -77,7 +78,10 @@ func TestStreamHandler_MissingID(t *testing.T) {
 	pidMgr := pidmanager.NewManager()
 	mux := multiplexer.New(multiplexer.DefaultConfig())
 
-	handler := createTestStreamHandler(mux, pidMgr, "http://localhost:6878")
+	cfg := &config.Config{}
+	cfg.Acestream.EngineURL = "http://localhost:6878"
+	deps := StreamDependencies{Multiplexer: mux, PidMgr: pidMgr}
+	handler := CreateStreamHandler(cfg, deps)
 
 	req := httptest.NewRequest(http.MethodGet, "/stream", nil)
 	w := httptest.NewRecorder()
@@ -97,7 +101,10 @@ func TestStreamHandler_InvalidID(t *testing.T) {
 	pidMgr := pidmanager.NewManager()
 	mux := multiplexer.New(multiplexer.DefaultConfig())
 
-	handler := createTestStreamHandler(mux, pidMgr, "http://localhost:6878")
+	cfg := &config.Config{}
+	cfg.Acestream.EngineURL = "http://localhost:6878"
+	deps := StreamDependencies{Multiplexer: mux, PidMgr: pidMgr}
+	handler := CreateStreamHandler(cfg, deps)
 
 	tests := []struct {
 		name string
@@ -130,7 +137,10 @@ func TestStreamHandler_MethodNotAllowed(t *testing.T) {
 	pidMgr := pidmanager.NewManager()
 	mux := multiplexer.New(multiplexer.DefaultConfig())
 
-	handler := createTestStreamHandler(mux, pidMgr, "http://localhost:6878")
+	cfg := &config.Config{}
+	cfg.Acestream.EngineURL = "http://localhost:6878"
+	deps := StreamDependencies{Multiplexer: mux, PidMgr: pidMgr}
+	handler := CreateStreamHandler(cfg, deps)
 
 	methods := []string{http.MethodPost, http.MethodPut, http.MethodDelete}
 
@@ -173,7 +183,10 @@ func TestStreamHandler_WithMockEngine(t *testing.T) {
 	pidMgr := pidmanager.NewManager()
 	mux := multiplexer.New(multiplexer.DefaultConfig())
 
-	handler := createTestStreamHandler(mux, pidMgr, mockEngine.URL)
+	cfg := &config.Config{}
+	cfg.Acestream.EngineURL = mockEngine.URL
+	deps := StreamDependencies{Multiplexer: mux, PidMgr: pidMgr}
+	handler := CreateStreamHandler(cfg, deps)
 
 	req := httptest.NewRequest(http.MethodGet, "/stream?id=0123456789abcdef0123456789abcdef01234567", nil)
 	req.RemoteAddr = testRemoteAddr
@@ -198,7 +211,10 @@ func TestStreamHandler_EngineConnectionError(t *testing.T) {
 	mux := multiplexer.New(multiplexer.DefaultConfig())
 
 	// Use invalid engine URL
-	handler := createTestStreamHandler(mux, pidMgr, "http://localhost:99999")
+	cfg := &config.Config{}
+	cfg.Acestream.EngineURL = "http://localhost:99999"
+	deps := StreamDependencies{Multiplexer: mux, PidMgr: pidMgr}
+	handler := CreateStreamHandler(cfg, deps)
 
 	req := httptest.NewRequest(http.MethodGet, "/stream?id=0123456789abcdef0123456789abcdef01234567", nil)
 	req.RemoteAddr = testRemoteAddr
@@ -237,7 +253,10 @@ func TestStreamHandler_TranscodeParameters(t *testing.T) {
 	pidMgr := pidmanager.NewManager()
 	mux := multiplexer.New(multiplexer.DefaultConfig())
 
-	handler := createTestStreamHandler(mux, pidMgr, mockEngine.URL)
+	cfg := &config.Config{}
+	cfg.Acestream.EngineURL = mockEngine.URL
+	deps := StreamDependencies{Multiplexer: mux, PidMgr: pidMgr}
+	handler := CreateStreamHandler(cfg, deps)
 
 	req := httptest.NewRequest(http.MethodGet, "/stream?id=0123456789abcdef0123456789abcdef01234567&transcode_audio=mp3", nil)
 	req.RemoteAddr = testRemoteAddr
@@ -302,46 +321,5 @@ func TestHealthHandler(t *testing.T) {
 
 	if w.Body.String() != "OK" {
 		t.Errorf("Expected body 'OK', got: %s", w.Body.String())
-	}
-}
-
-// Helper function to create stream handler for testing
-func createTestStreamHandler(mux *multiplexer.Multiplexer, pidMgr *pidmanager.Manager, engineURL string) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodGet {
-			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-			return
-		}
-
-		contentID := r.URL.Query().Get("id")
-		if contentID == "" {
-			http.Error(w, "Missing id parameter", http.StatusBadRequest)
-			return
-		}
-
-		if !domain.IsValidAcestreamID(contentID) {
-			http.Error(w, "Invalid id format: must be 40 hexadecimal characters", http.StatusBadRequest)
-			return
-		}
-
-		clientInfo := pidmanager.ExtractClientIdentifier(r)
-		pid := pidMgr.GetOrCreatePID(contentID, clientInfo)
-
-		upstreamURL := engineURL + "/ace/getstream?id=" + contentID + "&pid=" + string(rune(pid+'0'))
-
-		// Add optional transcode parameters
-		if transcodeAudio := r.URL.Query().Get("transcode_audio"); transcodeAudio != "" {
-			upstreamURL += "&transcode_audio=" + transcodeAudio
-		}
-
-		if err := mux.ServeStream(r.Context(), w, contentID, upstreamURL, string(rune(pid+'0'))); err != nil {
-			if strings.Contains(err.Error(), "connect") || strings.Contains(err.Error(), "upstream") {
-				http.Error(w, "Bad Gateway: cannot connect to Engine", http.StatusBadGateway)
-				return
-			}
-		}
-
-		_ = pidMgr.ReleasePID(pid)
-		pidMgr.CleanupDisconnected()
 	}
 }
