@@ -321,7 +321,9 @@ func TestFileStorage_getFilePath(t *testing.T) {
 		key := "test-key"
 		path := storage.getFilePath(key)
 
-		if !filepath.IsAbs(path) && !filepath.HasPrefix(path, tempDir) {
+		// Check if path is absolute or relative to tempDir
+		rel, err := filepath.Rel(tempDir, path)
+		if err != nil || filepath.IsAbs(rel) {
 			t.Errorf("Expected path to be within %q, got %q", tempDir, path)
 		}
 	})
