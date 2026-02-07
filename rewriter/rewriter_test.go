@@ -1042,8 +1042,8 @@ func TestApplyMetadataOverrides(t *testing.T) {
 		expected string
 	}{
 		{
-			name:  "nil override",
-			input: `#EXTINF:-1,Channel Name`,
+			name:     "nil override",
+			input:    `#EXTINF:-1,Channel Name`,
 			override: nil,
 			expected: `#EXTINF:-1,Channel Name`,
 		},

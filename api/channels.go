@@ -25,11 +25,11 @@ type Stream struct {
 
 // Channel represents a channel with its metadata and array of streams
 type Channel struct {
-	Name        string   `json:"name"`
-	TvgID       string   `json:"tvg_id"`
-	TvgLogo     string   `json:"tvg_logo"`
-	GroupTitle  string   `json:"group_title"`
-	Streams     []Stream `json:"streams"`
+	Name       string   `json:"name"`
+	TvgID      string   `json:"tvg_id"`
+	TvgLogo    string   `json:"tvg_logo"`
+	GroupTitle string   `json:"group_title"`
+	Streams    []Stream `json:"streams"`
 }
 
 // ChannelsHandler handles the GET /api/channels endpoint

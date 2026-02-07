@@ -86,7 +86,7 @@ func (h *OverridesHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 // OverrideResponse represents the response for a single override
 type OverrideResponse struct {
-	AcestreamID string                    `json:"acestream_id"`
+	AcestreamID string                     `json:"acestream_id"`
 	Override    *overrides.ChannelOverride `json:"override"`
 }
 
@@ -112,9 +112,9 @@ func (h *OverridesHandler) handleGet(w http.ResponseWriter, r *http.Request, ace
 
 // ValidationError represents a validation error response
 type ValidationError struct {
-	Error   string   `json:"error"`
-	Field   string   `json:"field,omitempty"`
-	Message string   `json:"message"`
+	Error       string   `json:"error"`
+	Field       string   `json:"field,omitempty"`
+	Message     string   `json:"message"`
 	Suggestions []string `json:"suggestions,omitempty"`
 }
 
@@ -140,9 +140,9 @@ func (h *OverridesHandler) handlePut(w http.ResponseWriter, r *http.Request, ace
 			suggestions := h.getSuggestions(tvgID, 10)
 
 			validationErr := ValidationError{
-				Error:   "validation_error",
-				Field:   "tvg_id",
-				Message: "TVG-ID not found in EPG data",
+				Error:       "validation_error",
+				Field:       "tvg_id",
+				Message:     "TVG-ID not found in EPG data",
 				Suggestions: suggestions,
 			}
 
@@ -242,9 +242,9 @@ type BulkUpdateRequest struct {
 
 // BulkUpdateResponse represents the response for a bulk update operation
 type BulkUpdateResponse struct {
-	Updated int                           `json:"updated"`
-	Failed  int                           `json:"failed"`
-	Errors  []overrides.BulkUpdateError   `json:"errors,omitempty"`
+	Updated int                         `json:"updated"`
+	Failed  int                         `json:"failed"`
+	Errors  []overrides.BulkUpdateError `json:"errors,omitempty"`
 }
 
 // handleBulkUpdate handles PATCH /api/overrides/bulk
@@ -292,9 +292,9 @@ func (h *OverridesHandler) handleBulkUpdate(w http.ResponseWriter, r *http.Reque
 				suggestions := h.getSuggestions(tvgID, 10)
 
 				validationErr := ValidationError{
-					Error:   "validation_error",
-					Field:   "tvg_id",
-					Message: "TVG-ID not found in EPG data",
+					Error:       "validation_error",
+					Field:       "tvg_id",
+					Message:     "TVG-ID not found in EPG data",
 					Suggestions: suggestions,
 				}
 

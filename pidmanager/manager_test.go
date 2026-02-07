@@ -278,28 +278,28 @@ func TestGetActiveSessions(t *testing.T) {
 
 func TestExtractClientIdentifier(t *testing.T) {
 	tests := []struct {
-		name           string
-		remoteAddr     string
-		xRealIP        string
-		xForwardedFor  string
-		userAgent      string
-		expectedIP     string
-		expectedUA     string
+		name          string
+		remoteAddr    string
+		xRealIP       string
+		xForwardedFor string
+		userAgent     string
+		expectedIP    string
+		expectedUA    string
 	}{
 		{
-			name:        "Direct connection",
-			remoteAddr:  "192.168.1.100:12345",
-			userAgent:   "VLC/3.0.18",
-			expectedIP:  "192.168.1.100:12345",
-			expectedUA:  "VLC/3.0.18",
+			name:       "Direct connection",
+			remoteAddr: "192.168.1.100:12345",
+			userAgent:  "VLC/3.0.18",
+			expectedIP: "192.168.1.100:12345",
+			expectedUA: "VLC/3.0.18",
 		},
 		{
-			name:        "With X-Real-IP",
-			remoteAddr:  "127.0.0.1:12345",
-			xRealIP:     "192.168.1.100",
-			userAgent:   "VLC/3.0.18",
-			expectedIP:  "192.168.1.100",
-			expectedUA:  "VLC/3.0.18",
+			name:       "With X-Real-IP",
+			remoteAddr: "127.0.0.1:12345",
+			xRealIP:    "192.168.1.100",
+			userAgent:  "VLC/3.0.18",
+			expectedIP: "192.168.1.100",
+			expectedUA: "VLC/3.0.18",
 		},
 		{
 			name:          "With X-Forwarded-For",
@@ -319,11 +319,11 @@ func TestExtractClientIdentifier(t *testing.T) {
 			expectedUA:    "VLC/3.0.18",
 		},
 		{
-			name:        "Empty User-Agent",
-			remoteAddr:  "192.168.1.100:12345",
-			userAgent:   "",
-			expectedIP:  "192.168.1.100:12345",
-			expectedUA:  "",
+			name:       "Empty User-Agent",
+			remoteAddr: "192.168.1.100:12345",
+			userAgent:  "",
+			expectedIP: "192.168.1.100:12345",
+			expectedUA: "",
 		},
 	}
 

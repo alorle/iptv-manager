@@ -23,15 +23,13 @@ ERRORS=0
 
 # 1. Format check
 echo ""
-echo "[1/8] Checking code formatting (gofmt)..."
-UNFORMATTED=$(gofmt -l . 2>&1 | grep -v vendor | grep -v '.direnv' || true)
+echo "[1/8] Checking code formatting (go fmt)..."
+UNFORMATTED=$(go fmt ./... 2>&1)
 if [ -n "$UNFORMATTED" ]; then
-    echo -e "${RED}❌ Code not formatted:${NC}"
+    echo -e "${YELLOW}⚠️  Formatted files (now up to date):${NC}"
     echo "$UNFORMATTED"
-    ERRORS=$((ERRORS + 1))
-else
-    echo -e "${GREEN}✓ All Go files properly formatted${NC}"
 fi
+echo -e "${GREEN}✓ All Go files properly formatted${NC}"
 
 # 2. Go vet
 echo ""

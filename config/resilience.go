@@ -16,9 +16,9 @@ type ResilienceConfig struct {
 	ReconnectInitialBackoff time.Duration // Initial backoff duration
 
 	// Circuit breaker settings
-	CBFailureThreshold   int           // Number of failures before opening circuit
-	CBTimeout            time.Duration // Timeout before attempting to close circuit
-	CBHalfOpenRequests   int           // Number of requests allowed in half-open state
+	CBFailureThreshold int           // Number of failures before opening circuit
+	CBTimeout          time.Duration // Timeout before attempting to close circuit
+	CBHalfOpenRequests int           // Number of requests allowed in half-open state
 
 	// Health check settings
 	HealthCheckInterval time.Duration // Interval between health checks
@@ -36,9 +36,9 @@ func DefaultResilienceConfig() *ResilienceConfig {
 		ReconnectInitialBackoff: 500 * time.Millisecond,
 
 		// Circuit breaker defaults
-		CBFailureThreshold:   5,
-		CBTimeout:            30 * time.Second,
-		CBHalfOpenRequests:   1,
+		CBFailureThreshold: 5,
+		CBTimeout:          30 * time.Second,
+		CBHalfOpenRequests: 1,
 
 		// Health check defaults
 		HealthCheckInterval: 30 * time.Second,

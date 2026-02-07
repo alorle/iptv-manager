@@ -53,10 +53,10 @@ func ParseLogLevel(s string) LogLevel {
 
 // Logger provides structured logging with configurable levels
 type Logger struct {
-	mu       sync.Mutex
-	level    LogLevel
-	logger   *log.Logger
-	prefix   string
+	mu     sync.Mutex
+	level  LogLevel
+	logger *log.Logger
+	prefix string
 }
 
 // New creates a new Logger with the specified level
@@ -155,11 +155,11 @@ func (l *Logger) Error(msg string, fields map[string]interface{}) {
 type ResilienceEvent string
 
 const (
-	EventReconnectAttempt  ResilienceEvent = "reconnect_attempt"
-	EventReconnectSuccess  ResilienceEvent = "reconnect_success"
-	EventReconnectFailed   ResilienceEvent = "reconnect_failed"
+	EventReconnectAttempt     ResilienceEvent = "reconnect_attempt"
+	EventReconnectSuccess     ResilienceEvent = "reconnect_success"
+	EventReconnectFailed      ResilienceEvent = "reconnect_failed"
 	EventCircuitBreakerChange ResilienceEvent = "circuit_breaker_change"
-	EventHealthCheckFailed ResilienceEvent = "health_check_failed"
+	EventHealthCheckFailed    ResilienceEvent = "health_check_failed"
 )
 
 // LogReconnectAttempt logs a reconnection attempt (INFO level)

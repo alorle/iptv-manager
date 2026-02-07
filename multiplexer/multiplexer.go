@@ -182,7 +182,6 @@ func (s *Stream) ClientCount() int {
 	return len(s.Clients)
 }
 
-
 // IsReconnecting returns true if the stream is currently reconnecting
 func (s *Stream) IsReconnecting() bool {
 	s.reconnectMu.RLock()

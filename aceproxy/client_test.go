@@ -15,17 +15,17 @@ import (
 
 func TestNewClient(t *testing.T) {
 	tests := []struct {
-		name           string
-		config         *Config
-		envEngineURL   string
-		envTimeout     string
-		expectedURL    string
+		name            string
+		config          *Config
+		envEngineURL    string
+		envTimeout      string
+		expectedURL     string
 		expectedTimeout time.Duration
 	}{
 		{
-			name:           "default configuration",
-			config:         nil,
-			expectedURL:    defaultEngineURL,
+			name:            "default configuration",
+			config:          nil,
+			expectedURL:     defaultEngineURL,
 			expectedTimeout: defaultTimeout,
 		},
 		{
@@ -34,21 +34,21 @@ func TestNewClient(t *testing.T) {
 				EngineURL: "http://custom:8080",
 				Timeout:   15 * time.Second,
 			},
-			expectedURL:    "http://custom:8080",
+			expectedURL:     "http://custom:8080",
 			expectedTimeout: 15 * time.Second,
 		},
 		{
-			name:           "environment variable URL",
-			config:         &Config{},
-			envEngineURL:   "http://env-test:9999",
-			expectedURL:    "http://env-test:9999",
+			name:            "environment variable URL",
+			config:          &Config{},
+			envEngineURL:    "http://env-test:9999",
+			expectedURL:     "http://env-test:9999",
 			expectedTimeout: defaultTimeout,
 		},
 		{
-			name:           "environment variable timeout",
-			config:         &Config{},
-			envTimeout:     "45",
-			expectedURL:    defaultEngineURL,
+			name:            "environment variable timeout",
+			config:          &Config{},
+			envTimeout:      "45",
+			expectedURL:     defaultEngineURL,
 			expectedTimeout: 45 * time.Second,
 		},
 		{
@@ -57,9 +57,9 @@ func TestNewClient(t *testing.T) {
 				EngineURL: "http://config:7777",
 				Timeout:   10 * time.Second,
 			},
-			envEngineURL:   "http://env:8888",
-			envTimeout:     "60",
-			expectedURL:    "http://config:7777",
+			envEngineURL:    "http://env:8888",
+			envTimeout:      "60",
+			expectedURL:     "http://config:7777",
 			expectedTimeout: 10 * time.Second,
 		},
 	}
@@ -427,9 +427,9 @@ func TestHealthCheckIntegrationWithCircuitBreaker(t *testing.T) {
 	defer server.Close()
 
 	cb := circuitbreaker.New(circuitbreaker.Config{
-		FailureThreshold:   3,
-		Timeout:            1 * time.Second,
-		HalfOpenRequests:   1,
+		FailureThreshold: 3,
+		Timeout:          1 * time.Second,
+		HalfOpenRequests: 1,
 	})
 
 	// Discard logs during test

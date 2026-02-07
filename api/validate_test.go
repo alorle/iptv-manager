@@ -38,12 +38,12 @@ func (m *mockEPGCache) Count() int {
 func newMockEPGCache() *mockEPGCache {
 	return &mockEPGCache{
 		channels: map[string]epg.ChannelInfo{
-			"La1.TV":      {ID: "La1.TV", DisplayName: "La 1"},
-			"La2.TV":      {ID: "La2.TV", DisplayName: "La 2"},
-			"Antena3.TV":  {ID: "Antena3.TV", DisplayName: "Antena 3"},
-			"Cuatro.TV":   {ID: "Cuatro.TV", DisplayName: "Cuatro"},
+			"La1.TV":       {ID: "La1.TV", DisplayName: "La 1"},
+			"La2.TV":       {ID: "La2.TV", DisplayName: "La 2"},
+			"Antena3.TV":   {ID: "Antena3.TV", DisplayName: "Antena 3"},
+			"Cuatro.TV":    {ID: "Cuatro.TV", DisplayName: "Cuatro"},
 			"Telecinco.TV": {ID: "Telecinco.TV", DisplayName: "Telecinco"},
-			"LaSexta.TV":  {ID: "LaSexta.TV", DisplayName: "La Sexta"},
+			"LaSexta.TV":   {ID: "LaSexta.TV", DisplayName: "La Sexta"},
 		},
 	}
 }

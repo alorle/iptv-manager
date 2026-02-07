@@ -38,11 +38,11 @@ func (s State) String() string {
 
 // Config contains the configuration for a circuit breaker
 type Config struct {
-	FailureThreshold   int           // Number of consecutive failures before opening
-	Timeout            time.Duration // How long to wait in OPEN before transitioning to HALF-OPEN
-	HalfOpenRequests   int           // Number of test requests allowed in HALF-OPEN state
-	Logger             *logging.Logger // Logger for state changes (optional)
-	ContentID          string        // Content ID for logging context (optional)
+	FailureThreshold int             // Number of consecutive failures before opening
+	Timeout          time.Duration   // How long to wait in OPEN before transitioning to HALF-OPEN
+	HalfOpenRequests int             // Number of test requests allowed in HALF-OPEN state
+	Logger           *logging.Logger // Logger for state changes (optional)
+	ContentID        string          // Content ID for logging context (optional)
 }
 
 // CircuitBreaker defines the interface for circuit breaker functionality
@@ -67,13 +67,13 @@ type breaker struct {
 	config Config
 	mu     sync.RWMutex
 
-	state            State
-	failureCount     int
-	halfOpenRequests int
+	state             State
+	failureCount      int
+	halfOpenRequests  int
 	halfOpenSuccesses int
-	openedAt         time.Time
-	logger           *logging.Logger
-	contentID        string
+	openedAt          time.Time
+	logger            *logging.Logger
+	contentID         string
 }
 
 // New creates a new circuit breaker with the given configuration

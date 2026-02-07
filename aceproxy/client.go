@@ -16,12 +16,12 @@ import (
 )
 
 const (
-	defaultEngineURL     = "http://localhost:6878"
-	defaultTimeout       = 30 * time.Second
-	getStreamEndpoint    = "/ace/getstream"
-	healthCheckEndpoint  = "/webui/api/service"
-	envEngineURL         = "ACESTREAM_ENGINE_URL"
-	envTimeout           = "ACESTREAM_TIMEOUT"
+	defaultEngineURL    = "http://localhost:6878"
+	defaultTimeout      = 30 * time.Second
+	getStreamEndpoint   = "/ace/getstream"
+	healthCheckEndpoint = "/webui/api/service"
+	envEngineURL        = "ACESTREAM_ENGINE_URL"
+	envTimeout          = "ACESTREAM_TIMEOUT"
 )
 
 // HealthStatus represents the result of a health check
@@ -52,7 +52,7 @@ type Client struct {
 type Config struct {
 	EngineURL           string
 	Timeout             time.Duration
-	HealthCheckInterval time.Duration              // 0 to disable health checks
+	HealthCheckInterval time.Duration // 0 to disable health checks
 	CircuitBreaker      circuitbreaker.CircuitBreaker
 	Logger              *log.Logger
 	ResilienceLogger    *logging.Logger // Logger for resilience events
