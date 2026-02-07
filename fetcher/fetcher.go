@@ -73,7 +73,11 @@ func (f *Fetcher) fetchFromURL(url string) ([]byte, error) {
 	if err != nil {
 		return nil, fmt.Errorf("HTTP request failed: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() {
+		if closeErr := resp.Body.Close(); closeErr != nil {
+			log.Printf("warning: failed to close response body: %v", closeErr)
+		}
+	}()
 
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("HTTP request returned status %d: %s", resp.StatusCode, resp.Status)
