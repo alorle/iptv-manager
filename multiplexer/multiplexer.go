@@ -401,8 +401,7 @@ func (s *Stream) fanOut(ctx context.Context, cfg Config) {
 				// Mark as no longer reconnecting
 				s.setReconnecting(false)
 
-				// Reset attempt counter and break out of reconnection loop
-				attemptNumber = 0
+				// Break out of reconnection loop
 				break
 			}
 		}
