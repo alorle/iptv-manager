@@ -298,143 +298,152 @@ func (s *Stream) fanOut(ctx context.Context, cfg Config) {
 				s.upstream = nil
 			}
 
-			// Reconnection loop
-			backoff := cfg.ResilienceConfig.ReconnectInitialBackoff
+			// Attempt reconnection
 			attemptNumber = 1
-
-			for {
-				// Check if we should stop reconnecting
-				if ctx.Err() != nil || s.ClientCount() == 0 {
-					reason := "context canceled"
-					if s.ClientCount() == 0 {
-						reason = "no clients remaining"
-					}
-					log.Printf("Stream %s: Stopping reconnection - no clients or context canceled", s.ContentID)
-					if s.resLogger != nil {
-						s.resLogger.LogReconnectFailed(s.ContentID, reason, attemptNumber)
-					}
-					s.setReconnecting(false)
-					return
-				}
-
-				// Check circuit breaker state before attempting reconnection
-				cbState := s.circuitBreaker.State()
-				if cbState == circuitbreaker.StateOpen {
-					log.Printf("Stream %s: Circuit breaker is OPEN, skipping reconnection attempt %d", s.ContentID, attemptNumber)
-
-					// Wait for circuit breaker timeout before checking again
-					select {
-					case <-time.After(cfg.ResilienceConfig.CBTimeout):
-						continue
-					case <-ctx.Done():
-						s.setReconnecting(false)
-						return
-					}
-				}
-
-				// Log reconnection attempt
-				log.Printf("Stream %s: Reconnection attempt #%d (backoff: %v, buffer available: %d bytes)",
-					s.ContentID, attemptNumber, backoff, s.ringBuffer.Available())
-				if s.resLogger != nil {
-					s.resLogger.LogReconnectAttempt(s.ContentID, attemptNumber, backoff)
-				}
-
-				// Wait for backoff duration
-				select {
-				case <-time.After(backoff):
-				case <-ctx.Done():
-					s.setReconnecting(false)
-					return
-				}
-
-				// Attempt to reconnect through circuit breaker
-				var newUpstream io.ReadCloser
-				reconnectErr := s.circuitBreaker.Execute(func() error {
-					req, err := http.NewRequestWithContext(ctx, "GET", s.upstreamURL, nil)
-					if err != nil {
-						return fmt.Errorf("failed to create request: %w", err)
-					}
-
-					resp, err := s.httpClient.Do(req)
-					if err != nil {
-						return fmt.Errorf("failed to connect to upstream: %w", err)
-					}
-
-					if resp.StatusCode != http.StatusOK {
-						if closeErr := resp.Body.Close(); closeErr != nil {
-							log.Printf("Stream %s: warning: failed to close response body: %v", s.ContentID, closeErr)
-						}
-						return fmt.Errorf("upstream returned status %d", resp.StatusCode)
-					}
-
-					newUpstream = resp.Body
-					return nil
-				})
-
-				if reconnectErr != nil {
-					log.Printf("Stream %s: Reconnection attempt #%d failed: %v", s.ContentID, attemptNumber, reconnectErr)
-
-					// Calculate next backoff (exponential)
-					backoff = backoff * 2
-					if backoff > cfg.ResilienceConfig.ReconnectMaxBackoff {
-						backoff = cfg.ResilienceConfig.ReconnectMaxBackoff
-					}
-
-					attemptNumber++
-					continue
-				}
-
-				// Reconnection successful
-				downtime := time.Since(s.reconnectStart)
-				log.Printf("Stream %s: Reconnection attempt #%d succeeded - resuming normal streaming", s.ContentID, attemptNumber)
-				if s.resLogger != nil {
-					s.resLogger.LogReconnectSuccess(s.ContentID, downtime)
-				}
-
-				// Record reconnection metric
-				metrics.RecordUpstreamReconnection(s.ContentID)
-
-				s.mu.Lock()
-				s.upstream = newUpstream
-				s.mu.Unlock()
-
-				// Mark as no longer reconnecting
+			if !s.attemptReconnection(ctx, cfg, &attemptNumber) {
 				s.setReconnecting(false)
-
-				// Break out of reconnection loop
-				break
+				return
 			}
+
+			// Mark as no longer reconnecting
+			s.setReconnecting(false)
 		}
 
 		if n > 0 {
 			data := buffer[:n]
-
-			// Write to ring buffer for resilience
-			s.ringBuffer.Write(data)
-
-			// Send to all clients
-			s.mu.RLock()
-			clients := make([]*Client, 0, len(s.Clients))
-			for _, client := range s.Clients {
-				clients = append(clients, client)
-			}
-			s.mu.RUnlock()
-
-			// Send to each client concurrently
-			var wg sync.WaitGroup
-			for _, client := range clients {
-				wg.Add(1)
-				go func(c *Client) {
-					defer wg.Done()
-					if err := c.Send(data); err != nil {
-						log.Printf("Stream %s: Failed to send to client %s: %v", s.ContentID, c.ID, err)
-						c.Close()
-					}
-				}(client)
-			}
-			wg.Wait()
+			s.distributeData(data)
 		}
 	}
+}
+
+// attemptReconnection attempts to reconnect to the upstream server
+// Returns true if reconnection succeeded, false if it should stop trying
+func (s *Stream) attemptReconnection(ctx context.Context, cfg Config, attemptNumber *int) bool {
+	backoff := cfg.ResilienceConfig.ReconnectInitialBackoff
+
+	for {
+		// Check if we should stop reconnecting
+		if ctx.Err() != nil || s.ClientCount() == 0 {
+			reason := "context canceled"
+			if s.ClientCount() == 0 {
+				reason = "no clients remaining"
+			}
+			log.Printf("Stream %s: Stopping reconnection - no clients or context canceled", s.ContentID)
+			if s.resLogger != nil {
+				s.resLogger.LogReconnectFailed(s.ContentID, reason, *attemptNumber)
+			}
+			return false
+		}
+
+		// Check circuit breaker state before attempting reconnection
+		cbState := s.circuitBreaker.State()
+		if cbState == circuitbreaker.StateOpen {
+			log.Printf("Stream %s: Circuit breaker is OPEN, skipping reconnection attempt %d", s.ContentID, *attemptNumber)
+
+			// Wait for circuit breaker timeout before checking again
+			select {
+			case <-time.After(cfg.ResilienceConfig.CBTimeout):
+				continue
+			case <-ctx.Done():
+				return false
+			}
+		}
+
+		// Log reconnection attempt
+		log.Printf("Stream %s: Reconnection attempt #%d (backoff: %v, buffer available: %d bytes)",
+			s.ContentID, *attemptNumber, backoff, s.ringBuffer.Available())
+		if s.resLogger != nil {
+			s.resLogger.LogReconnectAttempt(s.ContentID, *attemptNumber, backoff)
+		}
+
+		// Wait for backoff duration
+		select {
+		case <-time.After(backoff):
+		case <-ctx.Done():
+			return false
+		}
+
+		// Attempt to reconnect through circuit breaker
+		var newUpstream io.ReadCloser
+		reconnectErr := s.circuitBreaker.Execute(func() error {
+			req, err := http.NewRequestWithContext(ctx, "GET", s.upstreamURL, nil)
+			if err != nil {
+				return fmt.Errorf("failed to create request: %w", err)
+			}
+
+			resp, err := s.httpClient.Do(req)
+			if err != nil {
+				return fmt.Errorf("failed to connect to upstream: %w", err)
+			}
+
+			if resp.StatusCode != http.StatusOK {
+				if closeErr := resp.Body.Close(); closeErr != nil {
+					log.Printf("Stream %s: warning: failed to close response body: %v", s.ContentID, closeErr)
+				}
+				return fmt.Errorf("upstream returned status %d", resp.StatusCode)
+			}
+
+			newUpstream = resp.Body
+			return nil
+		})
+
+		if reconnectErr != nil {
+			log.Printf("Stream %s: Reconnection attempt #%d failed: %v", s.ContentID, *attemptNumber, reconnectErr)
+
+			// Calculate next backoff (exponential)
+			backoff = backoff * 2
+			if backoff > cfg.ResilienceConfig.ReconnectMaxBackoff {
+				backoff = cfg.ResilienceConfig.ReconnectMaxBackoff
+			}
+
+			*attemptNumber++
+			continue
+		}
+
+		// Reconnection successful
+		downtime := time.Since(s.reconnectStart)
+		log.Printf("Stream %s: Reconnection attempt #%d succeeded - resuming normal streaming", s.ContentID, *attemptNumber)
+		if s.resLogger != nil {
+			s.resLogger.LogReconnectSuccess(s.ContentID, downtime)
+		}
+
+		// Record reconnection metric
+		metrics.RecordUpstreamReconnection(s.ContentID)
+
+		s.mu.Lock()
+		s.upstream = newUpstream
+		s.mu.Unlock()
+
+		return true
+	}
+}
+
+// distributeData sends data to all connected clients concurrently
+func (s *Stream) distributeData(data []byte) {
+	// Write to ring buffer for resilience
+	s.ringBuffer.Write(data)
+
+	// Get snapshot of clients
+	s.mu.RLock()
+	clients := make([]*Client, 0, len(s.Clients))
+	for _, client := range s.Clients {
+		clients = append(clients, client)
+	}
+	s.mu.RUnlock()
+
+	// Send to each client concurrently
+	var wg sync.WaitGroup
+	for _, client := range clients {
+		wg.Add(1)
+		go func(c *Client) {
+			defer wg.Done()
+			if err := c.Send(data); err != nil {
+				log.Printf("Stream %s: Failed to send to client %s: %v", s.ContentID, c.ID, err)
+				c.Close()
+			}
+		}(client)
+	}
+	wg.Wait()
 }
 
 // Stop stops the stream
