@@ -5,6 +5,8 @@ import (
 	"testing"
 )
 
+const testStreamID = "test-stream-123"
+
 func TestNewManager(t *testing.T) {
 	m := NewManager()
 
@@ -27,7 +29,7 @@ func TestNewManager(t *testing.T) {
 
 func TestGetOrCreatePID_NewSession(t *testing.T) {
 	m := NewManager()
-	streamID := "test-stream-123"
+	streamID := testStreamID
 	clientID := ClientIdentifier{
 		IP:        "192.168.1.100",
 		UserAgent: "VLC/3.0.18",
@@ -46,7 +48,7 @@ func TestGetOrCreatePID_NewSession(t *testing.T) {
 
 func TestGetOrCreatePID_ReuseExisting(t *testing.T) {
 	m := NewManager()
-	streamID := "test-stream-123"
+	streamID := testStreamID
 	clientID := ClientIdentifier{
 		IP:        "192.168.1.100",
 		UserAgent: "VLC/3.0.18",
@@ -69,7 +71,7 @@ func TestGetOrCreatePID_ReuseExisting(t *testing.T) {
 
 func TestGetOrCreatePID_DifferentClients(t *testing.T) {
 	m := NewManager()
-	streamID := "test-stream-123"
+	streamID := testStreamID
 
 	client1 := ClientIdentifier{IP: "192.168.1.100", UserAgent: "VLC/3.0.18"}
 	client2 := ClientIdentifier{IP: "192.168.1.101", UserAgent: "VLC/3.0.18"}
@@ -110,7 +112,7 @@ func TestGetOrCreatePID_DifferentStreams(t *testing.T) {
 
 func TestGetOrCreatePID_DifferentUserAgents(t *testing.T) {
 	m := NewManager()
-	streamID := "test-stream-123"
+	streamID := testStreamID
 
 	client1 := ClientIdentifier{IP: "192.168.1.100", UserAgent: "VLC/3.0.18"}
 	client2 := ClientIdentifier{IP: "192.168.1.100", UserAgent: "Kodi/19.0"}
@@ -129,7 +131,7 @@ func TestGetOrCreatePID_DifferentUserAgents(t *testing.T) {
 
 func TestReleasePID(t *testing.T) {
 	m := NewManager()
-	streamID := "test-stream-123"
+	streamID := testStreamID
 	clientID := ClientIdentifier{
 		IP:        "192.168.1.100",
 		UserAgent: "VLC/3.0.18",
@@ -165,7 +167,7 @@ func TestReleasePID_InvalidPID(t *testing.T) {
 
 func TestCleanupDisconnected(t *testing.T) {
 	m := NewManager()
-	streamID := "test-stream-123"
+	streamID := testStreamID
 
 	// Create multiple sessions
 	client1 := ClientIdentifier{IP: "192.168.1.100", UserAgent: "VLC/3.0.18"}
@@ -210,7 +212,7 @@ func TestCleanupDisconnected(t *testing.T) {
 
 func TestGetSession(t *testing.T) {
 	m := NewManager()
-	streamID := "test-stream-123"
+	streamID := testStreamID
 	clientID := ClientIdentifier{
 		IP:        "192.168.1.100",
 		UserAgent: "VLC/3.0.18",
@@ -251,7 +253,7 @@ func TestGetSession_NotFound(t *testing.T) {
 
 func TestGetActiveSessions(t *testing.T) {
 	m := NewManager()
-	streamID := "test-stream-123"
+	streamID := testStreamID
 
 	if m.GetActiveSessions() != 0 {
 		t.Error("Expected 0 active sessions initially")
@@ -360,7 +362,7 @@ func TestExtractClientIdentifier(t *testing.T) {
 
 func TestConcurrency(t *testing.T) {
 	m := NewManager()
-	streamID := "test-stream-123"
+	streamID := testStreamID
 
 	// Create sessions concurrently
 	done := make(chan bool)
@@ -391,7 +393,7 @@ func TestConcurrency(t *testing.T) {
 
 func TestPIDIncrement(t *testing.T) {
 	m := NewManager()
-	streamID := "test-stream-123"
+	streamID := testStreamID
 
 	// Create 10 different sessions
 	pids := make([]int, 10)

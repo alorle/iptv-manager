@@ -151,7 +151,7 @@ func TestOverridesHandler_Put_Update(t *testing.T) {
 	defer cleanup()
 
 	acestreamID := testAcestreamID
-	tvgID1 := "La1.TV"
+	tvgID1 := testTvgIDLa1
 	override1 := overrides.ChannelOverride{
 		TvgID: &tvgID1,
 	}
@@ -461,7 +461,7 @@ func TestOverridesHandler_List_WithData(t *testing.T) {
 	acestreamID1 := "0123456789abcdef0123456789abcdef01234567"
 	acestreamID2 := "fedcba9876543210fedcba9876543210fedcba98"
 
-	tvgID1 := "La1.TV"
+	tvgID1 := testTvgIDLa1
 	tvgID2 := testTvgIDLa2
 
 	override1 := overrides.ChannelOverride{TvgID: &tvgID1}

@@ -12,6 +12,8 @@ import (
 	"github.com/alorle/iptv-manager/pidmanager"
 )
 
+const testRemoteAddr = "192.168.1.100:12345"
+
 func TestIsValidContentID(t *testing.T) {
 	tests := []struct {
 		name     string
@@ -173,7 +175,7 @@ func TestStreamHandler_WithMockEngine(t *testing.T) {
 	handler := createStreamHandler(mux, pidMgr, mockEngine.URL)
 
 	req := httptest.NewRequest(http.MethodGet, "/stream?id=0123456789abcdef0123456789abcdef01234567", nil)
-	req.RemoteAddr = "192.168.1.100:12345"
+	req.RemoteAddr = testRemoteAddr
 	req.Header.Set("User-Agent", "VLC/3.0.18")
 
 	w := httptest.NewRecorder()
@@ -198,7 +200,7 @@ func TestStreamHandler_EngineConnectionError(t *testing.T) {
 	handler := createStreamHandler(mux, pidMgr, "http://localhost:99999")
 
 	req := httptest.NewRequest(http.MethodGet, "/stream?id=0123456789abcdef0123456789abcdef01234567", nil)
-	req.RemoteAddr = "192.168.1.100:12345"
+	req.RemoteAddr = testRemoteAddr
 
 	w := httptest.NewRecorder()
 
@@ -237,7 +239,7 @@ func TestStreamHandler_TranscodeParameters(t *testing.T) {
 	handler := createStreamHandler(mux, pidMgr, mockEngine.URL)
 
 	req := httptest.NewRequest(http.MethodGet, "/stream?id=0123456789abcdef0123456789abcdef01234567&transcode_audio=mp3", nil)
-	req.RemoteAddr = "192.168.1.100:12345"
+	req.RemoteAddr = testRemoteAddr
 
 	w := httptest.NewRecorder()
 

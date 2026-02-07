@@ -24,6 +24,8 @@ http://example.com/stream.m3u8
 #EXTINF:-1 tvg-id="test3" tvg-name="Test Channel 3",Test Channel 3
 acestream://aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
 `
+
+	contentTypeM3U = "audio/x-mpegurl"
 )
 
 // setupTestEnvironment creates a temporary directory and returns cleanup function
@@ -42,7 +44,7 @@ func createMockIPFSServer(t *testing.T, shouldFail bool, content string) *httpte
 			_, _ = w.Write([]byte("IPFS node unavailable"))
 			return
 		}
-		w.Header().Set("Content-Type", "audio/x-mpegurl")
+		w.Header().Set("Content-Type", contentTypeM3U)
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write([]byte(content))
 	}))
@@ -89,7 +91,7 @@ func TestIntegration_FreshFetchFromMockIPFS(t *testing.T) {
 		}
 
 		rewrittenContent := rw.RewriteM3U(content, "http://127.0.0.1:8080")
-		w.Header().Set("Content-Type", "audio/x-mpegurl")
+		w.Header().Set("Content-Type", contentTypeM3U)
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write(rewrittenContent)
 	})
@@ -115,7 +117,7 @@ func TestIntegration_FreshFetchFromMockIPFS(t *testing.T) {
 
 	// Verify Content-Type header
 	contentType := resp.Header.Get("Content-Type")
-	if contentType != "audio/x-mpegurl" {
+	if contentType != contentTypeM3U {
 		t.Errorf("Expected Content-Type 'audio/x-mpegurl', got '%s'", contentType)
 	}
 
@@ -149,7 +151,7 @@ func TestIntegration_CacheHit(t *testing.T) {
 	// Create mock IPFS server that counts requests
 	mockServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		requestCount++
-		w.Header().Set("Content-Type", "audio/x-mpegurl")
+		w.Header().Set("Content-Type", contentTypeM3U)
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write([]byte(mockM3UContent))
 	}))
@@ -179,7 +181,7 @@ func TestIntegration_CacheHit(t *testing.T) {
 		}
 
 		rewrittenContent := rw.RewriteM3U(content, "http://127.0.0.1:8080")
-		w.Header().Set("Content-Type", "audio/x-mpegurl")
+		w.Header().Set("Content-Type", contentTypeM3U)
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write(rewrittenContent)
 
@@ -225,7 +227,7 @@ func TestIntegration_CacheHit(t *testing.T) {
 
 	// Verify Content-Type header
 	contentType := resp2.Header.Get("Content-Type")
-	if contentType != "audio/x-mpegurl" {
+	if contentType != contentTypeM3U {
 		t.Errorf("Expected Content-Type 'audio/x-mpegurl', got '%s'", contentType)
 	}
 
@@ -250,7 +252,7 @@ func TestIntegration_ExpiredCacheRefresh(t *testing.T) {
 	// Create mock IPFS server
 	mockServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		requestCount++
-		w.Header().Set("Content-Type", "audio/x-mpegurl")
+		w.Header().Set("Content-Type", contentTypeM3U)
 		w.WriteHeader(http.StatusOK)
 		// Send different content on second request
 		if requestCount == 1 {
@@ -280,7 +282,7 @@ func TestIntegration_ExpiredCacheRefresh(t *testing.T) {
 		}
 
 		rewrittenContent := rw.RewriteM3U(content, "http://127.0.0.1:8080")
-		w.Header().Set("Content-Type", "audio/x-mpegurl")
+		w.Header().Set("Content-Type", contentTypeM3U)
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write(rewrittenContent)
 	})
@@ -324,7 +326,7 @@ func TestIntegration_ExpiredCacheRefresh(t *testing.T) {
 
 	// Verify Content-Type header
 	contentType := resp2.Header.Get("Content-Type")
-	if contentType != "audio/x-mpegurl" {
+	if contentType != contentTypeM3U {
 		t.Errorf("Expected Content-Type 'audio/x-mpegurl', got '%s'", contentType)
 	}
 
@@ -357,7 +359,7 @@ func TestIntegration_IPFSFailureWithStaleCacheFallback(t *testing.T) {
 			_, _ = w.Write([]byte("IPFS node unavailable"))
 			return
 		}
-		w.Header().Set("Content-Type", "audio/x-mpegurl")
+		w.Header().Set("Content-Type", contentTypeM3U)
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write([]byte(mockM3UContent))
 	}))
@@ -382,7 +384,7 @@ func TestIntegration_IPFSFailureWithStaleCacheFallback(t *testing.T) {
 		}
 
 		rewrittenContent := rw.RewriteM3U(content, "http://127.0.0.1:8080")
-		w.Header().Set("Content-Type", "audio/x-mpegurl")
+		w.Header().Set("Content-Type", contentTypeM3U)
 		w.Header().Set("X-From-Cache", fmt.Sprintf("%v", fromCache))
 		w.Header().Set("X-Stale", fmt.Sprintf("%v", stale))
 		w.WriteHeader(http.StatusOK)
@@ -423,7 +425,7 @@ func TestIntegration_IPFSFailureWithStaleCacheFallback(t *testing.T) {
 
 	// Verify Content-Type header
 	contentType := resp2.Header.Get("Content-Type")
-	if contentType != "audio/x-mpegurl" {
+	if contentType != contentTypeM3U {
 		t.Errorf("Expected Content-Type 'audio/x-mpegurl', got '%s'", contentType)
 	}
 
@@ -470,7 +472,7 @@ func TestIntegration_URLRewritingOutput(t *testing.T) {
 		}
 
 		rewrittenContent := rw.RewriteM3U(content, "http://127.0.0.1:8080")
-		w.Header().Set("Content-Type", "audio/x-mpegurl")
+		w.Header().Set("Content-Type", contentTypeM3U)
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write(rewrittenContent)
 	})
@@ -573,7 +575,7 @@ func TestIntegration_ContentTypeHeaders(t *testing.T) {
 		}
 
 		rewrittenContent := rw.RewriteM3U(content, "http://127.0.0.1:8080")
-		w.Header().Set("Content-Type", "audio/x-mpegurl")
+		w.Header().Set("Content-Type", contentTypeM3U)
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write(rewrittenContent)
 	})
@@ -594,7 +596,7 @@ func TestIntegration_ContentTypeHeaders(t *testing.T) {
 
 	// Verify Content-Type header
 	contentType := resp.Header.Get("Content-Type")
-	expectedContentType := "audio/x-mpegurl"
+	expectedContentType := contentTypeM3U
 
 	if contentType != expectedContentType {
 		t.Errorf("Expected Content-Type '%s', got '%s'", expectedContentType, contentType)
@@ -680,7 +682,7 @@ func TestIntegration_HTTPStatusCodes(t *testing.T) {
 				}
 
 				rewrittenContent := rw.RewriteM3U(content, "http://127.0.0.1:8080")
-				w.Header().Set("Content-Type", "audio/x-mpegurl")
+				w.Header().Set("Content-Type", contentTypeM3U)
 				w.WriteHeader(http.StatusOK)
 				_, _ = w.Write(rewrittenContent)
 			})
@@ -738,7 +740,7 @@ func TestIntegration_MethodNotAllowed(t *testing.T) {
 		}
 
 		rewrittenContent := rw.RewriteM3U(content, "http://127.0.0.1:8080")
-		w.Header().Set("Content-Type", "audio/x-mpegurl")
+		w.Header().Set("Content-Type", contentTypeM3U)
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write(rewrittenContent)
 	})
@@ -829,7 +831,7 @@ func TestIntegration_RealEndpoints(t *testing.T) {
 		}
 
 		rewrittenContent := rw.RewriteM3U(content, "http://127.0.0.1:8080")
-		w.Header().Set("Content-Type", "audio/x-mpegurl")
+		w.Header().Set("Content-Type", contentTypeM3U)
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write(rewrittenContent)
 	})
@@ -848,7 +850,7 @@ func TestIntegration_RealEndpoints(t *testing.T) {
 		}
 
 		rewrittenContent := rw.RewriteM3U(content, "http://127.0.0.1:8080")
-		w.Header().Set("Content-Type", "audio/x-mpegurl")
+		w.Header().Set("Content-Type", contentTypeM3U)
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write(rewrittenContent)
 	})
@@ -896,7 +898,7 @@ func TestIntegration_RealEndpoints(t *testing.T) {
 		}
 
 		contentType := resp.Header.Get("Content-Type")
-		if contentType != "audio/x-mpegurl" {
+		if contentType != contentTypeM3U {
 			t.Errorf("Expected Content-Type 'audio/x-mpegurl', got '%s'", contentType)
 		}
 
@@ -926,7 +928,7 @@ func TestIntegration_RealEndpoints(t *testing.T) {
 		}
 
 		contentType := resp.Header.Get("Content-Type")
-		if contentType != "audio/x-mpegurl" {
+		if contentType != contentTypeM3U {
 			t.Errorf("Expected Content-Type 'audio/x-mpegurl', got '%s'", contentType)
 		}
 
@@ -1027,7 +1029,7 @@ acestream://4444444444444444444444444444444444444444
 		sortedContent := rewriter.SortStreamsByName(deduplicatedContent)
 		rewrittenContent := rw.RewriteM3U(sortedContent, "http://127.0.0.1:8080")
 
-		w.Header().Set("Content-Type", "audio/x-mpegurl")
+		w.Header().Set("Content-Type", contentTypeM3U)
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write(rewrittenContent)
 	})
@@ -1155,7 +1157,7 @@ acestream://3333333333333333333333333333333333333333
 		sortedContent := rewriter.SortStreamsByName(deduplicatedContent)
 		rewrittenContent := rw.RewriteM3U(sortedContent, "http://127.0.0.1:8080")
 
-		w.Header().Set("Content-Type", "audio/x-mpegurl")
+		w.Header().Set("Content-Type", contentTypeM3U)
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write(rewrittenContent)
 	})
@@ -1280,7 +1282,7 @@ acestream://4444444444444444444444444444444444444444
 		sortedContent := rewriter.SortStreamsByName(deduplicatedContent)
 		rewrittenContent := rw.RewriteM3U(sortedContent, "http://127.0.0.1:8080")
 
-		w.Header().Set("Content-Type", "audio/x-mpegurl")
+		w.Header().Set("Content-Type", contentTypeM3U)
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write(rewrittenContent)
 	})
@@ -1392,7 +1394,7 @@ acestream://2222222222222222222222222222222222222222
 		sortedContent := rewriter.SortStreamsByName(deduplicatedContent)
 		rewrittenContent := rw.RewriteM3U(sortedContent, "http://127.0.0.1:8080")
 
-		w.Header().Set("Content-Type", "audio/x-mpegurl")
+		w.Header().Set("Content-Type", contentTypeM3U)
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write(rewrittenContent)
 	})
@@ -1490,7 +1492,7 @@ acestream://1111111111111111111111111111111111111111
 		sortedContent := rewriter.SortStreamsByName(deduplicatedContent)
 		rewrittenContent := rw.RewriteM3U(sortedContent, "http://127.0.0.1:8080")
 
-		w.Header().Set("Content-Type", "audio/x-mpegurl")
+		w.Header().Set("Content-Type", contentTypeM3U)
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write(rewrittenContent)
 	})
@@ -1535,7 +1537,7 @@ acestream://1111111111111111111111111111111111111111
 			w.WriteHeader(http.StatusServiceUnavailable)
 			return
 		}
-		w.Header().Set("Content-Type", "audio/x-mpegurl")
+		w.Header().Set("Content-Type", contentTypeM3U)
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write([]byte(elcanoContent))
 	}))
@@ -1584,7 +1586,7 @@ acestream://1111111111111111111111111111111111111111
 		sortedContent := rewriter.SortStreamsByName(deduplicatedContent)
 		rewrittenContent := rw.RewriteM3U(sortedContent, "http://127.0.0.1:8080")
 
-		w.Header().Set("Content-Type", "audio/x-mpegurl")
+		w.Header().Set("Content-Type", contentTypeM3U)
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write(rewrittenContent)
 	})

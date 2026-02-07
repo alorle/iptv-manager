@@ -7,6 +7,8 @@ import (
 	"time"
 )
 
+const testKey = "test-key"
+
 func TestNewFileStorage(t *testing.T) {
 	t.Run("creates cache directory if it doesn't exist", func(t *testing.T) {
 		tempDir := filepath.Join(t.TempDir(), "cache")
@@ -69,7 +71,7 @@ func TestFileStorage_SetAndGet(t *testing.T) {
 	}
 
 	t.Run("stores and retrieves content", func(t *testing.T) {
-		key := "test-key"
+		key := testKey
 		content := []byte("test content")
 
 		// Set content
@@ -299,7 +301,7 @@ func TestFileStorage_getFilePath(t *testing.T) {
 	}
 
 	t.Run("generates consistent paths for same key", func(t *testing.T) {
-		key := "test-key"
+		key := testKey
 		path1 := storage.getFilePath(key)
 		path2 := storage.getFilePath(key)
 
@@ -318,7 +320,7 @@ func TestFileStorage_getFilePath(t *testing.T) {
 	})
 
 	t.Run("generates paths within base directory", func(t *testing.T) {
-		key := "test-key"
+		key := testKey
 		path := storage.getFilePath(key)
 
 		// Check if path is absolute or relative to tempDir
