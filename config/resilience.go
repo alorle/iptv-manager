@@ -48,119 +48,123 @@ func DefaultResilienceConfig() *ResilienceConfig {
 	}
 }
 
+// envParser is a helper for parsing environment variables with validation
+type envParser struct {
+	errors []string
+}
+
+// parseDuration parses a duration environment variable, ensuring it's positive
+func (p *envParser) parseDuration(envName string, target *time.Duration) {
+	val := os.Getenv(envName)
+	if val == "" {
+		return
+	}
+
+	duration, err := time.ParseDuration(val)
+	if err != nil {
+		p.errors = append(p.errors, fmt.Sprintf("%s: invalid duration format (use '30s', '1m', etc.)", envName))
+		return
+	}
+
+	if duration <= 0 {
+		p.errors = append(p.errors, fmt.Sprintf("%s must be positive", envName))
+		return
+	}
+
+	*target = duration
+}
+
+// parseInt parses an integer environment variable, ensuring it's positive
+func (p *envParser) parseInt(envName string, target *int) {
+	val := os.Getenv(envName)
+	if val == "" {
+		return
+	}
+
+	intVal, err := strconv.Atoi(val)
+	if err != nil {
+		p.errors = append(p.errors, fmt.Sprintf("%s: must be a valid integer", envName))
+		return
+	}
+
+	if intVal <= 0 {
+		p.errors = append(p.errors, fmt.Sprintf("%s must be positive", envName))
+		return
+	}
+
+	*target = intVal
+}
+
+// parseByteSize parses a byte size environment variable, ensuring it's positive
+func (p *envParser) parseByteSize(envName string, target *int) {
+	val := os.Getenv(envName)
+	if val == "" {
+		return
+	}
+
+	size, err := parseByteSize(val)
+	if err != nil {
+		p.errors = append(p.errors, fmt.Sprintf("%s: %v", envName, err))
+		return
+	}
+
+	if size <= 0 {
+		p.errors = append(p.errors, fmt.Sprintf("%s must be positive", envName))
+		return
+	}
+
+	*target = size
+}
+
+// parseEnum parses an enum environment variable from a set of valid values
+func (p *envParser) parseEnum(envName string, target *string, validValues map[string]bool) {
+	val := os.Getenv(envName)
+	if val == "" {
+		return
+	}
+
+	normalized := strings.ToUpper(val)
+	if !validValues[normalized] {
+		// Build list of valid values for error message
+		var validList []string
+		for k := range validValues {
+			validList = append(validList, k)
+		}
+		p.errors = append(p.errors, fmt.Sprintf("%s must be one of: %s", envName, strings.Join(validList, ", ")))
+		return
+	}
+
+	*target = normalized
+}
+
 // LoadFromEnv loads resilience configuration from environment variables
 // and returns an error if any value is invalid
 func LoadFromEnv() (*ResilienceConfig, error) {
 	cfg := DefaultResilienceConfig()
-	var errors []string
+	parser := &envParser{}
 
-	// Parse RECONNECT_BUFFER_SIZE
-	if val := os.Getenv("RECONNECT_BUFFER_SIZE"); val != "" {
-		size, err := parseByteSize(val)
-		if err != nil {
-			errors = append(errors, fmt.Sprintf("RECONNECT_BUFFER_SIZE: %v", err))
-		} else if size <= 0 {
-			errors = append(errors, "RECONNECT_BUFFER_SIZE must be positive")
-		} else {
-			cfg.ReconnectBufferSize = size
-		}
-	}
-
-	// Parse RECONNECT_MAX_BACKOFF
-	if val := os.Getenv("RECONNECT_MAX_BACKOFF"); val != "" {
-		duration, err := time.ParseDuration(val)
-		if err != nil {
-			errors = append(errors, "RECONNECT_MAX_BACKOFF: invalid duration format (use '30s', '1m', etc.)")
-		} else if duration <= 0 {
-			errors = append(errors, "RECONNECT_MAX_BACKOFF must be positive")
-		} else {
-			cfg.ReconnectMaxBackoff = duration
-		}
-	}
-
-	// Parse RECONNECT_INITIAL_BACKOFF
-	if val := os.Getenv("RECONNECT_INITIAL_BACKOFF"); val != "" {
-		duration, err := time.ParseDuration(val)
-		if err != nil {
-			errors = append(errors, "RECONNECT_INITIAL_BACKOFF: invalid duration format (use '500ms', '1s', etc.)")
-		} else if duration <= 0 {
-			errors = append(errors, "RECONNECT_INITIAL_BACKOFF must be positive")
-		} else {
-			cfg.ReconnectInitialBackoff = duration
-		}
-	}
-
-	// Parse CB_FAILURE_THRESHOLD
-	if val := os.Getenv("CB_FAILURE_THRESHOLD"); val != "" {
-		threshold, err := strconv.Atoi(val)
-		if err != nil {
-			errors = append(errors, "CB_FAILURE_THRESHOLD: must be a valid integer")
-		} else if threshold <= 0 {
-			errors = append(errors, "CB_FAILURE_THRESHOLD must be positive")
-		} else {
-			cfg.CBFailureThreshold = threshold
-		}
-	}
-
-	// Parse CB_TIMEOUT
-	if val := os.Getenv("CB_TIMEOUT"); val != "" {
-		duration, err := time.ParseDuration(val)
-		if err != nil {
-			errors = append(errors, "CB_TIMEOUT: invalid duration format (use '30s', '1m', etc.)")
-		} else if duration <= 0 {
-			errors = append(errors, "CB_TIMEOUT must be positive")
-		} else {
-			cfg.CBTimeout = duration
-		}
-	}
-
-	// Parse CB_HALF_OPEN_REQUESTS
-	if val := os.Getenv("CB_HALF_OPEN_REQUESTS"); val != "" {
-		requests, err := strconv.Atoi(val)
-		if err != nil {
-			errors = append(errors, "CB_HALF_OPEN_REQUESTS: must be a valid integer")
-		} else if requests <= 0 {
-			errors = append(errors, "CB_HALF_OPEN_REQUESTS must be positive")
-		} else {
-			cfg.CBHalfOpenRequests = requests
-		}
-	}
-
-	// Parse HEALTH_CHECK_INTERVAL
-	if val := os.Getenv("HEALTH_CHECK_INTERVAL"); val != "" {
-		duration, err := time.ParseDuration(val)
-		if err != nil {
-			errors = append(errors, "HEALTH_CHECK_INTERVAL: invalid duration format (use '30s', '1m', etc.)")
-		} else if duration <= 0 {
-			errors = append(errors, "HEALTH_CHECK_INTERVAL must be positive")
-		} else {
-			cfg.HealthCheckInterval = duration
-		}
-	}
-
-	// Parse LOG_LEVEL
-	if val := os.Getenv("LOG_LEVEL"); val != "" {
-		level := strings.ToUpper(val)
-		validLevels := map[string]bool{
-			"DEBUG": true,
-			"INFO":  true,
-			"WARN":  true,
-			"ERROR": true,
-		}
-		if !validLevels[level] {
-			errors = append(errors, "LOG_LEVEL must be one of: DEBUG, INFO, WARN, ERROR")
-		} else {
-			cfg.LogLevel = level
-		}
-	}
+	// Parse all environment variables
+	parser.parseByteSize("RECONNECT_BUFFER_SIZE", &cfg.ReconnectBufferSize)
+	parser.parseDuration("RECONNECT_MAX_BACKOFF", &cfg.ReconnectMaxBackoff)
+	parser.parseDuration("RECONNECT_INITIAL_BACKOFF", &cfg.ReconnectInitialBackoff)
+	parser.parseInt("CB_FAILURE_THRESHOLD", &cfg.CBFailureThreshold)
+	parser.parseDuration("CB_TIMEOUT", &cfg.CBTimeout)
+	parser.parseInt("CB_HALF_OPEN_REQUESTS", &cfg.CBHalfOpenRequests)
+	parser.parseDuration("HEALTH_CHECK_INTERVAL", &cfg.HealthCheckInterval)
+	parser.parseEnum("LOG_LEVEL", &cfg.LogLevel, map[string]bool{
+		"DEBUG": true,
+		"INFO":  true,
+		"WARN":  true,
+		"ERROR": true,
+	})
 
 	// Validate relationships between values
 	if cfg.ReconnectInitialBackoff > cfg.ReconnectMaxBackoff {
-		errors = append(errors, "RECONNECT_INITIAL_BACKOFF must be less than or equal to RECONNECT_MAX_BACKOFF")
+		parser.errors = append(parser.errors, "RECONNECT_INITIAL_BACKOFF must be less than or equal to RECONNECT_MAX_BACKOFF")
 	}
 
-	if len(errors) > 0 {
-		return nil, fmt.Errorf("configuration validation failed:\n  - %s", strings.Join(errors, "\n  - "))
+	if len(parser.errors) > 0 {
+		return nil, fmt.Errorf("configuration validation failed:\n  - %s", strings.Join(parser.errors, "\n  - "))
 	}
 
 	return cfg, nil
