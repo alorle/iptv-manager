@@ -63,6 +63,44 @@ func TestNewFileStorage(t *testing.T) {
 	})
 }
 
+// setAndGetContent is a test helper that sets and retrieves content
+func setAndGetContent(t *testing.T, storage *FileStorage, key string, content []byte) *Entry {
+	t.Helper()
+
+	if err := storage.Set(key, content); err != nil {
+		t.Fatalf("Set failed: %v", err)
+	}
+
+	entry, err := storage.Get(key)
+	if err != nil {
+		t.Fatalf("Get failed: %v", err)
+	}
+
+	return entry
+}
+
+// verifyContentMatch checks if entry content matches expected content
+func verifyContentMatch(t *testing.T, entry *Entry, expected []byte) {
+	t.Helper()
+
+	if string(entry.Content) != string(expected) {
+		t.Errorf("Expected content %q, got %q", expected, entry.Content)
+	}
+}
+
+// verifyTimestampValid checks if entry has a valid recent timestamp
+func verifyTimestampValid(t *testing.T, entry *Entry) {
+	t.Helper()
+
+	if entry.Timestamp.IsZero() {
+		t.Error("Expected non-zero timestamp")
+	}
+
+	if time.Since(entry.Timestamp) > time.Second {
+		t.Error("Timestamp should be recent")
+	}
+}
+
 func TestFileStorage_SetAndGet(t *testing.T) {
 	tempDir := t.TempDir()
 	storage, err := NewFileStorage(tempDir)
@@ -74,28 +112,9 @@ func TestFileStorage_SetAndGet(t *testing.T) {
 		key := testKey
 		content := []byte("test content")
 
-		// Set content
-		if err := storage.Set(key, content); err != nil {
-			t.Fatalf("Set failed: %v", err)
-		}
-
-		// Get content
-		entry, err := storage.Get(key)
-		if err != nil {
-			t.Fatalf("Get failed: %v", err)
-		}
-
-		if string(entry.Content) != string(content) {
-			t.Errorf("Expected content %q, got %q", content, entry.Content)
-		}
-
-		if entry.Timestamp.IsZero() {
-			t.Error("Expected non-zero timestamp")
-		}
-
-		if time.Since(entry.Timestamp) > time.Second {
-			t.Error("Timestamp should be recent")
-		}
+		entry := setAndGetContent(t, storage, key, content)
+		verifyContentMatch(t, entry, content)
+		verifyTimestampValid(t, entry)
 	})
 
 	t.Run("overwrites existing content", func(t *testing.T) {
@@ -103,28 +122,10 @@ func TestFileStorage_SetAndGet(t *testing.T) {
 		firstContent := []byte("first content")
 		secondContent := []byte("second content")
 
-		// Set first content
-		if err := storage.Set(key, firstContent); err != nil {
-			t.Fatalf("First Set failed: %v", err)
-		}
-
-		// Wait a bit to ensure different timestamps
+		setAndGetContent(t, storage, key, firstContent)
 		time.Sleep(10 * time.Millisecond)
-
-		// Set second content
-		if err := storage.Set(key, secondContent); err != nil {
-			t.Fatalf("Second Set failed: %v", err)
-		}
-
-		// Get content - should be second content
-		entry, err := storage.Get(key)
-		if err != nil {
-			t.Fatalf("Get failed: %v", err)
-		}
-
-		if string(entry.Content) != string(secondContent) {
-			t.Errorf("Expected content %q, got %q", secondContent, entry.Content)
-		}
+		entry := setAndGetContent(t, storage, key, secondContent)
+		verifyContentMatch(t, entry, secondContent)
 	})
 
 	t.Run("returns error for non-existent key", func(t *testing.T) {
@@ -142,14 +143,7 @@ func TestFileStorage_SetAndGet(t *testing.T) {
 		key := "empty-key"
 		content := []byte("")
 
-		if err := storage.Set(key, content); err != nil {
-			t.Fatalf("Set failed with empty content: %v", err)
-		}
-
-		entry, err := storage.Get(key)
-		if err != nil {
-			t.Fatalf("Get failed: %v", err)
-		}
+		entry := setAndGetContent(t, storage, key, content)
 
 		if len(entry.Content) != 0 {
 			t.Errorf("Expected empty content, got %d bytes", len(entry.Content))
@@ -160,14 +154,7 @@ func TestFileStorage_SetAndGet(t *testing.T) {
 		key := "binary-key"
 		content := []byte{0x00, 0x01, 0xFF, 0xFE}
 
-		if err := storage.Set(key, content); err != nil {
-			t.Fatalf("Set failed with binary content: %v", err)
-		}
-
-		entry, err := storage.Get(key)
-		if err != nil {
-			t.Fatalf("Get failed: %v", err)
-		}
+		entry := setAndGetContent(t, storage, key, content)
 
 		if len(entry.Content) != len(content) {
 			t.Errorf("Expected content length %d, got %d", len(content), len(entry.Content))
