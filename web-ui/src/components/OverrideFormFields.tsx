@@ -1,4 +1,5 @@
 import type { Channel } from '../types'
+import type { CustomAttribute } from '../hooks/useChannelOverrideForm'
 import { FormField } from './FormField'
 import { TvgIdField } from './TvgIdField'
 import { CustomAttributesSection } from './CustomAttributesSection'
@@ -11,11 +12,11 @@ interface OverrideFormFieldsProps {
   tvgName: string
   tvgLogo: string
   groupTitle: string
-  customAttributes: Record<string, string>
+  customAttributes: CustomAttribute[]
   forceCheck: boolean
   validating: boolean
-  validationError: string
-  tvgIdValidation: { isValid: boolean; message: string; suggestions?: string[] } | null
+  validationError: string | null
+  tvgIdValidation: { valid: boolean; suggestions: string[] } | null
   isTvgIdInvalid: boolean
   onEnabledChange: (enabled: boolean) => void
   onTvgIdChange: (value: string) => void
@@ -26,8 +27,8 @@ interface OverrideFormFieldsProps {
   onTvgIdBlur: () => void
   onSuggestionClick: (suggestion: string) => void
   onAddCustomAttribute: () => void
-  onRemoveCustomAttribute: (key: string) => void
-  onCustomAttributeChange: (key: string, newKey?: string, value?: string) => void
+  onRemoveCustomAttribute: (index: number) => void
+  onCustomAttributeChange: (index: number, field: 'key' | 'value', value: string) => void
 }
 
 export function OverrideFormFields({

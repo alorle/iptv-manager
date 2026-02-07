@@ -14,8 +14,8 @@ interface ChannelTableProps {
   someSelected: boolean
   selectedIds: Set<string>
   expandedChannelId: string | null
-  expandedRowRef: React.RefObject<HTMLTableRowElement>
-  tableContainerRef: React.RefObject<HTMLDivElement>
+  expandedRowRef: React.RefObject<HTMLTableRowElement | null>
+  tableContainerRef: React.RefObject<HTMLDivElement | null>
   getChannelKey: (channel: Channel) => string
   onSelectAll: (checked: boolean) => void
   onSelectOne: (key: string, checked: boolean) => void

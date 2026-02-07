@@ -1,9 +1,9 @@
-import { RefObject } from 'react'
+import type { RefObject } from 'react'
 
 interface FormHeaderProps {
   title: string
   onClose: () => void
-  closeButtonRef: RefObject<HTMLButtonElement>
+  closeButtonRef: RefObject<HTMLButtonElement | null>
 }
 
 export function FormHeader({ title, onClose, closeButtonRef }: FormHeaderProps) {

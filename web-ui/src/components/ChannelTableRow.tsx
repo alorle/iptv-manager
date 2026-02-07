@@ -8,7 +8,7 @@ interface ChannelTableRowProps {
   isExpanded: boolean
   isSelected: boolean
   enabledFilter: 'all' | 'enabled' | 'disabled'
-  expandedRowRef: React.RefObject<HTMLTableRowElement> | null
+  expandedRowRef: React.RefObject<HTMLTableRowElement | null> | null
   onRowClick: () => void
   onSelectOne: (key: string, checked: boolean) => void
 }

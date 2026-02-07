@@ -188,10 +188,10 @@ describe('useToast', () => {
   it('should return toast ID from convenience methods', () => {
     const { result } = renderHook(() => useToast())
 
-    let successId: string
-    let errorId: string
-    let warningId: string
-    let infoId: string
+    let successId = ''
+    let errorId = ''
+    let warningId = ''
+    let infoId = ''
 
     act(() => {
       successId = result.current.success('Success')
