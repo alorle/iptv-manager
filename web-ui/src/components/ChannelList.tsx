@@ -9,6 +9,8 @@ import { useChannelBulkEdit } from '../hooks/useChannelBulkEdit'
 import { BulkEditModal } from './BulkEditModal'
 import { ErrorDisplay } from './ErrorDisplay'
 import { LoadingSpinner } from './LoadingSpinner'
+import { ChannelFilters } from './ChannelFilters'
+import { BulkActionsBar } from './BulkActionsBar'
 import type { useToast } from '../hooks/useToast'
 import './ChannelList.css'
 
@@ -90,76 +92,19 @@ export function ChannelList({ onChannelSelect, refreshTrigger, toast }: ChannelL
     >
       <div className="channel-list-header">
         <h1 id="page-title">Channel Management</h1>
-        <div className="filters" role="search" aria-label="Filter channels">
-          <label htmlFor="channel-search" className="visually-hidden">
-            Search channels
-          </label>
-          <input
-            id="channel-search"
-            type="search"
-            className="search-input"
-            placeholder="Search channels..."
-            value={searchText}
-            onChange={(e) => setSearchText(e.target.value)}
-            aria-describedby="search-results"
-          />
-          <label htmlFor="group-filter" className="visually-hidden">
-            Filter by group
-          </label>
-          <select
-            id="group-filter"
-            className="group-filter"
-            value={groupFilter}
-            onChange={(e) => setGroupFilter(e.target.value)}
-          >
-            <option value="">All Groups</option>
-            {uniqueGroups.map((group) => (
-              <option key={group} value={group}>
-                {group}
-              </option>
-            ))}
-          </select>
-          <div className="enabled-filter" role="group" aria-label="Filter by enabled status">
-            <button
-              type="button"
-              className={`filter-button ${enabledFilter === 'all' ? 'active' : ''}`}
-              onClick={() => setEnabledFilter('all')}
-              aria-pressed={enabledFilter === 'all'}
-            >
-              All
-            </button>
-            <button
-              type="button"
-              className={`filter-button ${enabledFilter === 'enabled' ? 'active' : ''}`}
-              onClick={() => setEnabledFilter('enabled')}
-              aria-pressed={enabledFilter === 'enabled'}
-            >
-              Enabled
-            </button>
-            <button
-              type="button"
-              className={`filter-button ${enabledFilter === 'disabled' ? 'active' : ''}`}
-              onClick={() => setEnabledFilter('disabled')}
-              aria-pressed={enabledFilter === 'disabled'}
-            >
-              Disabled
-            </button>
-          </div>
-        </div>
-        {selectedIds.size > 0 && (
-          <div className="bulk-actions" role="toolbar" aria-label="Bulk actions">
-            <div className="selection-info" aria-live="polite" aria-atomic="true">
-              {selectedIds.size} channel(s) selected
-            </div>
-            <button
-              type="button"
-              className="button button-primary"
-              onClick={() => setShowBulkEditModal(true)}
-            >
-              Bulk Edit
-            </button>
-          </div>
-        )}
+        <ChannelFilters
+          searchText={searchText}
+          groupFilter={groupFilter}
+          enabledFilter={enabledFilter}
+          uniqueGroups={uniqueGroups}
+          onSearchChange={setSearchText}
+          onGroupFilterChange={setGroupFilter}
+          onEnabledFilterChange={setEnabledFilter}
+        />
+        <BulkActionsBar
+          selectedCount={selectedIds.size}
+          onBulkEdit={() => setShowBulkEditModal(true)}
+        />
       </div>
 
       <div
