@@ -85,9 +85,7 @@ export function useTvgIdValidation(
     [setTvgId]
   )
 
-  const isTvgIdInvalid = Boolean(
-    tvgIdValidation && !tvgIdValidation.valid && tvgId.trim() !== ''
-  )
+  const isTvgIdInvalid = Boolean(tvgIdValidation && !tvgIdValidation.valid && tvgId.trim() !== '')
 
   return {
     tvgIdValidation,

@@ -52,8 +52,12 @@ export function EditOverrideForm({ channel, onClose, onSave, toast }: EditOverri
 
   const { closeButtonRef } = useFocusManagement()
 
-  const { saving, validationError, handleSave: saveOperation, handleDelete } =
-    useChannelOverrideMutations(channel, toast, onSave, setTvgIdValidation)
+  const {
+    saving,
+    validationError,
+    handleSave: saveOperation,
+    handleDelete,
+  } = useChannelOverrideMutations(channel, toast, onSave, setTvgIdValidation)
 
   // Wrapper to pass form data to save operation
   const handleSave = async () => {
