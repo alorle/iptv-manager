@@ -335,7 +335,7 @@ func TestMultiplexer_GetOrCreateStream_New(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "video/mp2t")
 		w.WriteHeader(http.StatusOK)
-		w.Write(testData)
+		_, _ = w.Write(testData)
 	}))
 	defer server.Close()
 
@@ -377,7 +377,7 @@ func TestMultiplexer_GetOrCreateStream_Existing(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 		// Send minimal data and let connection close naturally
-		w.Write([]byte("test"))
+		_, _ = w.Write([]byte("test"))
 	}))
 	defer server.Close()
 
@@ -479,7 +479,7 @@ func TestMultiplexer_RemoveStream(t *testing.T) {
 func TestMultiplexer_RemoveStream_WithClients(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte("test"))
+		_, _ = w.Write([]byte("test"))
 	}))
 	defer server.Close()
 
@@ -517,7 +517,7 @@ func TestMultiplexer_RemoveStream_WithClients(t *testing.T) {
 func TestMultiplexer_Stats(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte("test"))
+		_, _ = w.Write([]byte("test"))
 	}))
 	defer server.Close()
 
@@ -582,7 +582,7 @@ func TestStream_FanOut(t *testing.T) {
 	time.Sleep(50 * time.Millisecond)
 
 	// Write data to upstream
-	pw.Write(testData)
+	_, _ = pw.Write(testData)
 
 	// Verify both clients received the data
 	select {
@@ -604,7 +604,7 @@ func TestStream_FanOut(t *testing.T) {
 	}
 
 	// Cleanup
-	pw.Close()
+	_ = pw.Close()
 	stream.Stop()
 }
 
@@ -623,7 +623,7 @@ func TestStream_FanOut_ClientRemovalDuringStream(t *testing.T) {
 	time.Sleep(50 * time.Millisecond)
 
 	// Write some data
-	pw.Write(testData)
+	_, _ = pw.Write(testData)
 
 	// Verify client received data
 	select {
@@ -637,10 +637,10 @@ func TestStream_FanOut_ClientRemovalDuringStream(t *testing.T) {
 	stream.RemoveClient("client-1")
 
 	// Write more data - should not panic
-	pw.Write(testData)
+	_, _ = pw.Write(testData)
 
 	// Cleanup
-	pw.Close()
+	_ = pw.Close()
 	stream.Stop()
 }
 
@@ -649,7 +649,7 @@ func TestMultiplexer_ConcurrentStreams(t *testing.T) {
 		w.WriteHeader(http.StatusOK)
 		// Stream some data
 		for i := 0; i < 5; i++ {
-			w.Write([]byte("data"))
+			_, _ = w.Write([]byte("data"))
 			time.Sleep(10 * time.Millisecond)
 		}
 	}))
@@ -713,7 +713,7 @@ func TestStream_Stop(t *testing.T) {
 	// Stop should complete without hanging
 	done := make(chan bool)
 	go func() {
-		pw.Close()
+		_ = pw.Close()
 		stream.Stop()
 		done <- true
 	}()
@@ -753,7 +753,7 @@ func TestClientDisconnectDoesNotAffectOtherClients(t *testing.T) {
 
 	// Send first chunk of data - both clients should receive it
 	testData1 := []byte("first chunk")
-	pw.Write(testData1)
+	_, _ = pw.Write(testData1)
 
 	// Verify both clients received first chunk
 	select {
@@ -784,7 +784,7 @@ func TestClientDisconnectDoesNotAffectOtherClients(t *testing.T) {
 
 	// Send second chunk - only client 2 should receive it
 	testData2 := []byte("second chunk after client1 disconnected")
-	pw.Write(testData2)
+	_, _ = pw.Write(testData2)
 
 	// Verify client 2 still receives data
 	select {
@@ -808,7 +808,7 @@ func TestClientDisconnectDoesNotAffectOtherClients(t *testing.T) {
 
 	// Send third chunk to ensure stream continues working
 	testData3 := []byte("third chunk")
-	pw.Write(testData3)
+	_, _ = pw.Write(testData3)
 
 	select {
 	case data := <-client2.buffer:
@@ -820,7 +820,7 @@ func TestClientDisconnectDoesNotAffectOtherClients(t *testing.T) {
 	}
 
 	// Cleanup
-	pw.Close()
+	_ = pw.Close()
 	stream.Stop()
 }
 
@@ -849,7 +849,7 @@ func TestMultiplexerIndependentContexts(t *testing.T) {
 			case <-stopServer:
 				return
 			case <-ticker.C:
-				w.Write([]byte("chunk "))
+				_, _ = w.Write([]byte("chunk "))
 				flusher.Flush()
 			}
 		}

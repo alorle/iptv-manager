@@ -315,13 +315,13 @@ func TestMultiplexer_NewClientDuringReconnection(t *testing.T) {
 		if requestCount == 1 {
 			// First request succeeds with some data
 			w.WriteHeader(http.StatusOK)
-			w.Write([]byte("initial data"))
+			_, _ = w.Write([]byte("initial data"))
 			// Close connection to simulate failure
 			return
 		}
 		// Subsequent requests succeed (reconnection)
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte("reconnected data"))
+		_, _ = w.Write([]byte("reconnected data"))
 		// Keep connection open for streaming
 		flusher, ok := w.(http.Flusher)
 		if ok {

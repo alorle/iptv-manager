@@ -78,7 +78,7 @@ func TestFetchWithCacheFallback_SuccessfulFetch(t *testing.T) {
 	expectedContent := "#EXTM3U\n#EXTINF:-1,Test Channel\nhttp://example.com/stream.m3u8\n"
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte(expectedContent))
+		_, _ = w.Write([]byte(expectedContent))
 	}))
 	defer server.Close()
 
@@ -124,7 +124,7 @@ func TestFetchWithCacheFallback_FetchFailure_CacheFallback(t *testing.T) {
 	// Pre-populate cache with stale content
 	cacheKey := cache.DeriveKeyFromURL(server.URL)
 	staleContent := "#EXTM3U\n#EXTINF:-1,Stale Channel\nhttp://example.com/stale.m3u8\n"
-	storage.Set(cacheKey, []byte(staleContent))
+	_ = storage.Set(cacheKey, []byte(staleContent))
 
 	content, fromCache, err := fetcher.FetchWithCacheFallback(server.URL)
 
@@ -176,7 +176,7 @@ func TestFetchWithCacheFallback_NetworkTimeout(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		time.Sleep(200 * time.Millisecond)
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte("#EXTM3U\n"))
+		_, _ = w.Write([]byte("#EXTM3U\n"))
 	}))
 	defer server.Close()
 
@@ -187,7 +187,7 @@ func TestFetchWithCacheFallback_NetworkTimeout(t *testing.T) {
 	// Pre-populate cache
 	cacheKey := cache.DeriveKeyFromURL(server.URL)
 	cachedContent := "#EXTM3U\n#EXTINF:-1,Cached Channel\nhttp://example.com/cached.m3u8\n"
-	storage.Set(cacheKey, []byte(cachedContent))
+	_ = storage.Set(cacheKey, []byte(cachedContent))
 
 	content, fromCache, err := fetcher.FetchWithCacheFallback(server.URL)
 
@@ -229,7 +229,7 @@ func TestFetchWithCacheFallback_Non200StatusCode(t *testing.T) {
 			// Pre-populate cache
 			cacheKey := cache.DeriveKeyFromURL(server.URL)
 			cachedContent := "#EXTM3U\n#EXTINF:-1,Cached Channel\nhttp://example.com/cached.m3u8\n"
-			storage.Set(cacheKey, []byte(cachedContent))
+			_ = storage.Set(cacheKey, []byte(cachedContent))
 
 			content, fromCache, err := fetcher.FetchWithCacheFallback(server.URL)
 
@@ -266,7 +266,7 @@ func TestIsExpired(t *testing.T) {
 	}
 
 	// Add fresh cache entry
-	storage.Set(cacheKey, []byte("#EXTM3U\n"))
+	_ = storage.Set(cacheKey, []byte("#EXTM3U\n"))
 
 	expired, err = fetcher.IsExpired(testURL)
 	if err != nil {
@@ -297,7 +297,7 @@ func TestFetchFromURL_LargeContent(t *testing.T) {
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte(largeContent))
+		_, _ = w.Write([]byte(largeContent))
 	}))
 	defer server.Close()
 
@@ -327,7 +327,7 @@ func TestFetchWithCache_FreshCache_ServeImmediately(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		serverCalled = true
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte("#EXTM3U\n#EXTINF:-1,New Content\nhttp://example.com/new.m3u8\n"))
+		_, _ = w.Write([]byte("#EXTM3U\n#EXTINF:-1,New Content\nhttp://example.com/new.m3u8\n"))
 	}))
 	defer server.Close()
 
@@ -337,7 +337,7 @@ func TestFetchWithCache_FreshCache_ServeImmediately(t *testing.T) {
 	// Pre-populate cache with fresh content
 	cacheKey := cache.DeriveKeyFromURL(server.URL)
 	freshContent := "#EXTM3U\n#EXTINF:-1,Fresh Cached Channel\nhttp://example.com/cached.m3u8\n"
-	storage.Set(cacheKey, []byte(freshContent))
+	_ = storage.Set(cacheKey, []byte(freshContent))
 
 	content, fromCache, isStale, err := fetcher.FetchWithCache(server.URL)
 
@@ -367,7 +367,7 @@ func TestFetchWithCache_ExpiredCache_FetchSuccess_UpdateCache(t *testing.T) {
 	newContent := "#EXTM3U\n#EXTINF:-1,New Content\nhttp://example.com/new.m3u8\n"
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte(newContent))
+		_, _ = w.Write([]byte(newContent))
 	}))
 	defer server.Close()
 
@@ -378,7 +378,7 @@ func TestFetchWithCache_ExpiredCache_FetchSuccess_UpdateCache(t *testing.T) {
 	// Pre-populate cache with old content
 	cacheKey := cache.DeriveKeyFromURL(server.URL)
 	oldContent := "#EXTM3U\n#EXTINF:-1,Old Cached Channel\nhttp://example.com/old.m3u8\n"
-	storage.Set(cacheKey, []byte(oldContent))
+	_ = storage.Set(cacheKey, []byte(oldContent))
 
 	// Wait for cache to expire
 	time.Sleep(20 * time.Millisecond)
@@ -426,7 +426,7 @@ func TestFetchWithCache_ExpiredCache_FetchFail_ServeStale(t *testing.T) {
 	// Pre-populate cache with old content
 	cacheKey := cache.DeriveKeyFromURL(server.URL)
 	oldContent := "#EXTM3U\n#EXTINF:-1,Old Cached Channel\nhttp://example.com/old.m3u8\n"
-	storage.Set(cacheKey, []byte(oldContent))
+	_ = storage.Set(cacheKey, []byte(oldContent))
 
 	// Wait for cache to expire
 	time.Sleep(20 * time.Millisecond)
@@ -455,7 +455,7 @@ func TestFetchWithCache_NoCache_FetchSuccess(t *testing.T) {
 	expectedContent := "#EXTM3U\n#EXTINF:-1,Test Channel\nhttp://example.com/stream.m3u8\n"
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte(expectedContent))
+		_, _ = w.Write([]byte(expectedContent))
 	}))
 	defer server.Close()
 
@@ -537,7 +537,7 @@ func TestFetchWithCache_TTLCalculation(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		serverCallCount++
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte(fmt.Sprintf("#EXTM3U\n# Call %d\n", serverCallCount)))
+		_, _ = w.Write([]byte(fmt.Sprintf("#EXTM3U\n# Call %d\n", serverCallCount)))
 	}))
 	defer server.Close()
 

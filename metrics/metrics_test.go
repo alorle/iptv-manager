@@ -149,10 +149,10 @@ func TestCircuitBreakerStateValues(t *testing.T) {
 				t.Fatalf("Failed to get metrics: %v", err)
 			}
 			defer func() {
-		if closeErr := resp.Body.Close(); closeErr != nil {
-			t.Errorf("failed to close response body: %v", closeErr)
-		}
-	}()
+				if closeErr := resp.Body.Close(); closeErr != nil {
+					t.Errorf("failed to close response body: %v", closeErr)
+				}
+			}()
 
 			body, err := io.ReadAll(resp.Body)
 			if err != nil {

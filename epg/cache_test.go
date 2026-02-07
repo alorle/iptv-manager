@@ -33,7 +33,7 @@ func TestNew_Success(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/xml")
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte(mockEPGXML))
+		_, _ = w.Write([]byte(mockEPGXML))
 	}))
 	defer server.Close()
 
@@ -60,7 +60,7 @@ func TestNew_DefaultURL(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/xml")
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte(mockEPGXML))
+		_, _ = w.Write([]byte(mockEPGXML))
 	}))
 	defer server.Close()
 
@@ -100,7 +100,7 @@ func TestNew_InvalidXML(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/xml")
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte("invalid xml content"))
+		_, _ = w.Write([]byte("invalid xml content"))
 	}))
 	defer server.Close()
 
@@ -116,7 +116,7 @@ func TestNew_Timeout(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		time.Sleep(2 * time.Second)
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte(mockEPGXML))
+		_, _ = w.Write([]byte(mockEPGXML))
 	}))
 	defer server.Close()
 
@@ -131,7 +131,7 @@ func TestIsValid(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/xml")
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte(mockEPGXML))
+		_, _ = w.Write([]byte(mockEPGXML))
 	}))
 	defer server.Close()
 
@@ -168,7 +168,7 @@ func TestGetChannelInfo(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/xml")
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte(mockEPGXML))
+		_, _ = w.Write([]byte(mockEPGXML))
 	}))
 	defer server.Close()
 
@@ -200,7 +200,7 @@ func TestSearch(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/xml")
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte(mockEPGXML))
+		_, _ = w.Write([]byte(mockEPGXML))
 	}))
 	defer server.Close()
 
@@ -288,7 +288,7 @@ func TestSearch_MaxResults(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/xml")
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte(mockEPGXML))
+		_, _ = w.Write([]byte(mockEPGXML))
 	}))
 	defer server.Close()
 
@@ -308,7 +308,7 @@ func TestCount(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/xml")
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte(mockEPGXML))
+		_, _ = w.Write([]byte(mockEPGXML))
 	}))
 	defer server.Close()
 
@@ -327,7 +327,7 @@ func TestSearch_CaseInsensitive(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/xml")
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte(mockEPGXML))
+		_, _ = w.Write([]byte(mockEPGXML))
 	}))
 	defer server.Close()
 

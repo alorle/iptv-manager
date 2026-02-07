@@ -177,8 +177,8 @@ func TestCleanupDisconnected(t *testing.T) {
 	pid3 := m.GetOrCreatePID(streamID, client3)
 
 	// Disconnect two sessions
-	m.ReleasePID(pid1)
-	m.ReleasePID(pid2)
+	_ = m.ReleasePID(pid1)
+	_ = m.ReleasePID(pid2)
 
 	// Cleanup
 	cleaned := m.CleanupDisconnected()
@@ -269,7 +269,7 @@ func TestGetActiveSessions(t *testing.T) {
 	}
 
 	// Release one
-	m.ReleasePID(pid1)
+	_ = m.ReleasePID(pid1)
 
 	if m.GetActiveSessions() != 1 {
 		t.Errorf("Expected 1 active session after release, got %d", m.GetActiveSessions())

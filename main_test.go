@@ -151,7 +151,7 @@ func TestIntegration_CacheHit(t *testing.T) {
 		requestCount++
 		w.Header().Set("Content-Type", "audio/x-mpegurl")
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte(mockM3UContent))
+		_, _ = w.Write([]byte(mockM3UContent))
 	}))
 	defer mockServer.Close()
 
@@ -250,9 +250,9 @@ func TestIntegration_ExpiredCacheRefresh(t *testing.T) {
 		w.WriteHeader(http.StatusOK)
 		// Send different content on second request
 		if requestCount == 1 {
-			w.Write([]byte(mockM3UContent))
+			_, _ = w.Write([]byte(mockM3UContent))
 		} else {
-			w.Write([]byte("#EXTM3U\n#EXTINF:-1,Updated Channel\nacestream://bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\n"))
+			_, _ = w.Write([]byte("#EXTM3U\n#EXTINF:-1,Updated Channel\nacestream://bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\n"))
 		}
 	}))
 	defer mockServer.Close()
@@ -355,7 +355,7 @@ func TestIntegration_IPFSFailureWithStaleCacheFallback(t *testing.T) {
 		}
 		w.Header().Set("Content-Type", "audio/x-mpegurl")
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte(mockM3UContent))
+		_, _ = w.Write([]byte(mockM3UContent))
 	}))
 	defer mockServer.Close()
 
@@ -656,7 +656,7 @@ func TestIntegration_HTTPStatusCodes(t *testing.T) {
 			// Pre-populate cache if needed
 			if tt.cacheExists {
 				cacheKey := fmt.Sprintf("%s", mockServer.URL)
-				storage.Set(cacheKey, []byte(mockM3UContent))
+				_ = storage.Set(cacheKey, []byte(mockM3UContent))
 			}
 
 			fetch := fetcher.New(5*time.Second, storage, 1*time.Hour)
@@ -804,7 +804,7 @@ func TestIntegration_RealEndpoints(t *testing.T) {
 	// Health endpoint
 	mux.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte("OK"))
+		_, _ = w.Write([]byte("OK"))
 	})
 
 	// Elcano endpoint (modified to use mock server)
@@ -1529,7 +1529,7 @@ acestream://1111111111111111111111111111111111111111
 		}
 		w.Header().Set("Content-Type", "audio/x-mpegurl")
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte(elcanoContent))
+		_, _ = w.Write([]byte(elcanoContent))
 	}))
 	defer elcanoServer.Close()
 
