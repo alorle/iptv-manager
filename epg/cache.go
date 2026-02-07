@@ -27,20 +27,20 @@ type ChannelInfo struct {
 	DisplayName string
 }
 
-// EPGCache provides fast TVG-ID validation and search functionality
-type EPGCache struct {
+// Cache provides fast TVG-ID validation and search functionality
+type Cache struct {
 	channels    map[string]ChannelInfo // Map of channel ID -> ChannelInfo for O(1) lookup
 	channelList []ChannelInfo          // List of all channels for search/suggestion
 	epgURL      string
 }
 
-// New creates a new EPGCache and initializes it by fetching and parsing the EPG XML
-func New(epgURL string, timeout time.Duration) (*EPGCache, error) {
+// New creates a new Cache and initializes it by fetching and parsing the EPG XML
+func New(epgURL string, timeout time.Duration) (*Cache, error) {
 	if epgURL == "" {
 		epgURL = "https://raw.githubusercontent.com/davidmuma/EPG_dobleM/master/guiatv.xml"
 	}
 
-	cache := &EPGCache{
+	cache := &Cache{
 		channels: make(map[string]ChannelInfo),
 		epgURL:   epgURL,
 	}
@@ -53,7 +53,7 @@ func New(epgURL string, timeout time.Duration) (*EPGCache, error) {
 }
 
 // fetch downloads and parses the EPG XML
-func (c *EPGCache) fetch(timeout time.Duration) error {
+func (c *Cache) fetch(timeout time.Duration) error {
 	client := &http.Client{
 		Timeout: timeout,
 	}
@@ -92,20 +92,20 @@ func (c *EPGCache) fetch(timeout time.Duration) error {
 }
 
 // IsValid checks if a TVG-ID exists in the EPG
-func (c *EPGCache) IsValid(tvgID string) bool {
+func (c *Cache) IsValid(tvgID string) bool {
 	_, exists := c.channels[tvgID]
 	return exists
 }
 
 // GetChannelInfo retrieves channel information by TVG-ID
-func (c *EPGCache) GetChannelInfo(tvgID string) (ChannelInfo, bool) {
+func (c *Cache) GetChannelInfo(tvgID string) (ChannelInfo, bool) {
 	info, exists := c.channels[tvgID]
 	return info, exists
 }
 
 // Search returns channels matching a partial TVG-ID or display name (case-insensitive)
 // Returns up to maxResults channels
-func (c *EPGCache) Search(query string, maxResults int) []ChannelInfo {
+func (c *Cache) Search(query string, maxResults int) []ChannelInfo {
 	if query == "" {
 		return nil
 	}
@@ -128,6 +128,6 @@ func (c *EPGCache) Search(query string, maxResults int) []ChannelInfo {
 }
 
 // Count returns the total number of channels in the cache
-func (c *EPGCache) Count() int {
+func (c *Cache) Count() int {
 	return len(c.channels)
 }

@@ -66,7 +66,7 @@ func TestNew_DefaultURL(t *testing.T) {
 
 	// When passing empty string, it should use default URL (which will fail in test)
 	// So we just verify the logic by checking that epgURL is set to default
-	cache := &EPGCache{
+	cache := &Cache{
 		channels: make(map[string]ChannelInfo),
 		epgURL:   "",
 	}

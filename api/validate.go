@@ -21,19 +21,19 @@ type ValidateResponse struct {
 	Suggestions []string `json:"suggestions,omitempty"`
 }
 
-// EPGCacheInterface defines the methods needed from EPGCache
-type EPGCacheInterface interface {
+// TVGValidator defines the interface for TVG-ID validation and channel search
+type TVGValidator interface {
 	IsValid(tvgID string) bool
 	Search(query string, maxResults int) []epg.ChannelInfo
 }
 
 // ValidateHandler handles the POST /api/validate/tvg-id endpoint
 type ValidateHandler struct {
-	epgCache EPGCacheInterface
+	epgCache TVGValidator
 }
 
 // NewValidateHandler creates a new handler for the validation API
-func NewValidateHandler(epgCache EPGCacheInterface) *ValidateHandler {
+func NewValidateHandler(epgCache TVGValidator) *ValidateHandler {
 	return &ValidateHandler{
 		epgCache: epgCache,
 	}
