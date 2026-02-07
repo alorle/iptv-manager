@@ -241,6 +241,76 @@ func DeduplicateStreams(content []byte) []byte {
 	return []byte(result.String())
 }
 
+// extractContentID extracts the acestream content ID from a URL query parameter.
+// Returns the first 40 hex characters found after "?id=".
+func extractContentID(line string) string {
+	idIdx := strings.Index(line, "?id=")
+	if idIdx == -1 {
+		return ""
+	}
+
+	afterID := line[idIdx+4:]
+	endIdx := 0
+	for endIdx < len(afterID) && endIdx < 40 {
+		c := afterID[endIdx]
+		if !((c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F')) {
+			break
+		}
+		endIdx++
+	}
+	return afterID[:endIdx]
+}
+
+// extractTranscodeAudio extracts the transcode_audio parameter value from a URL.
+// Returns empty string if the parameter is not found.
+func extractTranscodeAudio(line string) string {
+	transcodeIdx := strings.Index(line, "transcode_audio=")
+	if transcodeIdx == -1 {
+		return ""
+	}
+
+	afterTranscode := line[transcodeIdx+16:]
+	transcodeEndIdx := strings.IndexAny(afterTranscode, "&\n\r")
+	if transcodeEndIdx == -1 {
+		return afterTranscode
+	}
+	return afterTranscode[:transcodeEndIdx]
+}
+
+// buildStreamURL constructs a stream URL with the given content ID, optional transcode parameter, and base URL.
+func buildStreamURL(baseUrl, contentID, transcodeAudio string) string {
+	path := "/stream?id=" + contentID
+	if transcodeAudio != "" {
+		path += "&transcode_audio=" + transcodeAudio
+	}
+
+	if baseUrl == "" {
+		return path
+	}
+	return baseUrl + path
+}
+
+// rewriteAcestreamURL converts an acestream:// URL to the internal /stream format.
+func rewriteAcestreamURL(line, baseUrl string) string {
+	streamID := strings.TrimPrefix(line, "acestream://")
+	streamID = strings.TrimSpace(streamID)
+	return buildStreamURL(baseUrl, streamID, "")
+}
+
+// rewriteAlreadyRewrittenURL normalizes an already-rewritten stream URL to the standard format.
+// Preserves transcode_audio parameter if present.
+func rewriteAlreadyRewrittenURL(line, baseUrl string) string {
+	contentID := extractContentID(line)
+	transcodeAudio := extractTranscodeAudio(line)
+	return buildStreamURL(baseUrl, contentID, transcodeAudio)
+}
+
+// isRewrittenStreamURL checks if a line is an already-rewritten stream URL.
+func isRewrittenStreamURL(line string) bool {
+	return strings.Contains(line, "?id=") &&
+		(strings.Contains(line, "/stream") || strings.Contains(line, "/ace/getstream"))
+}
+
 // RewriteM3U processes M3U content line by line and rewrites acestream:// URLs
 // to internal server URLs in the format /stream?id={content_id}
 // Preserves transcode_audio parameter if present in original URL
@@ -254,96 +324,15 @@ func (r *Rewriter) RewriteM3U(content []byte, baseUrl string) []byte {
 			result.WriteString("\n")
 		}
 
-		// Check if line starts with acestream://
-		if strings.HasPrefix(line, "acestream://") {
-			// Extract stream ID from acestream:// URL
-			streamID := strings.TrimPrefix(line, "acestream://")
-			// Remove any trailing whitespace or carriage return
-			streamID = strings.TrimSpace(streamID)
-
-			// Build the rewritten URL
-			var rewrittenURL string
-			if baseUrl == "" {
-				// Use relative URL if no base URL provided
-				rewrittenURL = fmt.Sprintf("/stream?id=%s", streamID)
-			} else {
-				// Use absolute URL with base URL
-				rewrittenURL = fmt.Sprintf("%s/stream?id=%s", baseUrl, streamID)
-			}
-			result.WriteString(rewrittenURL)
-		} else if strings.Contains(line, "?id=") && (strings.Contains(line, "/stream") || strings.Contains(line, "/ace/getstream")) {
-			// This is already a rewritten URL, check for transcode_audio parameter
-			if strings.Contains(line, "transcode_audio=") {
-				// Extract the content ID and transcode_audio parameter
-				var contentID, transcodeAudio string
-
-				// Find the id parameter
-				idIdx := strings.Index(line, "?id=")
-				if idIdx != -1 {
-					afterID := line[idIdx+4:]
-					// Extract content ID (40 hex characters)
-					endIdx := 0
-					for endIdx < len(afterID) && endIdx < 40 {
-						c := afterID[endIdx]
-						if !((c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F')) {
-							break
-						}
-						endIdx++
-					}
-					contentID = afterID[:endIdx]
-
-					// Find transcode_audio parameter
-					transcodeIdx := strings.Index(line, "transcode_audio=")
-					if transcodeIdx != -1 {
-						afterTranscode := line[transcodeIdx+16:]
-						transcodeEndIdx := strings.IndexAny(afterTranscode, "&\n\r")
-						if transcodeEndIdx == -1 {
-							transcodeAudio = afterTranscode
-						} else {
-							transcodeAudio = afterTranscode[:transcodeEndIdx]
-						}
-					}
-				}
-
-				// Build the new URL with transcode_audio preserved
-				var rewrittenURL string
-				if baseUrl == "" {
-					rewrittenURL = fmt.Sprintf("/stream?id=%s&transcode_audio=%s", contentID, transcodeAudio)
-				} else {
-					rewrittenURL = fmt.Sprintf("%s/stream?id=%s&transcode_audio=%s", baseUrl, contentID, transcodeAudio)
-				}
-				result.WriteString(rewrittenURL)
-			} else {
-				// No transcode_audio, just rewrite the URL format
-				// Extract content ID
-				var contentID string
-				idIdx := strings.Index(line, "?id=")
-				if idIdx != -1 {
-					afterID := line[idIdx+4:]
-					endIdx := 0
-					for endIdx < len(afterID) && endIdx < 40 {
-						c := afterID[endIdx]
-						if !((c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F')) {
-							break
-						}
-						endIdx++
-					}
-					contentID = afterID[:endIdx]
-				}
-
-				var rewrittenURL string
-				if baseUrl == "" {
-					rewrittenURL = fmt.Sprintf("/stream?id=%s", contentID)
-				} else {
-					rewrittenURL = fmt.Sprintf("%s/stream?id=%s", baseUrl, contentID)
-				}
-				result.WriteString(rewrittenURL)
-			}
-		} else if strings.HasPrefix(line, "#EXTINF:") {
-			// Remove logo metadata from EXTINF lines
+		// Route line processing based on type
+		switch {
+		case strings.HasPrefix(line, "acestream://"):
+			result.WriteString(rewriteAcestreamURL(line, baseUrl))
+		case isRewrittenStreamURL(line):
+			result.WriteString(rewriteAlreadyRewrittenURL(line, baseUrl))
+		case strings.HasPrefix(line, "#EXTINF:"):
 			result.WriteString(RemoveLogoMetadata(line))
-		} else {
-			// Preserve all other lines unchanged
+		default:
 			result.WriteString(line)
 		}
 	}
