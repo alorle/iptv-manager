@@ -337,6 +337,114 @@ func main() {
 	}
 }
 
+// logCacheStatus logs the cache status for a fetched source
+func logCacheStatus(sourceName string, fromCache, stale bool) {
+	if !fromCache {
+		log.Printf("Using fresh content for %s in unified playlist", sourceName)
+		return
+	}
+
+	if stale {
+		log.Printf("Using stale cache for %s in unified playlist", sourceName)
+	} else {
+		log.Printf("Using fresh cache for %s in unified playlist", sourceName)
+	}
+}
+
+// stripM3UHeader removes the #EXTM3U header from playlist content if present
+func stripM3UHeader(content []byte) string {
+	str := string(content)
+	if strings.HasPrefix(str, "#EXTM3U") {
+		str = strings.TrimPrefix(str, "#EXTM3U")
+		str = strings.TrimLeft(str, "\n")
+	}
+	return str
+}
+
+// mergePlaylistSources merges multiple playlist sources into a single M3U
+func mergePlaylistSources(sources []struct {
+	name      string
+	content   []byte
+	err       error
+	fromCache bool
+	stale     bool
+}) string {
+	var merged strings.Builder
+	merged.WriteString("#EXTM3U\n")
+
+	for _, source := range sources {
+		if source.err != nil {
+			log.Printf("Skipping %s source in unified playlist: %v", source.name, source.err)
+			continue
+		}
+
+		logCacheStatus(source.name, source.fromCache, source.stale)
+
+		// Add newline separator if we're appending to existing content
+		if merged.Len() > len("#EXTM3U\n") {
+			merged.WriteString("\n")
+		}
+		merged.WriteString(stripM3UHeader(source.content))
+	}
+
+	return merged.String()
+}
+
+// cleanOrphanedOverrides removes overrides for channels no longer in the playlists
+func cleanOrphanedOverrides(deps *dependencies, sources []struct {
+	content []byte
+	err     error
+	stale   bool
+}) {
+	// Only clean if we have fresh data from at least one source
+	hasFreshData := false
+	for _, source := range sources {
+		if source.err == nil && !source.stale {
+			hasFreshData = true
+			break
+		}
+	}
+
+	if !hasFreshData {
+		log.Printf("Skipping orphan cleanup - using only stale cache data")
+		return
+	}
+
+	// Collect all valid acestream IDs from successful fetches
+	var validIDs []string
+	for _, source := range sources {
+		if source.err == nil {
+			ids := rewriter.ExtractAcestreamIDs(source.content)
+			validIDs = append(validIDs, ids...)
+		}
+	}
+
+	// Clean orphaned overrides
+	deletedCount, err := deps.overridesMgr.CleanOrphans(validIDs)
+	if err != nil {
+		log.Printf("WARNING: Failed to clean orphaned overrides: %v", err)
+	} else if deletedCount > 0 {
+		log.Printf("Cleaned up %d orphaned override(s)", deletedCount)
+	}
+}
+
+// processPlaylist applies the full M3U processing pipeline: overrides, dedup, sort, rewrite
+func processPlaylist(deps *dependencies, content string, baseURL string) []byte {
+	contentBytes := []byte(content)
+
+	// Apply channel overrides BEFORE deduplication and sorting
+	overridden := rewriter.ApplyOverrides(contentBytes, deps.overridesMgr)
+
+	// Apply deduplication by acestream ID
+	deduplicated := rewriter.DeduplicateStreams(overridden)
+
+	// Apply alphabetical sorting by display name
+	sorted := rewriter.SortStreamsByName(deduplicated)
+
+	// Rewrite acestream:// URLs and remove logos
+	return deps.rewriter.RewriteM3U(sorted, baseURL)
+}
+
 // createUnifiedPlaylistHandler creates an HTTP handler for the unified playlist endpoint
 func createUnifiedPlaylistHandler(deps *dependencies) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
@@ -358,99 +466,34 @@ func createUnifiedPlaylistHandler(deps *dependencies) http.HandlerFunc {
 			return
 		}
 
-		// Build merged content starting with M3U header
-		var mergedContent strings.Builder
-		mergedContent.WriteString("#EXTM3U\n")
-
-		// Add elcano content if available
-		if elcanoErr == nil {
-			// Log cache status for elcano
-			if elcanoFromCache {
-				if elcanoStale {
-					log.Printf("Using stale cache for elcano in unified playlist")
-				} else {
-					log.Printf("Using fresh cache for elcano in unified playlist")
-				}
-			} else {
-				log.Printf("Using fresh content for elcano in unified playlist")
-			}
-
-			// Parse and add elcano streams (skip header line)
-			elcanoStr := string(elcanoContent)
-			if strings.HasPrefix(elcanoStr, "#EXTM3U") {
-				elcanoStr = strings.TrimPrefix(elcanoStr, "#EXTM3U")
-				elcanoStr = strings.TrimLeft(elcanoStr, "\n")
-			}
-			mergedContent.WriteString(elcanoStr)
-		} else {
-			log.Printf("Skipping elcano source in unified playlist: %v", elcanoErr)
+		// Merge playlist sources
+		sources := []struct {
+			name      string
+			content   []byte
+			err       error
+			fromCache bool
+			stale     bool
+		}{
+			{"elcano", elcanoContent, elcanoErr, elcanoFromCache, elcanoStale},
+			{"newera", neweraContent, neweraErr, neweraFromCache, neweraStale},
 		}
+		mergedContent := mergePlaylistSources(sources)
 
-		// Add newera content if available
-		if neweraErr == nil {
-			// Log cache status for newera
-			if neweraFromCache {
-				if neweraStale {
-					log.Printf("Using stale cache for newera in unified playlist")
-				} else {
-					log.Printf("Using fresh cache for newera in unified playlist")
-				}
-			} else {
-				log.Printf("Using fresh content for newera in unified playlist")
-			}
-
-			// Parse and add newera streams (skip header line)
-			neweraStr := string(neweraContent)
-			if strings.HasPrefix(neweraStr, "#EXTM3U") {
-				neweraStr = strings.TrimPrefix(neweraStr, "#EXTM3U")
-				neweraStr = strings.TrimLeft(neweraStr, "\n")
-			}
-			if mergedContent.Len() > len("#EXTM3U\n") {
-				mergedContent.WriteString("\n")
-			}
-			mergedContent.WriteString(neweraStr)
-		} else {
-			log.Printf("Skipping newera source in unified playlist: %v", neweraErr)
+		// Clean up orphaned overrides
+		cleanupSources := []struct {
+			content []byte
+			err     error
+			stale   bool
+		}{
+			{elcanoContent, elcanoErr, elcanoStale},
+			{neweraContent, neweraErr, neweraStale},
 		}
+		cleanOrphanedOverrides(deps, cleanupSources)
 
-		// Clean up orphaned overrides if we have fresh data from at least one source
-		hasFreshData := (elcanoErr == nil && !elcanoStale) || (neweraErr == nil && !neweraStale)
-		if hasFreshData {
-			// Collect all valid acestream IDs from both sources
-			var validIDs []string
-			if elcanoErr == nil {
-				elcanoIDs := rewriter.ExtractAcestreamIDs(elcanoContent)
-				validIDs = append(validIDs, elcanoIDs...)
-			}
-			if neweraErr == nil {
-				neweraIDs := rewriter.ExtractAcestreamIDs(neweraContent)
-				validIDs = append(validIDs, neweraIDs...)
-			}
+		// Process playlist through full pipeline
+		rewrittenContent := processPlaylist(deps, mergedContent, baseURL)
 
-			// Clean orphaned overrides
-			if deletedCount, err := deps.overridesMgr.CleanOrphans(validIDs); err != nil {
-				log.Printf("WARNING: Failed to clean orphaned overrides: %v", err)
-			} else if deletedCount > 0 {
-				log.Printf("Cleaned up %d orphaned override(s)", deletedCount)
-			}
-		} else {
-			log.Printf("Skipping orphan cleanup - using only stale cache data")
-		}
-
-		// Apply channel overrides BEFORE deduplication and sorting
-		mergedBytes := []byte(mergedContent.String())
-		overriddenContent := rewriter.ApplyOverrides(mergedBytes, deps.overridesMgr)
-
-		// Apply deduplication by acestream ID
-		deduplicatedContent := rewriter.DeduplicateStreams(overriddenContent)
-
-		// Apply alphabetical sorting by display name
-		sortedContent := rewriter.SortStreamsByName(deduplicatedContent)
-
-		// Rewrite acestream:// URLs and remove logos
-		rewrittenContent := deps.rewriter.RewriteM3U(sortedContent, baseURL)
-
-		// Set content type
+		// Send response
 		w.Header().Set("Content-Type", "audio/x-mpegurl")
 		w.WriteHeader(http.StatusOK)
 		if _, err := w.Write(rewrittenContent); err != nil {
