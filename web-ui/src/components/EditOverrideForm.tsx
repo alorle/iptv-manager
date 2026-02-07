@@ -1,11 +1,9 @@
-import { useState, useEffect, useRef, useCallback } from 'react'
+import { useState, useCallback, useRef } from 'react'
 import type { Channel } from '../types'
-import {
-  updateOverride,
-  deleteOverride,
-  validateTvgId,
-  type ValidationError,
-} from '../api/channels'
+import { useChannelOverrideForm } from '../hooks/useChannelOverrideForm'
+import { useTvgIdValidation } from '../hooks/useTvgIdValidation'
+import { useChannelOverrideMutations } from '../hooks/useChannelOverrideMutations'
+import { useFocusManagement } from '../hooks/useFocusManagement'
 import { ConfirmDialog } from './ConfirmDialog'
 import { LoadingSpinner } from './LoadingSpinner'
 import type { useToast } from '../hooks/useToast'
@@ -18,46 +16,65 @@ interface EditOverrideFormProps {
   toast: ReturnType<typeof useToast>
 }
 
-interface CustomAttribute {
-  key: string
-  value: string
-}
-
 export function EditOverrideForm({ channel, onClose, onSave, toast }: EditOverrideFormProps) {
-  // Extract the first (and only) stream from the channel
   const stream = channel.streams[0]
-
-  const [enabled, setEnabled] = useState<boolean>(stream.enabled)
-  const [tvgId, setTvgId] = useState<string>(channel.tvg_id)
-  const [tvgName, setTvgName] = useState<string>(stream.tvg_name)
-  const [tvgLogo, setTvgLogo] = useState<string>(channel.tvg_logo)
-  const [groupTitle, setGroupTitle] = useState<string>(channel.group_title)
-  const [customAttributes, setCustomAttributes] = useState<CustomAttribute[]>([])
-
-  const [tvgIdValidation, setTvgIdValidation] = useState<{
-    valid: boolean
-    suggestions: string[]
-  } | null>(null)
-  const [validating, setValidating] = useState(false)
-  const [saving, setSaving] = useState(false)
-  const [forceCheck, setForceCheck] = useState(false)
-  const [validationError, setValidationError] = useState<string | null>(null)
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
-
   const modalRef = useRef<HTMLDivElement>(null)
-  const closeButtonRef = useRef<HTMLButtonElement>(null)
 
-  // Focus management - focus close button when modal opens
-  useEffect(() => {
-    closeButtonRef.current?.focus()
+  // Custom hooks for logic separation
+  const {
+    enabled,
+    tvgId,
+    tvgName,
+    tvgLogo,
+    groupTitle,
+    customAttributes,
+    forceCheck,
+    setEnabled,
+    setTvgId,
+    setTvgName,
+    setTvgLogo,
+    setGroupTitle,
+    setForceCheck,
+    handleAddCustomAttribute,
+    handleRemoveCustomAttribute,
+    handleCustomAttributeChange,
+  } = useChannelOverrideForm(channel)
 
-    // Store previously focused element to restore later
-    const previouslyFocusedElement = document.activeElement as HTMLElement
+  const {
+    tvgIdValidation,
+    validating,
+    isTvgIdInvalid,
+    handleTvgIdBlur,
+    handleSuggestionClick,
+    setTvgIdValidation,
+  } = useTvgIdValidation(tvgId, channel.tvg_id, setTvgId)
 
-    return () => {
-      previouslyFocusedElement?.focus()
-    }
-  }, [])
+  const { closeButtonRef } = useFocusManagement()
+
+  const { saving, validationError, handleSave: saveOperation, handleDelete } =
+    useChannelOverrideMutations(channel, toast, onSave, setTvgIdValidation)
+
+  // Wrapper to pass form data to save operation
+  const handleSave = async () => {
+    await saveOperation(
+      {
+        enabled,
+        tvgId,
+        tvgName,
+        tvgLogo,
+        groupTitle,
+        customAttributes,
+      },
+      forceCheck
+    )
+  }
+
+  // Handle delete confirmation
+  const handleDeleteConfirm = async () => {
+    setShowDeleteConfirm(false)
+    await handleDelete()
+  }
 
   // Handle escape key to close modal
   const handleKeyDown = useCallback(
@@ -69,158 +86,6 @@ export function EditOverrideForm({ channel, onClose, onSave, toast }: EditOverri
     [onClose, showDeleteConfirm]
   )
 
-  // Validation function
-  const performValidation = useCallback(
-    async (value: string) => {
-      const trimmedTvgId = value.trim()
-
-      // Empty TVG-ID is always valid
-      if (trimmedTvgId === '') {
-        setTvgIdValidation({ valid: true, suggestions: [] })
-        return
-      }
-
-      // Don't validate if same as original
-      if (trimmedTvgId === channel.tvg_id) {
-        setTvgIdValidation({ valid: true, suggestions: [] })
-        return
-      }
-
-      setValidating(true)
-      try {
-        const result = await validateTvgId(trimmedTvgId)
-        setTvgIdValidation({
-          valid: result.valid,
-          suggestions: result.suggestions || [],
-        })
-      } catch (err) {
-        console.error('Failed to validate TVG-ID:', err)
-        setTvgIdValidation({ valid: true, suggestions: [] }) // Assume valid on error
-      } finally {
-        setValidating(false)
-      }
-    },
-    [channel.tvg_id]
-  )
-
-  // Debounced TVG-ID validation while typing
-  useEffect(() => {
-    const timeoutId = setTimeout(() => {
-      performValidation(tvgId)
-    }, 300) // 300ms debounce
-
-    return () => clearTimeout(timeoutId)
-  }, [tvgId, performValidation])
-
-  // Handle blur event to validate immediately
-  const handleTvgIdBlur = () => {
-    performValidation(tvgId)
-  }
-
-  const handleAddCustomAttribute = () => {
-    setCustomAttributes([...customAttributes, { key: '', value: '' }])
-  }
-
-  const handleRemoveCustomAttribute = (index: number) => {
-    setCustomAttributes(customAttributes.filter((_, i) => i !== index))
-  }
-
-  const handleCustomAttributeChange = (index: number, field: 'key' | 'value', value: string) => {
-    const updated = [...customAttributes]
-    updated[index][field] = value
-    setCustomAttributes(updated)
-  }
-
-  const handleSave = async () => {
-    setValidationError(null)
-    setSaving(true)
-
-    try {
-      // Build override object with only changed fields
-      const override: Record<string, unknown> = {}
-
-      if (enabled !== stream.enabled) {
-        override.enabled = enabled
-      }
-
-      if (tvgId.trim() !== channel.tvg_id) {
-        override.tvg_id = tvgId.trim() || null
-      }
-
-      if (tvgName.trim() !== stream.tvg_name) {
-        override.tvg_name = tvgName.trim() || null
-      }
-
-      if (tvgLogo.trim() !== channel.tvg_logo) {
-        override.tvg_logo = tvgLogo.trim() || null
-      }
-
-      if (groupTitle.trim() !== channel.group_title) {
-        override.group_title = groupTitle.trim() || null
-      }
-
-      // Add custom attributes (currently not supported by backend, placeholder)
-      if (customAttributes.length > 0) {
-        const customAttrs: Record<string, string> = {}
-        customAttributes.forEach((attr) => {
-          if (attr.key.trim()) {
-            customAttrs[attr.key.trim()] = attr.value
-          }
-        })
-        if (Object.keys(customAttrs).length > 0) {
-          // Store as a comment for now since backend doesn't support it yet
-          console.log('Custom attributes not yet supported:', customAttrs)
-        }
-      }
-
-      await updateOverride(stream.acestream_id, override, forceCheck)
-      toast.success('Channel override saved successfully')
-      onSave()
-    } catch (err) {
-      if (err && typeof err === 'object' && 'error' in err) {
-        const validationErr = err as ValidationError
-        const errorMsg = validationErr.message || 'Validation failed'
-        setValidationError(errorMsg)
-        toast.error(errorMsg)
-        if (validationErr.suggestions) {
-          setTvgIdValidation({
-            valid: false,
-            suggestions: validationErr.suggestions,
-          })
-        }
-      } else {
-        const errorMsg = err instanceof Error ? err.message : 'Failed to save override'
-        setValidationError(errorMsg)
-        toast.error(errorMsg)
-      }
-    } finally {
-      setSaving(false)
-    }
-  }
-
-  const handleDeleteConfirm = async () => {
-    setShowDeleteConfirm(false)
-    setValidationError(null)
-    setSaving(true)
-
-    try {
-      await deleteOverride(stream.acestream_id)
-      toast.success('Channel override deleted successfully')
-      onSave()
-    } catch (err) {
-      const errorMsg = err instanceof Error ? err.message : 'Failed to delete override'
-      setValidationError(errorMsg)
-      toast.error(errorMsg)
-    } finally {
-      setSaving(false)
-    }
-  }
-
-  const handleSuggestionClick = (suggestion: string) => {
-    setTvgId(suggestion)
-  }
-
-  const isTvgIdInvalid = tvgIdValidation && !tvgIdValidation.valid && tvgId.trim() !== ''
   const canSave = !validating && (!isTvgIdInvalid || forceCheck)
 
   return (
@@ -281,7 +146,7 @@ export function EditOverrideForm({ channel, onClose, onSave, toast }: EditOverri
                 {tvgIdValidation.valid ? '✓ Valid' : '✗ Invalid'}
               </span>
             )}
-            {isTvgIdInvalid && tvgIdValidation.suggestions.length > 0 && (
+            {isTvgIdInvalid && tvgIdValidation && tvgIdValidation.suggestions.length > 0 && (
               <div className="suggestions">
                 <p className="suggestions-label">Did you mean:</p>
                 <ul>
