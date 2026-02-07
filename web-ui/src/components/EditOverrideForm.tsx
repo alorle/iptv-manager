@@ -6,6 +6,9 @@ import { useChannelOverrideMutations } from '../hooks/useChannelOverrideMutation
 import { useFocusManagement } from '../hooks/useFocusManagement'
 import { ConfirmDialog } from './ConfirmDialog'
 import { LoadingSpinner } from './LoadingSpinner'
+import { FormField } from './FormField'
+import { TvgIdField } from './TvgIdField'
+import { CustomAttributesSection } from './CustomAttributesSection'
 import type { useToast } from '../hooks/useToast'
 import './EditOverrideForm.css'
 
@@ -134,38 +137,18 @@ export function EditOverrideForm({ channel, onClose, onSave, toast }: EditOverri
             </label>
           </div>
 
-          <div className="form-field">
-            <label htmlFor="tvg-id">TVG-ID</label>
-            <input
-              id="tvg-id"
-              type="text"
-              value={tvgId}
-              onChange={(e) => setTvgId(e.target.value)}
-              onBlur={handleTvgIdBlur}
-              placeholder={channel.tvg_id || 'Original TVG-ID'}
-            />
-            {validating && <span className="validation-status validating">Validating...</span>}
-            {!validating && tvgIdValidation && tvgId.trim() !== '' && (
-              <span className={`validation-status ${tvgIdValidation.valid ? 'valid' : 'invalid'}`}>
-                {tvgIdValidation.valid ? '✓ Valid' : '✗ Invalid'}
-              </span>
-            )}
-            {isTvgIdInvalid && tvgIdValidation && tvgIdValidation.suggestions.length > 0 && (
-              <div className="suggestions">
-                <p className="suggestions-label">Did you mean:</p>
-                <ul>
-                  {tvgIdValidation.suggestions.map((suggestion) => (
-                    <li key={suggestion} onClick={() => handleSuggestionClick(suggestion)}>
-                      {suggestion}
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            )}
-          </div>
+          <TvgIdField
+            tvgId={tvgId}
+            validating={validating}
+            validation={tvgIdValidation}
+            isTvgIdInvalid={isTvgIdInvalid}
+            originalTvgId={channel.tvg_id}
+            onTvgIdChange={setTvgId}
+            onTvgIdBlur={handleTvgIdBlur}
+            onSuggestionClick={handleSuggestionClick}
+          />
 
-          <div className="form-field">
-            <label htmlFor="tvg-name">TVG-Name</label>
+          <FormField label="TVG-Name" htmlFor="tvg-name">
             <input
               id="tvg-name"
               type="text"
@@ -173,10 +156,9 @@ export function EditOverrideForm({ channel, onClose, onSave, toast }: EditOverri
               onChange={(e) => setTvgName(e.target.value)}
               placeholder={stream.tvg_name || 'Original TVG-Name'}
             />
-          </div>
+          </FormField>
 
-          <div className="form-field">
-            <label htmlFor="tvg-logo">TVG-Logo URL</label>
+          <FormField label="TVG-Logo URL" htmlFor="tvg-logo">
             <input
               id="tvg-logo"
               type="text"
@@ -184,10 +166,9 @@ export function EditOverrideForm({ channel, onClose, onSave, toast }: EditOverri
               onChange={(e) => setTvgLogo(e.target.value)}
               placeholder={channel.tvg_logo || 'Original TVG-Logo'}
             />
-          </div>
+          </FormField>
 
-          <div className="form-field">
-            <label htmlFor="group-title">Group Title</label>
+          <FormField label="Group Title" htmlFor="group-title">
             <input
               id="group-title"
               type="text"
@@ -195,48 +176,14 @@ export function EditOverrideForm({ channel, onClose, onSave, toast }: EditOverri
               onChange={(e) => setGroupTitle(e.target.value)}
               placeholder={channel.group_title || 'Original Group Title'}
             />
-          </div>
+          </FormField>
 
-          <div className="custom-attributes-section">
-            <div className="section-header">
-              <h4>Custom Attributes</h4>
-              <button
-                type="button"
-                className="add-attribute-button"
-                onClick={handleAddCustomAttribute}
-              >
-                + Add
-              </button>
-            </div>
-
-            {customAttributes.map((attr, index) => (
-              <div key={index} className="custom-attribute">
-                <input
-                  type="text"
-                  placeholder="Key"
-                  value={attr.key}
-                  onChange={(e) => handleCustomAttributeChange(index, 'key', e.target.value)}
-                />
-                <input
-                  type="text"
-                  placeholder="Value"
-                  value={attr.value}
-                  onChange={(e) => handleCustomAttributeChange(index, 'value', e.target.value)}
-                />
-                <button
-                  type="button"
-                  className="remove-attribute-button"
-                  onClick={() => handleRemoveCustomAttribute(index)}
-                >
-                  Remove
-                </button>
-              </div>
-            ))}
-
-            {customAttributes.length === 0 && (
-              <p className="no-attributes">No custom attributes. Click "Add" to create one.</p>
-            )}
-          </div>
+          <CustomAttributesSection
+            customAttributes={customAttributes}
+            onAdd={handleAddCustomAttribute}
+            onRemove={handleRemoveCustomAttribute}
+            onChange={handleCustomAttributeChange}
+          />
 
           {isTvgIdInvalid && (
             <div className="form-field">
