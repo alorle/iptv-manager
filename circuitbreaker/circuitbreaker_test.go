@@ -156,7 +156,7 @@ func TestOpenBlocksRequests(t *testing.T) {
 	})
 
 	// Trigger transition to OPEN
-	cb.Execute(func() error { return errTestFailure })
+	_ = cb.Execute(func() error { return errTestFailure })
 
 	if cb.State() != StateOpen {
 		t.Fatalf("expected state OPEN, got %s", cb.State())
@@ -182,7 +182,7 @@ func TestOpenToHalfOpen(t *testing.T) {
 	})
 
 	// Transition to OPEN
-	cb.Execute(func() error { return errTestFailure })
+	_ = cb.Execute(func() error { return errTestFailure })
 	if cb.State() != StateOpen {
 		t.Fatalf("expected state OPEN, got %s", cb.State())
 	}
@@ -211,7 +211,7 @@ func TestHalfOpenSuccessToClosed(t *testing.T) {
 	})
 
 	// Transition to OPEN
-	cb.Execute(func() error { return errTestFailure })
+	_ = cb.Execute(func() error { return errTestFailure })
 
 	// Wait for timeout
 	time.Sleep(100 * time.Millisecond)
@@ -244,7 +244,7 @@ func TestHalfOpenFailureToOpen(t *testing.T) {
 	})
 
 	// Transition to OPEN
-	cb.Execute(func() error { return errTestFailure })
+	_ = cb.Execute(func() error { return errTestFailure })
 
 	// Wait for timeout
 	time.Sleep(100 * time.Millisecond)
@@ -277,7 +277,7 @@ func TestHalfOpenRequestLimit(t *testing.T) {
 	})
 
 	// Transition to OPEN
-	cb.Execute(func() error { return errTestFailure })
+	_ = cb.Execute(func() error { return errTestFailure })
 
 	// Wait for timeout
 	time.Sleep(100 * time.Millisecond)
@@ -305,7 +305,7 @@ func TestHalfOpenRequestLimitExceeded(t *testing.T) {
 	})
 
 	// Transition to OPEN
-	cb.Execute(func() error { return errTestFailure })
+	_ = cb.Execute(func() error { return errTestFailure })
 
 	// Wait for timeout
 	time.Sleep(100 * time.Millisecond)
@@ -331,8 +331,8 @@ func TestClosedSuccessResetsFailureCount(t *testing.T) {
 	})
 
 	// Two failures
-	cb.Execute(func() error { return errTestFailure })
-	cb.Execute(func() error { return errTestFailure })
+	_ = cb.Execute(func() error { return errTestFailure })
+	_ = cb.Execute(func() error { return errTestFailure })
 
 	if cb.State() != StateClosed {
 		t.Errorf("expected state CLOSED after 2 failures, got %s", cb.State())
@@ -345,14 +345,14 @@ func TestClosedSuccessResetsFailureCount(t *testing.T) {
 	}
 
 	// Verify failure count was reset by checking we need 3 more failures
-	cb.Execute(func() error { return errTestFailure })
-	cb.Execute(func() error { return errTestFailure })
+	_ = cb.Execute(func() error { return errTestFailure })
+	_ = cb.Execute(func() error { return errTestFailure })
 	if cb.State() != StateClosed {
 		t.Errorf("expected state still CLOSED after 2 more failures, got %s", cb.State())
 	}
 
 	// Third failure should open circuit
-	cb.Execute(func() error { return errTestFailure })
+	_ = cb.Execute(func() error { return errTestFailure })
 	if cb.State() != StateOpen {
 		t.Errorf("expected state OPEN after 3 failures, got %s", cb.State())
 	}
@@ -367,7 +367,7 @@ func TestReset(t *testing.T) {
 	})
 
 	// Transition to OPEN
-	cb.Execute(func() error { return errTestFailure })
+	_ = cb.Execute(func() error { return errTestFailure })
 	if cb.State() != StateOpen {
 		t.Fatalf("expected state OPEN, got %s", cb.State())
 	}
@@ -394,11 +394,11 @@ func TestResetFromHalfOpen(t *testing.T) {
 	})
 
 	// Transition to OPEN
-	cb.Execute(func() error { return errTestFailure })
+	_ = cb.Execute(func() error { return errTestFailure })
 
 	// Wait and make one half-open request
 	time.Sleep(100 * time.Millisecond)
-	cb.Execute(func() error { return nil })
+	_ = cb.Execute(func() error { return nil })
 
 	if cb.State() != StateHalfOpen {
 		t.Fatalf("expected state HALF-OPEN, got %s", cb.State())
@@ -424,7 +424,7 @@ func TestConcurrentAccess(t *testing.T) {
 	for i := 0; i < 10; i++ {
 		go func() {
 			for j := 0; j < 100; j++ {
-				cb.Execute(func() error {
+				_ = cb.Execute(func() error {
 					if j%3 == 0 {
 						return errTestFailure
 					}
@@ -454,7 +454,7 @@ func TestDescriptiveErrorMessages(t *testing.T) {
 	})
 
 	// Transition to OPEN
-	cb.Execute(func() error { return errTestFailure })
+	_ = cb.Execute(func() error { return errTestFailure })
 
 	// Verify OPEN error message
 	err := cb.Execute(func() error { return nil })
