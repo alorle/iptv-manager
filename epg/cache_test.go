@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 )
@@ -54,30 +55,14 @@ func TestNew_Success(t *testing.T) {
 	}
 }
 
-func TestNew_DefaultURL(t *testing.T) {
-	// This test will fail if the default URL is not reachable
-	// We'll use a mock server and verify that default URL is used when empty string is passed
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/xml")
-		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write([]byte(mockEPGXML))
-	}))
-	defer server.Close()
-
-	// When passing empty string, it should use default URL (which will fail in test)
-	// So we just verify the logic by checking that epgURL is set to default
-	cache := &Cache{
-		channels: make(map[string]ChannelInfo),
-		epgURL:   "",
+func TestNew_EmptyURL(t *testing.T) {
+	// Test that empty URL returns an error
+	_, err := New("", 5*time.Second)
+	if err == nil {
+		t.Error("Expected error when URL is empty, got nil")
 	}
-
-	if cache.epgURL == "" {
-		cache.epgURL = defaultEPGURL
-	}
-
-	expected := defaultEPGURL
-	if cache.epgURL != expected {
-		t.Errorf("Expected default URL %s, got %s", expected, cache.epgURL)
+	if err != nil && !strings.Contains(err.Error(), "EPG URL is required") {
+		t.Errorf("Expected 'EPG URL is required' error, got: %v", err)
 	}
 }
 

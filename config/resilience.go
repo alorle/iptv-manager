@@ -11,20 +11,20 @@ import (
 // ResilienceConfig centralizes all resilience-related configuration
 type ResilienceConfig struct {
 	// Reconnection settings
-	ReconnectBufferSize     int           // Buffer size for reconnection data
-	ReconnectMaxBackoff     time.Duration // Maximum backoff duration between retries
-	ReconnectInitialBackoff time.Duration // Initial backoff duration
+	ReconnectBufferSize     int           `yaml:"reconnect_buffer_size"`     // Buffer size for reconnection data
+	ReconnectMaxBackoff     time.Duration `yaml:"reconnect_max_backoff"`     // Maximum backoff duration between retries
+	ReconnectInitialBackoff time.Duration `yaml:"reconnect_initial_backoff"` // Initial backoff duration
 
 	// Circuit breaker settings
-	CBFailureThreshold int           // Number of failures before opening circuit
-	CBTimeout          time.Duration // Timeout before attempting to close circuit
-	CBHalfOpenRequests int           // Number of requests allowed in half-open state
+	CBFailureThreshold int           `yaml:"cb_failure_threshold"` // Number of failures before opening circuit
+	CBTimeout          time.Duration `yaml:"cb_timeout"`           // Timeout before attempting to close circuit
+	CBHalfOpenRequests int           `yaml:"cb_half_open_requests"` // Number of requests allowed in half-open state
 
 	// Health check settings
-	HealthCheckInterval time.Duration // Interval between health checks
+	HealthCheckInterval time.Duration `yaml:"health_check_interval"` // Interval between health checks
 
 	// Logging settings
-	LogLevel string // Log level: DEBUG, INFO, WARN, ERROR
+	LogLevel string `yaml:"log_level"` // Log level: DEBUG, INFO, WARN, ERROR
 }
 
 // DefaultResilienceConfig returns a ResilienceConfig with sensible defaults

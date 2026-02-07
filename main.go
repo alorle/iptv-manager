@@ -4,9 +4,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
-	"os"
 	"path/filepath"
-	"strconv"
 	"strings"
 	"time"
 
@@ -25,26 +23,6 @@ import (
 	"github.com/alorle/iptv-manager/ui"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
-
-const (
-	elcanoIPFSURL = "https://ipfs.io/ipns/k51qzi5uqu5di462t7j4vu4akwfhvtjhy88qbupktvoacqfqe9uforjvhyi4wr/hashes_acestream.m3u"
-	neweraIPFSURL = "https://ipfs.io/ipns/k2k4r8oqlcjxsritt5mczkcn4mmvcmymbqw7113fz2flkrerfwfps004/data/listas/lista_fuera_iptv.m3u"
-)
-
-// Config holds the application configuration loaded from environment variables
-type Config struct {
-	HTTPAddress            string
-	HTTPPort               string
-	AcestreamPlayerBaseURL string
-	AcestreamEngineURL     string
-	CacheDir               string
-	CacheTTL               time.Duration
-	StreamBufferSize       int
-	UseMultiplexing        bool
-	ProxyReadTimeout       time.Duration
-	ProxyWriteTimeout      time.Duration
-	ProxyBufferSize        int
-}
 
 // dependencies holds all initialized application components
 type dependencies struct {
@@ -70,166 +48,37 @@ func getBaseURL(r *http.Request) string {
 	return fmt.Sprintf("%s://%s", scheme, r.Host)
 }
 
-// getEnvWithDefault returns the environment variable value or a default if not set
-func getEnvWithDefault(key, defaultValue string) string {
-	if val := os.Getenv(key); val != "" {
-		return val
-	}
-	return defaultValue
-}
-
-// parseIntEnv parses an integer environment variable with a default value
-// Returns an error if the value is invalid or not positive
-func parseIntEnv(key string, defaultValue int) (int, error) {
-	valStr := os.Getenv(key)
-	if valStr == "" {
-		return defaultValue, nil
-	}
-
-	val, err := strconv.Atoi(valStr)
-	if err != nil {
-		return 0, fmt.Errorf("invalid %s: %w", key, err)
-	}
-
-	if val <= 0 {
-		return 0, fmt.Errorf("%s must be positive", key)
-	}
-
-	return val, nil
-}
-
-// parseBoolEnv parses a boolean environment variable with a default value
-// Accepts: "true", "1" for true; anything else for false
-func parseBoolEnv(key string, defaultValue bool) bool {
-	valStr := os.Getenv(key)
-	if valStr == "" {
-		return defaultValue
-	}
-	return valStr == "true" || valStr == "1"
-}
-
-// parseDurationEnv parses a duration environment variable with a default value
-// Returns an error if the value is invalid or not positive
-func parseDurationEnv(key string, defaultValue time.Duration) (time.Duration, error) {
-	valStr := os.Getenv(key)
-	if valStr == "" {
-		return defaultValue, nil
-	}
-
-	val, err := time.ParseDuration(valStr)
-	if err != nil {
-		return 0, fmt.Errorf("invalid %s: %w", key, err)
-	}
-
-	if val <= 0 {
-		return 0, fmt.Errorf("%s must be positive", key)
-	}
-
-	return val, nil
-}
-
-// parseRequiredDuration parses a required duration environment variable
-// Returns an error if the variable is not set, invalid, or not positive
-func parseRequiredDuration(key string) (time.Duration, error) {
-	valStr := os.Getenv(key)
-	if valStr == "" {
-		return 0, fmt.Errorf("%s environment variable is required", key)
-	}
-
-	val, err := time.ParseDuration(valStr)
-	if err != nil {
-		return 0, fmt.Errorf("invalid %s format (expected duration like '1h', '30m'): %w", key, err)
-	}
-
-	if val <= 0 {
-		return 0, fmt.Errorf("%s must be positive, got: %s", key, valStr)
-	}
-
-	return val, nil
-}
-
-// validateCacheDir validates and normalizes the cache directory path
-func validateCacheDir(dir string) (string, error) {
-	if dir == "" {
-		return "", fmt.Errorf("CACHE_DIR environment variable is required")
-	}
-
-	// Ensure cache directory is an absolute path
-	if !filepath.IsAbs(dir) {
-		absPath, err := filepath.Abs(dir)
-		if err != nil {
-			return "", fmt.Errorf("failed to resolve absolute path for CACHE_DIR: %w", err)
-		}
-		return absPath, nil
-	}
-
-	return dir, nil
-}
-
-func loadConfig() (*Config, error) {
-	cfg := &Config{
-		HTTPAddress:            getEnvWithDefault("HTTP_ADDRESS", "127.0.0.1"),
-		HTTPPort:               getEnvWithDefault("HTTP_PORT", "8080"),
-		AcestreamPlayerBaseURL: getEnvWithDefault("ACESTREAM_PLAYER_BASE_URL", "http://127.0.0.1:6878/ace/getstream"),
-		AcestreamEngineURL:     getEnvWithDefault("ACESTREAM_ENGINE_URL", "http://127.0.0.1:6878"),
-		UseMultiplexing:        parseBoolEnv("USE_MULTIPLEXING", true),
-	}
-
-	var err error
-
-	// Parse integer values
-	if cfg.StreamBufferSize, err = parseIntEnv("STREAM_BUFFER_SIZE", 1024*1024); err != nil {
-		return nil, err
-	}
-	if cfg.ProxyBufferSize, err = parseIntEnv("PROXY_BUFFER_SIZE", 4194304); err != nil {
-		return nil, err
-	}
-
-	// Parse duration values
-	if cfg.ProxyReadTimeout, err = parseDurationEnv("PROXY_READ_TIMEOUT", 5*time.Second); err != nil {
-		return nil, err
-	}
-	if cfg.ProxyWriteTimeout, err = parseDurationEnv("PROXY_WRITE_TIMEOUT", 10*time.Second); err != nil {
-		return nil, err
-	}
-
-	// Parse required values
-	if cfg.CacheDir, err = validateCacheDir(os.Getenv("CACHE_DIR")); err != nil {
-		return nil, err
-	}
-	if cfg.CacheTTL, err = parseRequiredDuration("CACHE_TTL"); err != nil {
-		return nil, err
-	}
-
-	return cfg, nil
-}
-
 // printConfig outputs the configuration to stdout
-func printConfig(cfg *Config, resCfg *config.ResilienceConfig) {
-	fmt.Printf("httpAddress: %v\n", cfg.HTTPAddress)
-	fmt.Printf("httpPort: %v\n", cfg.HTTPPort)
-	fmt.Printf("acestreamPlayerBaseUrl: %v\n", cfg.AcestreamPlayerBaseURL)
-	fmt.Printf("acestreamEngineUrl: %v\n", cfg.AcestreamEngineURL)
-	fmt.Printf("cacheDir: %v\n", cfg.CacheDir)
-	fmt.Printf("cacheTTL: %v\n", cfg.CacheTTL)
-	fmt.Printf("streamBufferSize: %v bytes\n", cfg.StreamBufferSize)
-	fmt.Printf("useMultiplexing: %v\n", cfg.UseMultiplexing)
-	fmt.Printf("proxyReadTimeout: %v\n", cfg.ProxyReadTimeout)
-	fmt.Printf("proxyWriteTimeout: %v\n", cfg.ProxyWriteTimeout)
-	fmt.Printf("proxyBufferSize: %v bytes\n", cfg.ProxyBufferSize)
-	fmt.Printf("logLevel: %v\n", resCfg.LogLevel)
+func printConfig(cfg *config.Config) {
+	fmt.Printf("httpAddress: %v\n", cfg.HTTP.Address)
+	fmt.Printf("httpPort: %v\n", cfg.HTTP.Port)
+	fmt.Printf("acestreamPlayerBaseUrl: %v\n", cfg.Acestream.PlayerBaseURL)
+	fmt.Printf("acestreamEngineUrl: %v\n", cfg.Acestream.EngineURL)
+	fmt.Printf("cacheDir: %v\n", cfg.Cache.Dir)
+	fmt.Printf("cacheTTL: %v\n", cfg.Cache.TTL)
+	fmt.Printf("streamBufferSize: %v bytes\n", cfg.Stream.BufferSize)
+	fmt.Printf("useMultiplexing: %v\n", cfg.Stream.UseMultiplexing)
+	fmt.Printf("proxyReadTimeout: %v\n", cfg.Proxy.ReadTimeout)
+	fmt.Printf("proxyWriteTimeout: %v\n", cfg.Proxy.WriteTimeout)
+	fmt.Printf("proxyBufferSize: %v bytes\n", cfg.Proxy.BufferSize)
+	fmt.Printf("playlistSources: %d\n", len(cfg.Playlists))
+	for _, pl := range cfg.Playlists {
+		fmt.Printf("  - %s: %s\n", pl.Name, pl.URL)
+	}
+	fmt.Printf("epgUrl: %v\n", cfg.EPG.URL)
+	fmt.Printf("logLevel: %v\n", cfg.Resilience.LogLevel)
 }
 
 // initDependencies initializes all application components
-func initDependencies(cfg *Config, resCfg *config.ResilienceConfig, resLogger *logging.Logger) (*dependencies, error) {
+func initDependencies(cfg *config.Config, resLogger *logging.Logger) (*dependencies, error) {
 	// Initialize cache storage
-	storage, err := cache.NewFileStorage(cfg.CacheDir)
+	storage, err := cache.NewFileStorage(cfg.Cache.Dir)
 	if err != nil {
 		return nil, fmt.Errorf("failed to initialize cache storage: %w", err)
 	}
 
 	// Initialize overrides manager
-	overridesPath := filepath.Join(cfg.CacheDir, "overrides.yaml")
+	overridesPath := filepath.Join(cfg.Cache.Dir, "overrides.yaml")
 	overridesMgr, err := overrides.NewManager(overridesPath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to initialize overrides manager: %w", err)
@@ -237,11 +86,7 @@ func initDependencies(cfg *Config, resCfg *config.ResilienceConfig, resLogger *l
 	log.Printf("Loaded %d channel overrides from %s", len(overridesMgr.List()), overridesPath)
 
 	// Initialize EPG cache
-	epgURL := os.Getenv("EPG_URL")
-	if epgURL == "" {
-		epgURL = "https://raw.githubusercontent.com/davidmuma/EPG_dobleM/master/guiatv.xml"
-	}
-	epgCache, err := epg.New(epgURL, 30*time.Second)
+	epgCache, err := epg.New(cfg.EPG.URL, 30*time.Second)
 	if err != nil {
 		log.Printf("Warning: Failed to initialize EPG cache: %v", err)
 		log.Printf("TVG-ID validation will not be available")
@@ -250,17 +95,17 @@ func initDependencies(cfg *Config, resCfg *config.ResilienceConfig, resLogger *l
 	}
 
 	// Initialize fetcher with 30 second timeout
-	fetch := fetcher.New(30*time.Second, storage, cfg.CacheTTL)
+	fetch := fetcher.New(30*time.Second, storage, cfg.Cache.TTL)
 
 	// Initialize rewriter
 	rw := rewriter.New()
 
 	// Initialize multiplexer
 	muxCfg := multiplexer.Config{
-		BufferSize:       cfg.StreamBufferSize,
+		BufferSize:       cfg.Stream.BufferSize,
 		ReadTimeout:      30 * time.Second,
 		WriteTimeout:     10 * time.Second,
-		ResilienceConfig: resCfg,
+		ResilienceConfig: &cfg.Resilience,
 		ResilienceLogger: resLogger,
 	}
 	mux := multiplexer.New(muxCfg)
@@ -281,26 +126,20 @@ func initDependencies(cfg *Config, resCfg *config.ResilienceConfig, resLogger *l
 
 func main() {
 	// Load and validate configuration
-	cfg, err := loadConfig()
+	cfg, err := config.Load()
 	if err != nil {
 		log.Fatalf("Configuration error: %v", err)
 	}
 
-	// Load resilience configuration
-	resCfg, err := config.LoadFromEnv()
-	if err != nil {
-		log.Fatalf("Failed to load resilience configuration: %v", err)
-	}
-
 	// Create resilience logger
-	logLevel := logging.ParseLogLevel(resCfg.LogLevel)
+	logLevel := logging.ParseLogLevel(cfg.Resilience.LogLevel)
 	resLogger := logging.New(logLevel, "[resilience]")
 
 	// Print configuration
-	printConfig(cfg, resCfg)
+	printConfig(cfg)
 
 	// Initialize all dependencies
-	deps, err := initDependencies(cfg, resCfg, resLogger)
+	deps, err := initDependencies(cfg, resLogger)
 	if err != nil {
 		log.Fatalf("Failed to initialize dependencies: %v", err)
 	}
@@ -314,9 +153,9 @@ func main() {
 
 	s := &http.Server{
 		Handler:      handler,
-		Addr:         fmt.Sprintf("%s:%s", cfg.HTTPAddress, cfg.HTTPPort),
-		ReadTimeout:  cfg.ProxyReadTimeout,
-		WriteTimeout: cfg.ProxyWriteTimeout,
+		Addr:         fmt.Sprintf("%s:%s", cfg.HTTP.Address, cfg.HTTP.Port),
+		ReadTimeout:  cfg.Proxy.ReadTimeout,
+		WriteTimeout: cfg.Proxy.WriteTimeout,
 		ErrorLog:     log.Default(),
 	}
 
@@ -350,14 +189,17 @@ func stripM3UHeader(content []byte) string {
 	return str
 }
 
-// mergePlaylistSources merges multiple playlist sources into a single M3U
-func mergePlaylistSources(sources []struct {
+// playlistSource represents a fetched playlist source
+type playlistSource struct {
 	name      string
 	content   []byte
 	err       error
 	fromCache bool
 	stale     bool
-}) string {
+}
+
+// mergePlaylistSources merges multiple playlist sources into a single M3U
+func mergePlaylistSources(sources []playlistSource) string {
 	var merged strings.Builder
 	merged.WriteString("#EXTM3U\n")
 
@@ -435,7 +277,7 @@ func processPlaylist(deps *dependencies, content string, baseURL string) []byte 
 }
 
 // createUnifiedPlaylistHandler creates an HTTP handler for the unified playlist endpoint
-func createUnifiedPlaylistHandler(deps *dependencies) http.HandlerFunc {
+func createUnifiedPlaylistHandler(cfg *config.Config, deps *dependencies) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
@@ -444,38 +286,52 @@ func createUnifiedPlaylistHandler(deps *dependencies) http.HandlerFunc {
 
 		baseURL := getBaseURL(r)
 
-		// Fetch both sources
-		elcanoContent, elcanoFromCache, elcanoStale, elcanoErr := deps.fetch.FetchWithCache(elcanoIPFSURL)
-		neweraContent, neweraFromCache, neweraStale, neweraErr := deps.fetch.FetchWithCache(neweraIPFSURL)
+		// Fetch all configured sources
+		sources := make([]playlistSource, 0, len(cfg.Playlists))
+		allFailed := true
 
-		// Check if both sources failed
-		if elcanoErr != nil && neweraErr != nil {
-			log.Printf("Failed to fetch unified playlist - both sources failed: elcano=%v, newera=%v", elcanoErr, neweraErr)
+		for _, pl := range cfg.Playlists {
+			content, fromCache, stale, err := deps.fetch.FetchWithCache(pl.URL)
+			sources = append(sources, playlistSource{
+				name:      pl.Name,
+				content:   content,
+				err:       err,
+				fromCache: fromCache,
+				stale:     stale,
+			})
+			if err == nil {
+				allFailed = false
+			}
+		}
+
+		// Check if all sources failed
+		if allFailed {
+			var errMsgs []string
+			for _, src := range sources {
+				if src.err != nil {
+					errMsgs = append(errMsgs, fmt.Sprintf("%s=%v", src.name, src.err))
+				}
+			}
+			log.Printf("Failed to fetch unified playlist - all sources failed: %s", strings.Join(errMsgs, ", "))
 			http.Error(w, "Bad Gateway", http.StatusBadGateway)
 			return
 		}
 
 		// Merge playlist sources
-		sources := []struct {
-			name      string
-			content   []byte
-			err       error
-			fromCache bool
-			stale     bool
-		}{
-			{"elcano", elcanoContent, elcanoErr, elcanoFromCache, elcanoStale},
-			{"newera", neweraContent, neweraErr, neweraFromCache, neweraStale},
-		}
 		mergedContent := mergePlaylistSources(sources)
 
 		// Clean up orphaned overrides
-		cleanupSources := []struct {
+		cleanupSources := make([]struct {
 			content []byte
 			err     error
 			stale   bool
-		}{
-			{elcanoContent, elcanoErr, elcanoStale},
-			{neweraContent, neweraErr, neweraStale},
+		}, len(sources))
+		for i, src := range sources {
+			cleanupSources[i] = struct {
+				content []byte
+				err     error
+				stale   bool
+			}{src.content, src.err, src.stale}
 		}
 		cleanOrphanedOverrides(deps, cleanupSources)
 
@@ -536,7 +392,7 @@ func createPlaylistHandler(deps *dependencies, sourceURL string, sourceName stri
 }
 
 // createStreamHandler creates the HTTP handler for streaming endpoints
-func createStreamHandler(cfg *Config, deps *dependencies) http.HandlerFunc {
+func createStreamHandler(cfg *config.Config, deps *dependencies) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		// Allow GET and HEAD requests (VLC sends HEAD to probe stream before playing)
 		if r.Method != http.MethodGet && r.Method != http.MethodHead {
@@ -574,7 +430,7 @@ func createStreamHandler(cfg *Config, deps *dependencies) http.HandlerFunc {
 		log.Printf("Stream request: contentID=%s, clientID=%s, pid=%d", contentID, clientID, pid)
 
 		// Build upstream URL with PID and optional transcode parameters
-		upstreamURL := fmt.Sprintf("%s/ace/getstream?id=%s&pid=%d", cfg.AcestreamEngineURL, contentID, pid)
+		upstreamURL := fmt.Sprintf("%s/ace/getstream?id=%s&pid=%d", cfg.Acestream.EngineURL, contentID, pid)
 
 		// Add optional transcode parameters
 		if transcodeAudio := r.URL.Query().Get("transcode_audio"); transcodeAudio != "" {
@@ -611,7 +467,7 @@ func createStreamHandler(cfg *Config, deps *dependencies) http.HandlerFunc {
 }
 
 // setupHandlers configures all HTTP routes and handlers
-func setupHandlers(cfg *Config, deps *dependencies) http.Handler {
+func setupHandlers(cfg *config.Config, deps *dependencies) http.Handler {
 	handler := http.NewServeMux()
 
 	handler.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
@@ -629,19 +485,21 @@ func setupHandlers(cfg *Config, deps *dependencies) http.Handler {
 	handler.HandleFunc("/stream", streamHandler)
 	handler.HandleFunc("/ace/getstream", streamHandler)
 
-	// Elcano playlist endpoint
-	handler.HandleFunc("/playlists/elcano.m3u", createPlaylistHandler(deps, elcanoIPFSURL, "elcano"))
-
-	// NewEra playlist endpoint
-	handler.HandleFunc("/playlists/newera.m3u", createPlaylistHandler(deps, neweraIPFSURL, "newera"))
+	// Individual playlist endpoints - one for each configured source
+	for _, pl := range cfg.Playlists {
+		path := fmt.Sprintf("/playlists/%s.m3u", pl.Name)
+		handler.HandleFunc(path, createPlaylistHandler(deps, pl.URL, pl.Name))
+	}
 
 	// Unified playlist endpoint - merges all sources
-	handler.HandleFunc("/playlist.m3u", createUnifiedPlaylistHandler(deps))
+	handler.HandleFunc("/playlist.m3u", createUnifiedPlaylistHandler(cfg, deps))
 
-	// API endpoints for channels
-	elcanoURL := elcanoIPFSURL
-	neweraURL := neweraIPFSURL
-	channelsHandler := api.NewChannelsHandler(deps.fetch, deps.overridesMgr, elcanoURL, neweraURL)
+	// API endpoints for channels - pass all playlist URLs
+	playlistURLs := make([]string, len(cfg.Playlists))
+	for i, pl := range cfg.Playlists {
+		playlistURLs[i] = pl.URL
+	}
+	channelsHandler := api.NewChannelsHandler(deps.fetch, deps.overridesMgr, playlistURLs...)
 	// Handle both /api/channels and /api/channels/{id}
 	handler.Handle("/api/channels", channelsHandler)
 	handler.Handle("/api/channels/", channelsHandler)

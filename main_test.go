@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/alorle/iptv-manager/cache"
+	"github.com/alorle/iptv-manager/config"
 	"github.com/alorle/iptv-manager/fetcher"
 	"github.com/alorle/iptv-manager/rewriter"
 )
@@ -850,21 +851,21 @@ func TestIntegration_RealEndpoints(t *testing.T) {
 	cleanup := setupRealEndpointsTestEnv(t, cacheDir)
 	defer cleanup()
 
-	cfg, err := loadConfig()
+	cfg, err := config.Load()
 	if err != nil {
 		t.Fatalf("Failed to load config: %v", err)
 	}
 
-	if !filepath.IsAbs(cfg.CacheDir) {
-		t.Fatalf("Cache directory must be absolute path, got: %s", cfg.CacheDir)
+	if !filepath.IsAbs(cfg.Cache.Dir) {
+		t.Fatalf("Cache directory must be absolute path, got: %s", cfg.Cache.Dir)
 	}
 
-	storage, err := cache.NewFileStorage(cfg.CacheDir)
+	storage, err := cache.NewFileStorage(cfg.Cache.Dir)
 	if err != nil {
 		t.Fatalf("Failed to initialize storage: %v", err)
 	}
 
-	fetch := fetcher.New(30*time.Second, storage, cfg.CacheTTL)
+	fetch := fetcher.New(30*time.Second, storage, cfg.Cache.TTL)
 	rw := rewriter.New()
 
 	mockServer := createMockIPFSServer(t, false, mockM3UContent)

@@ -10,8 +10,6 @@ import (
 	"time"
 )
 
-const defaultEPGURL = "https://raw.githubusercontent.com/davidmuma/EPG_dobleM/master/guiatv.xml"
-
 // Channel represents a channel element in the EPG XML
 type Channel struct {
 	ID          string `xml:"id,attr"`
@@ -40,7 +38,7 @@ type Cache struct {
 // New creates a new Cache and initializes it by fetching and parsing the EPG XML
 func New(epgURL string, timeout time.Duration) (*Cache, error) {
 	if epgURL == "" {
-		epgURL = defaultEPGURL
+		return nil, fmt.Errorf("EPG URL is required")
 	}
 
 	cache := &Cache{

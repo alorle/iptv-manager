@@ -35,17 +35,15 @@ type Channel struct {
 type ChannelsHandler struct {
 	fetcher      *fetcher.Fetcher
 	overridesMgr *overrides.Manager
-	elcanoURL    string
-	neweraURL    string
+	playlistURLs []string
 }
 
 // NewChannelsHandler creates a new handler for the channels API
-func NewChannelsHandler(fetch *fetcher.Fetcher, overridesMgr *overrides.Manager, elcanoURL, neweraURL string) *ChannelsHandler {
+func NewChannelsHandler(fetch *fetcher.Fetcher, overridesMgr *overrides.Manager, playlistURLs ...string) *ChannelsHandler {
 	return &ChannelsHandler{
 		fetcher:      fetch,
 		overridesMgr: overridesMgr,
-		elcanoURL:    elcanoURL,
-		neweraURL:    neweraURL,
+		playlistURLs: playlistURLs,
 	}
 }
 
@@ -270,32 +268,28 @@ func (h *ChannelsHandler) handleList(w http.ResponseWriter, r *http.Request) {
 	nameFilter := r.URL.Query().Get("name")
 	groupFilter := r.URL.Query().Get("group")
 
-	// Fetch both sources
-	elcanoContent, _, _, elcanoErr := h.fetcher.FetchWithCache(h.elcanoURL)
-	neweraContent, _, _, neweraErr := h.fetcher.FetchWithCache(h.neweraURL)
+	// Fetch all configured sources
+	var allStreams []streamData
+	allFailed := true
 
-	// Check if both sources failed
-	if elcanoErr != nil && neweraErr != nil {
-		log.Printf("Failed to fetch channels - both sources failed: elcano=%v, newera=%v", elcanoErr, neweraErr)
+	for i, url := range h.playlistURLs {
+		sourceName := domain.GetSourceName(url, i)
+		content, _, _, err := h.fetcher.FetchWithCache(url)
+
+		if err == nil {
+			streams := parseM3UStreams(content, sourceName)
+			allStreams = append(allStreams, streams...)
+			allFailed = false
+		} else {
+			log.Printf("Skipping %s source: %v", sourceName, err)
+		}
+	}
+
+	// Check if all sources failed
+	if allFailed {
+		log.Printf("Failed to fetch channels - all sources failed")
 		http.Error(w, "Bad Gateway", http.StatusBadGateway)
 		return
-	}
-
-	// Parse streams from both sources
-	var allStreams []streamData
-
-	if elcanoErr == nil {
-		elcanoStreams := parseM3UStreams(elcanoContent, "elcano")
-		allStreams = append(allStreams, elcanoStreams...)
-	} else {
-		log.Printf("Skipping elcano source: %v", elcanoErr)
-	}
-
-	if neweraErr == nil {
-		neweraStreams := parseM3UStreams(neweraContent, "newera")
-		allStreams = append(allStreams, neweraStreams...)
-	} else {
-		log.Printf("Skipping newera source: %v", neweraErr)
 	}
 
 	// Group streams by tvg-id into channels
@@ -344,29 +338,47 @@ func validateUpdateRequest(req *UpdateChannelRequest) bool {
 	return true
 }
 
-// fetchSourcesContent fetches content from both elcano and newera sources
-func (h *ChannelsHandler) fetchSourcesContent() (elcanoContent, neweraContent []byte, elcanoErr, neweraErr error) {
-	elcanoContent, _, _, elcanoErr = h.fetcher.FetchWithCache(h.elcanoURL)
-	neweraContent, _, _, neweraErr = h.fetcher.FetchWithCache(h.neweraURL)
-	return
-}
+// fetchSourcesContent fetches content from all configured sources
+func (h *ChannelsHandler) fetchSourcesContent() []struct {
+	content []byte
+	err     error
+	name    string
+} {
+	results := make([]struct {
+		content []byte
+		err     error
+		name    string
+	}, len(h.playlistURLs))
 
-// findStreamByID searches for a stream by acestream ID in the provided sources
-func findStreamByID(acestreamID string, elcanoContent, neweraContent []byte, elcanoErr, neweraErr error) *streamData {
-	if elcanoErr == nil {
-		elcanoStreams := parseM3UStreams(elcanoContent, "elcano")
-		for _, s := range elcanoStreams {
-			if s.AcestreamID == acestreamID {
-				return &s
-			}
+	for i, url := range h.playlistURLs {
+		content, _, _, err := h.fetcher.FetchWithCache(url)
+		results[i] = struct {
+			content []byte
+			err     error
+			name    string
+		}{
+			content: content,
+			err:     err,
+			name:    domain.GetSourceName(url, i),
 		}
 	}
 
-	if neweraErr == nil {
-		neweraStreams := parseM3UStreams(neweraContent, "newera")
-		for _, s := range neweraStreams {
-			if s.AcestreamID == acestreamID {
-				return &s
+	return results
+}
+
+// findStreamByID searches for a stream by acestream ID in the provided sources
+func findStreamByID(acestreamID string, sources []struct {
+	content []byte
+	err     error
+	name    string
+}) *streamData {
+	for _, source := range sources {
+		if source.err == nil {
+			streams := parseM3UStreams(source.content, source.name)
+			for _, s := range streams {
+				if s.AcestreamID == acestreamID {
+					return &s
+				}
 			}
 		}
 	}
@@ -445,15 +457,23 @@ func (h *ChannelsHandler) handleToggle(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Fetch sources
-	elcanoContent, neweraContent, elcanoErr, neweraErr := h.fetchSourcesContent()
-	if elcanoErr != nil && neweraErr != nil {
-		log.Printf("Failed to fetch channels - both sources failed: elcano=%v, newera=%v", elcanoErr, neweraErr)
+	sources := h.fetchSourcesContent()
+	allFailed := true
+	for _, src := range sources {
+		if src.err == nil {
+			allFailed = false
+			break
+		}
+	}
+
+	if allFailed {
+		log.Printf("Failed to fetch channels - all sources failed")
 		http.Error(w, "Bad Gateway", http.StatusBadGateway)
 		return
 	}
 
 	// Verify stream exists
-	if stream := findStreamByID(acestreamID, elcanoContent, neweraContent, elcanoErr, neweraErr); stream == nil {
+	if stream := findStreamByID(acestreamID, sources); stream == nil {
 		http.Error(w, "Stream not found", http.StatusNotFound)
 		return
 	}
@@ -471,7 +491,7 @@ func (h *ChannelsHandler) handleToggle(w http.ResponseWriter, r *http.Request) {
 	log.Printf("Updated stream %s with overrides", acestreamID)
 
 	// Build and return response
-	updatedStream := findStreamByID(acestreamID, elcanoContent, neweraContent, elcanoErr, neweraErr)
+	updatedStream := findStreamByID(acestreamID, sources)
 	if updatedStream != nil {
 		applyOverrideToStream(updatedStream, override)
 	}
@@ -504,14 +524,22 @@ func (h *ChannelsHandler) handleDelete(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Fetch sources and verify stream exists
-	elcanoContent, neweraContent, elcanoErr, neweraErr := h.fetchSourcesContent()
-	if elcanoErr != nil && neweraErr != nil {
-		log.Printf("Failed to fetch channels - both sources failed: elcano=%v, newera=%v", elcanoErr, neweraErr)
+	sources := h.fetchSourcesContent()
+	allFailed := true
+	for _, src := range sources {
+		if src.err == nil {
+			allFailed = false
+			break
+		}
+	}
+
+	if allFailed {
+		log.Printf("Failed to fetch channels - all sources failed")
 		http.Error(w, "Bad Gateway", http.StatusBadGateway)
 		return
 	}
 
-	originalStream := findStreamByID(acestreamID, elcanoContent, neweraContent, elcanoErr, neweraErr)
+	originalStream := findStreamByID(acestreamID, sources)
 	if originalStream == nil {
 		http.Error(w, "Stream not found", http.StatusNotFound)
 		return
