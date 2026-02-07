@@ -85,10 +85,7 @@ func (c *Cache) fetch(timeout time.Duration) error {
 
 	// Build the channel map and list
 	for _, ch := range tv.Channels {
-		info := ChannelInfo{
-			ID:          ch.ID,
-			DisplayName: ch.DisplayName,
-		}
+		info := ChannelInfo(ch)
 		c.channels[ch.ID] = info
 		c.channelList = append(c.channelList, info)
 	}

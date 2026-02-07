@@ -70,7 +70,7 @@ func LoadFromEnv() (*ResilienceConfig, error) {
 	if val := os.Getenv("RECONNECT_MAX_BACKOFF"); val != "" {
 		duration, err := time.ParseDuration(val)
 		if err != nil {
-			errors = append(errors, fmt.Sprintf("RECONNECT_MAX_BACKOFF: invalid duration format (use '30s', '1m', etc.)"))
+			errors = append(errors, "RECONNECT_MAX_BACKOFF: invalid duration format (use '30s', '1m', etc.)")
 		} else if duration <= 0 {
 			errors = append(errors, "RECONNECT_MAX_BACKOFF must be positive")
 		} else {
@@ -82,7 +82,7 @@ func LoadFromEnv() (*ResilienceConfig, error) {
 	if val := os.Getenv("RECONNECT_INITIAL_BACKOFF"); val != "" {
 		duration, err := time.ParseDuration(val)
 		if err != nil {
-			errors = append(errors, fmt.Sprintf("RECONNECT_INITIAL_BACKOFF: invalid duration format (use '500ms', '1s', etc.)"))
+			errors = append(errors, "RECONNECT_INITIAL_BACKOFF: invalid duration format (use '500ms', '1s', etc.)")
 		} else if duration <= 0 {
 			errors = append(errors, "RECONNECT_INITIAL_BACKOFF must be positive")
 		} else {
@@ -94,7 +94,7 @@ func LoadFromEnv() (*ResilienceConfig, error) {
 	if val := os.Getenv("CB_FAILURE_THRESHOLD"); val != "" {
 		threshold, err := strconv.Atoi(val)
 		if err != nil {
-			errors = append(errors, fmt.Sprintf("CB_FAILURE_THRESHOLD: must be a valid integer"))
+			errors = append(errors, "CB_FAILURE_THRESHOLD: must be a valid integer")
 		} else if threshold <= 0 {
 			errors = append(errors, "CB_FAILURE_THRESHOLD must be positive")
 		} else {
@@ -106,7 +106,7 @@ func LoadFromEnv() (*ResilienceConfig, error) {
 	if val := os.Getenv("CB_TIMEOUT"); val != "" {
 		duration, err := time.ParseDuration(val)
 		if err != nil {
-			errors = append(errors, fmt.Sprintf("CB_TIMEOUT: invalid duration format (use '30s', '1m', etc.)"))
+			errors = append(errors, "CB_TIMEOUT: invalid duration format (use '30s', '1m', etc.)")
 		} else if duration <= 0 {
 			errors = append(errors, "CB_TIMEOUT must be positive")
 		} else {
@@ -118,7 +118,7 @@ func LoadFromEnv() (*ResilienceConfig, error) {
 	if val := os.Getenv("CB_HALF_OPEN_REQUESTS"); val != "" {
 		requests, err := strconv.Atoi(val)
 		if err != nil {
-			errors = append(errors, fmt.Sprintf("CB_HALF_OPEN_REQUESTS: must be a valid integer"))
+			errors = append(errors, "CB_HALF_OPEN_REQUESTS: must be a valid integer")
 		} else if requests <= 0 {
 			errors = append(errors, "CB_HALF_OPEN_REQUESTS must be positive")
 		} else {
@@ -130,7 +130,7 @@ func LoadFromEnv() (*ResilienceConfig, error) {
 	if val := os.Getenv("HEALTH_CHECK_INTERVAL"); val != "" {
 		duration, err := time.ParseDuration(val)
 		if err != nil {
-			errors = append(errors, fmt.Sprintf("HEALTH_CHECK_INTERVAL: invalid duration format (use '30s', '1m', etc.)"))
+			errors = append(errors, "HEALTH_CHECK_INTERVAL: invalid duration format (use '30s', '1m', etc.)")
 		} else if duration <= 0 {
 			errors = append(errors, "HEALTH_CHECK_INTERVAL must be positive")
 		} else {
