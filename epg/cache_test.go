@@ -72,10 +72,10 @@ func TestNew_DefaultURL(t *testing.T) {
 	}
 
 	if cache.epgURL == "" {
-		cache.epgURL = "https://raw.githubusercontent.com/davidmuma/EPG_dobleM/master/guiatv.xml"
+		cache.epgURL = defaultEPGURL
 	}
 
-	expected := "https://raw.githubusercontent.com/davidmuma/EPG_dobleM/master/guiatv.xml"
+	expected := defaultEPGURL
 	if cache.epgURL != expected {
 		t.Errorf("Expected default URL %s, got %s", expected, cache.epgURL)
 	}

@@ -665,7 +665,7 @@ func TestIntegration_HTTPStatusCodes(t *testing.T) {
 
 			// Pre-populate cache if needed
 			if tt.cacheExists {
-				cacheKey := fmt.Sprintf("%s", mockServer.URL)
+				cacheKey := mockServer.URL
 				_ = storage.Set(cacheKey, []byte(mockM3UContent))
 			}
 
@@ -696,10 +696,10 @@ func TestIntegration_HTTPStatusCodes(t *testing.T) {
 				t.Fatalf("Failed to make request: %v", err)
 			}
 			defer func() {
-		if closeErr := resp.Body.Close(); closeErr != nil {
-			t.Errorf("failed to close response body: %v", closeErr)
-		}
-	}()
+				if closeErr := resp.Body.Close(); closeErr != nil {
+					t.Errorf("failed to close response body: %v", closeErr)
+				}
+			}()
 
 			// Verify status code
 			if resp.StatusCode != tt.expectedStatusCode {
@@ -865,10 +865,10 @@ func TestIntegration_RealEndpoints(t *testing.T) {
 			t.Fatalf("Failed to request health endpoint: %v", err)
 		}
 		defer func() {
-		if closeErr := resp.Body.Close(); closeErr != nil {
-			t.Errorf("failed to close response body: %v", closeErr)
-		}
-	}()
+			if closeErr := resp.Body.Close(); closeErr != nil {
+				t.Errorf("failed to close response body: %v", closeErr)
+			}
+		}()
 
 		if resp.StatusCode != http.StatusOK {
 			t.Errorf("Expected status code %d, got %d", http.StatusOK, resp.StatusCode)
@@ -888,10 +888,10 @@ func TestIntegration_RealEndpoints(t *testing.T) {
 			t.Fatalf("Failed to request elcano endpoint: %v", err)
 		}
 		defer func() {
-		if closeErr := resp.Body.Close(); closeErr != nil {
-			t.Errorf("failed to close response body: %v", closeErr)
-		}
-	}()
+			if closeErr := resp.Body.Close(); closeErr != nil {
+				t.Errorf("failed to close response body: %v", closeErr)
+			}
+		}()
 
 		if resp.StatusCode != http.StatusOK {
 			t.Errorf("Expected status code %d, got %d", http.StatusOK, resp.StatusCode)
@@ -918,10 +918,10 @@ func TestIntegration_RealEndpoints(t *testing.T) {
 			t.Fatalf("Failed to request newera endpoint: %v", err)
 		}
 		defer func() {
-		if closeErr := resp.Body.Close(); closeErr != nil {
-			t.Errorf("failed to close response body: %v", closeErr)
-		}
-	}()
+			if closeErr := resp.Body.Close(); closeErr != nil {
+				t.Errorf("failed to close response body: %v", closeErr)
+			}
+		}()
 
 		if resp.StatusCode != http.StatusOK {
 			t.Errorf("Expected status code %d, got %d", http.StatusOK, resp.StatusCode)
