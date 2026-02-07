@@ -69,27 +69,43 @@ func TestNewClient(t *testing.T) {
 			// Clear environment variables first to ensure clean state
 			oldEngineURL := os.Getenv(envEngineURL)
 			oldTimeout := os.Getenv(envTimeout)
-			os.Unsetenv(envEngineURL)
-			os.Unsetenv(envTimeout)
+			if err := os.Unsetenv(envEngineURL); err != nil {
+				t.Fatalf("failed to unset %s: %v", envEngineURL, err)
+			}
+			if err := os.Unsetenv(envTimeout); err != nil {
+				t.Fatalf("failed to unset %s: %v", envTimeout, err)
+			}
 			defer func() {
 				if oldEngineURL != "" {
-					os.Setenv(envEngineURL, oldEngineURL)
+					if err := os.Setenv(envEngineURL, oldEngineURL); err != nil {
+						t.Errorf("failed to restore %s: %v", envEngineURL, err)
+					}
 				}
 				if oldTimeout != "" {
-					os.Setenv(envTimeout, oldTimeout)
+					if err := os.Setenv(envTimeout, oldTimeout); err != nil {
+						t.Errorf("failed to restore %s: %v", envTimeout, err)
+					}
 				}
 			}()
 
 			// Set up test environment variables
 			if tt.envEngineURL != "" {
-				os.Setenv(envEngineURL, tt.envEngineURL)
+				if err := os.Setenv(envEngineURL, tt.envEngineURL); err != nil {
+					t.Fatalf("failed to set %s: %v", envEngineURL, err)
+				}
 			}
 			if tt.envTimeout != "" {
-				os.Setenv(envTimeout, tt.envTimeout)
+				if err := os.Setenv(envTimeout, tt.envTimeout); err != nil {
+					t.Fatalf("failed to set %s: %v", envTimeout, err)
+				}
 			}
 
 			client := NewClient(tt.config)
-			defer client.Close()
+			defer func() {
+				if err := client.Close(); err != nil {
+					t.Errorf("failed to close client: %v", err)
+				}
+			}()
 
 			if client.baseURL != tt.expectedURL {
 				t.Errorf("expected baseURL %s, got %s", tt.expectedURL, client.baseURL)
@@ -309,7 +325,11 @@ func TestHealthCheck(t *testing.T) {
 				EngineURL: server.URL,
 				Timeout:   5 * time.Second,
 			})
-			defer client.Close()
+			defer func() {
+				if err := client.Close(); err != nil {
+					t.Errorf("failed to close client: %v", err)
+				}
+			}()
 
 			ctx := context.Background()
 			err := client.HealthCheck(ctx)
@@ -341,7 +361,11 @@ func TestHealthCheckTimeout(t *testing.T) {
 		EngineURL: server.URL,
 		Timeout:   500 * time.Millisecond,
 	})
-	defer client.Close()
+	defer func() {
+		if err := client.Close(); err != nil {
+			t.Errorf("failed to close client: %v", err)
+		}
+	}()
 
 	ctx := context.Background()
 	err := client.HealthCheck(ctx)
@@ -371,7 +395,11 @@ func TestPeriodicHealthChecks(t *testing.T) {
 		HealthCheckInterval: 100 * time.Millisecond,
 		Logger:              logger,
 	})
-	defer client.Close()
+	defer func() {
+		if err := client.Close(); err != nil {
+			t.Errorf("failed to close client: %v", err)
+		}
+	}()
 
 	// Wait for at least 3 health checks
 	time.Sleep(350 * time.Millisecond)
@@ -399,7 +427,11 @@ func TestHealthCheckDisabled(t *testing.T) {
 		Timeout:             5 * time.Second,
 		HealthCheckInterval: 0, // Disabled
 	})
-	defer client.Close()
+	defer func() {
+		if err := client.Close(); err != nil {
+			t.Errorf("failed to close client: %v", err)
+		}
+	}()
 
 	// Wait a bit
 	time.Sleep(200 * time.Millisecond)
@@ -442,7 +474,11 @@ func TestHealthCheckIntegrationWithCircuitBreaker(t *testing.T) {
 		CircuitBreaker:      cb,
 		Logger:              logger,
 	})
-	defer client.Close()
+	defer func() {
+		if err := client.Close(); err != nil {
+			t.Errorf("failed to close client: %v", err)
+		}
+	}()
 
 	// Wait for health checks to run
 	time.Sleep(500 * time.Millisecond)
@@ -475,7 +511,11 @@ func TestGetHealthStatus(t *testing.T) {
 		HealthCheckInterval: 100 * time.Millisecond,
 		Logger:              logger,
 	})
-	defer client.Close()
+	defer func() {
+		if err := client.Close(); err != nil {
+			t.Errorf("failed to close client: %v", err)
+		}
+	}()
 
 	// Initial status should be healthy
 	status := client.GetHealthStatus()
@@ -515,7 +555,11 @@ func TestHealthCheckFailureUpdatesStatus(t *testing.T) {
 		HealthCheckInterval: 100 * time.Millisecond,
 		Logger:              logger,
 	})
-	defer client.Close()
+	defer func() {
+		if err := client.Close(); err != nil {
+			t.Errorf("failed to close client: %v", err)
+		}
+	}()
 
 	// Wait for a health check to run
 	time.Sleep(150 * time.Millisecond)
@@ -556,7 +600,9 @@ func TestClientCloseStopsHealthChecks(t *testing.T) {
 	countBefore := requestCount.Load()
 
 	// Close the client
-	client.Close()
+	if err := client.Close(); err != nil {
+		t.Errorf("failed to close client: %v", err)
+	}
 
 	// Wait a bit more
 	time.Sleep(250 * time.Millisecond)
