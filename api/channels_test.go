@@ -160,19 +160,19 @@ func TestDeleteOverride_InvalidID(t *testing.T) {
 			name:       "too short",
 			id:         "1234567890abcdef",
 			expectCode: http.StatusBadRequest,
-			expectBody: "Invalid acestream_id: must be 40 characters",
+			expectBody: "Invalid acestream_id: must be 40 hexadecimal characters",
 		},
 		{
 			name:       "too long",
 			id:         "1234567890abcdef1234567890abcdef123456789",
 			expectCode: http.StatusBadRequest,
-			expectBody: "Invalid acestream_id: must be 40 characters",
+			expectBody: "Invalid acestream_id: must be 40 hexadecimal characters",
 		},
 		{
 			name:       "non-hex characters",
 			id:         "1234567890abcdef1234567890abcdef1234567g",
 			expectCode: http.StatusBadRequest,
-			expectBody: "Invalid acestream_id: must be hexadecimal",
+			expectBody: "Invalid acestream_id: must be 40 hexadecimal characters",
 		},
 	}
 

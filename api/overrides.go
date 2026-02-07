@@ -23,19 +23,6 @@ func NewOverridesHandler(overridesMgr *overrides.Manager, epgCache TVGValidator)
 	}
 }
 
-// validateAcestreamID validates that an acestream ID is exactly 40 hexadecimal characters
-func validateAcestreamID(id string) bool {
-	if len(id) != 40 {
-		return false
-	}
-	for _, c := range id {
-		if !((c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F')) {
-			return false
-		}
-	}
-	return true
-}
-
 // ServeHTTP handles all override-related requests
 func (h *OverridesHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// Extract path after /api/overrides
@@ -248,94 +235,53 @@ type BulkUpdateResponse struct {
 }
 
 // handleBulkUpdate handles PATCH /api/overrides/bulk
-func (h *OverridesHandler) handleBulkUpdate(w http.ResponseWriter, r *http.Request) {
-	// Check for force parameter (skip TVG-ID validation)
-	force := r.URL.Query().Get("force") == "true"
-
-	// Check for atomic parameter (default to true for safety)
-	atomic := r.URL.Query().Get("atomic") != "false"
-
-	// Parse request body
-	var req BulkUpdateRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "Invalid request body", http.StatusBadRequest)
-		return
+// validateBulkRequest validates the bulk update request
+func validateBulkRequest(req *BulkUpdateRequest) bool {
+	if len(req.AcestreamIDs) == 0 || req.Field == "" {
+		return false
 	}
 
-	// Validate request
-	if len(req.AcestreamIDs) == 0 {
-		http.Error(w, "acestream_ids cannot be empty", http.StatusBadRequest)
-		return
-	}
-
-	if req.Field == "" {
-		http.Error(w, "field cannot be empty", http.StatusBadRequest)
-		return
-	}
-
-	// Validate all acestream IDs
 	for _, id := range req.AcestreamIDs {
 		if !validateAcestreamID(id) {
-			http.Error(w, "Invalid acestream_id: "+id+" must be 40 hexadecimal characters", http.StatusBadRequest)
-			return
+			return false
 		}
 	}
 
-	// Validate TVG-ID if that's the field being updated (unless force=true)
-	if !force && req.Field == "tvg_id" && h.epgCache != nil {
-		if strVal, ok := req.Value.(string); ok {
-			tvgID := strings.TrimSpace(strVal)
+	return true
+}
 
-			// Empty TVG-ID is valid (means "no EPG")
-			if tvgID != "" && !h.epgCache.IsValid(tvgID) {
-				// Get suggestions for invalid TVG-ID
-				suggestions := h.getSuggestions(tvgID, 10)
-
-				validationErr := ValidationError{
-					Error:       "validation_error",
-					Field:       "tvg_id",
-					Message:     "TVG-ID not found in EPG data",
-					Suggestions: suggestions,
-				}
-
-				w.Header().Set("Content-Type", "application/json")
-				w.WriteHeader(http.StatusBadRequest)
-				if err := json.NewEncoder(w).Encode(validationErr); err != nil {
-					log.Printf("Failed to encode validation error: %v", err)
-				}
-				return
-			}
-		}
+// validateTVGID validates a TVG-ID against EPG cache if available
+func (h *OverridesHandler) validateTVGID(tvgID string) (bool, []string) {
+	if tvgID == "" || h.epgCache == nil {
+		return true, nil
 	}
 
-	// Perform bulk update
-	result, err := h.overridesMgr.BulkUpdate(req.AcestreamIDs, req.Field, req.Value, atomic)
-	if err != nil {
-		log.Printf("Bulk update failed: %v", err)
-
-		// If result is not nil, return partial results
-		if result != nil {
-			response := BulkUpdateResponse{
-				Updated: result.Updated,
-				Failed:  result.Failed,
-				Errors:  result.Errors,
-			}
-
-			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(http.StatusInternalServerError)
-			if encErr := json.NewEncoder(w).Encode(response); encErr != nil {
-				log.Printf("Failed to encode bulk update response: %v", encErr)
-			}
-			return
-		}
-
-		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
-		return
+	if h.epgCache.IsValid(tvgID) {
+		return true, nil
 	}
 
-	log.Printf("Bulk update completed: %d updated, %d failed", result.Updated, result.Failed)
+	suggestions := h.getSuggestions(tvgID, 10)
+	return false, suggestions
+}
 
-	// Return the result
+// respondWithValidationError sends a validation error response
+func respondWithValidationError(w http.ResponseWriter, field, message string, suggestions []string) {
+	validationErr := ValidationError{
+		Error:       "validation_error",
+		Field:       field,
+		Message:     message,
+		Suggestions: suggestions,
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusBadRequest)
+	if err := json.NewEncoder(w).Encode(validationErr); err != nil {
+		log.Printf("Failed to encode validation error: %v", err)
+	}
+}
+
+// respondWithBulkResult sends a bulk update result response
+func respondWithBulkResult(w http.ResponseWriter, result *overrides.BulkUpdateResult) {
 	response := BulkUpdateResponse{
 		Updated: result.Updated,
 		Failed:  result.Failed,
@@ -343,8 +289,6 @@ func (h *OverridesHandler) handleBulkUpdate(w http.ResponseWriter, r *http.Reque
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-
-	// Return 200 if all succeeded, 207 Multi-Status if some failed
 	if result.Failed > 0 {
 		w.WriteHeader(http.StatusMultiStatus)
 	} else {
@@ -354,4 +298,46 @@ func (h *OverridesHandler) handleBulkUpdate(w http.ResponseWriter, r *http.Reque
 	if err := json.NewEncoder(w).Encode(response); err != nil {
 		log.Printf("Failed to encode bulk update response: %v", err)
 	}
+}
+
+func (h *OverridesHandler) handleBulkUpdate(w http.ResponseWriter, r *http.Request) {
+	force := r.URL.Query().Get("force") == "true"
+	atomic := r.URL.Query().Get("atomic") != "false"
+
+	var req BulkUpdateRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	if !validateBulkRequest(&req) {
+		http.Error(w, "acestream_ids cannot be empty and must be valid; field cannot be empty", http.StatusBadRequest)
+		return
+	}
+
+	// Validate TVG-ID if updating that field (unless force=true)
+	if !force && req.Field == "tvg_id" {
+		if strVal, ok := req.Value.(string); ok {
+			tvgID := strings.TrimSpace(strVal)
+			if valid, suggestions := h.validateTVGID(tvgID); !valid {
+				respondWithValidationError(w, "tvg_id", "TVG-ID not found in EPG data", suggestions)
+				return
+			}
+		}
+	}
+
+	result, err := h.overridesMgr.BulkUpdate(req.AcestreamIDs, req.Field, req.Value, atomic)
+	if err != nil {
+		log.Printf("Bulk update failed: %v", err)
+		if result != nil {
+			w.WriteHeader(http.StatusInternalServerError)
+			respondWithBulkResult(w, result)
+			return
+		}
+		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		return
+	}
+
+	log.Printf("Bulk update completed: %d updated, %d failed", result.Updated, result.Failed)
+	respondWithBulkResult(w, result)
 }

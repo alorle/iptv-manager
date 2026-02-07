@@ -353,114 +353,148 @@ type UpdateChannelRequest struct {
 	GroupTitle *string `json:"group_title,omitempty"`
 }
 
-// handleToggle handles the PATCH /api/channels/{acestream_id} request
-func (h *ChannelsHandler) handleToggle(w http.ResponseWriter, r *http.Request) {
-	// Extract acestream_id from the URL path
-	path := strings.TrimPrefix(r.URL.Path, "/api/channels/")
-	acestreamID := strings.TrimSpace(path)
-
-	// Validate acestream ID format (40 hex characters)
+// validateAcestreamID validates that an acestream ID is 40 hexadecimal characters
+func validateAcestreamID(acestreamID string) bool {
 	if len(acestreamID) != 40 {
-		http.Error(w, "Invalid acestream_id: must be 40 characters", http.StatusBadRequest)
-		return
+		return false
 	}
-
-	// Validate that it's hexadecimal
 	for _, c := range acestreamID {
 		if !((c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F')) {
-			http.Error(w, "Invalid acestream_id: must be hexadecimal", http.StatusBadRequest)
-			return
+			return false
+		}
+	}
+	return true
+}
+
+// validateUpdateRequest validates the update channel request fields
+func validateUpdateRequest(req *UpdateChannelRequest) bool {
+	if req.TvgID != nil && strings.TrimSpace(*req.TvgID) == "" {
+		return false
+	}
+	if req.TvgName != nil && strings.TrimSpace(*req.TvgName) == "" {
+		return false
+	}
+	return true
+}
+
+// fetchSourcesContent fetches content from both elcano and newera sources
+func (h *ChannelsHandler) fetchSourcesContent() (elcanoContent, neweraContent []byte, elcanoErr, neweraErr error) {
+	elcanoContent, _, _, elcanoErr = h.fetcher.FetchWithCache(h.elcanoURL)
+	neweraContent, _, _, neweraErr = h.fetcher.FetchWithCache(h.neweraURL)
+	return
+}
+
+// findStreamByID searches for a stream by acestream ID in the provided sources
+func findStreamByID(acestreamID string, elcanoContent, neweraContent []byte, elcanoErr, neweraErr error) *streamData {
+	if elcanoErr == nil {
+		elcanoStreams := parseM3UStreams(elcanoContent, "elcano")
+		for _, s := range elcanoStreams {
+			if s.AcestreamID == acestreamID {
+				return &s
+			}
 		}
 	}
 
-	// Parse request body
+	if neweraErr == nil {
+		neweraStreams := parseM3UStreams(neweraContent, "newera")
+		for _, s := range neweraStreams {
+			if s.AcestreamID == acestreamID {
+				return &s
+			}
+		}
+	}
+
+	return nil
+}
+
+// mergeOverrideWithRequest merges the request fields into the existing override
+func mergeOverrideWithRequest(existing *overrides.ChannelOverride, req *UpdateChannelRequest) overrides.ChannelOverride {
+	var override overrides.ChannelOverride
+	if existing != nil {
+		override = *existing
+	}
+
+	if req.Enabled != nil {
+		override.Enabled = req.Enabled
+	}
+	if req.TvgID != nil {
+		override.TvgID = req.TvgID
+	}
+	if req.TvgName != nil {
+		override.TvgName = req.TvgName
+	}
+	if req.TvgLogo != nil {
+		override.TvgLogo = req.TvgLogo
+	}
+	if req.GroupTitle != nil {
+		override.GroupTitle = req.GroupTitle
+	}
+
+	return override
+}
+
+// applyOverrideToStream applies override settings to a stream
+func applyOverrideToStream(stream *streamData, override overrides.ChannelOverride) {
+	stream.HasOverride = true
+
+	if override.Enabled != nil {
+		stream.Enabled = *override.Enabled
+	}
+	if override.TvgID != nil {
+		stream.TvgID = *override.TvgID
+	}
+	if override.TvgName != nil {
+		stream.TvgName = *override.TvgName
+	}
+	if override.TvgLogo != nil {
+		stream.TvgLogo = *override.TvgLogo
+	}
+	if override.GroupTitle != nil {
+		stream.GroupTitle = *override.GroupTitle
+	}
+}
+
+// handleToggle handles the PATCH /api/channels/{acestream_id} request
+func (h *ChannelsHandler) handleToggle(w http.ResponseWriter, r *http.Request) {
+	// Extract and validate acestream_id
+	path := strings.TrimPrefix(r.URL.Path, "/api/channels/")
+	acestreamID := strings.TrimSpace(path)
+
+	if !validateAcestreamID(acestreamID) {
+		http.Error(w, "Invalid acestream_id: must be 40 hexadecimal characters", http.StatusBadRequest)
+		return
+	}
+
+	// Parse and validate request body
 	var req UpdateChannelRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, "Invalid request body", http.StatusBadRequest)
 		return
 	}
 
-	// Validate tvg_id and tvg_name are not empty if provided
-	if req.TvgID != nil && strings.TrimSpace(*req.TvgID) == "" {
-		http.Error(w, "tvg_id cannot be empty", http.StatusBadRequest)
+	if !validateUpdateRequest(&req) {
+		http.Error(w, "tvg_id and tvg_name cannot be empty", http.StatusBadRequest)
 		return
 	}
 
-	if req.TvgName != nil && strings.TrimSpace(*req.TvgName) == "" {
-		http.Error(w, "tvg_name cannot be empty", http.StatusBadRequest)
-		return
-	}
-
-	// Check if the channel exists in any source
-	elcanoContent, _, _, elcanoErr := h.fetcher.FetchWithCache(h.elcanoURL)
-	neweraContent, _, _, neweraErr := h.fetcher.FetchWithCache(h.neweraURL)
-
-	// Check if both sources failed
+	// Fetch sources
+	elcanoContent, neweraContent, elcanoErr, neweraErr := h.fetchSourcesContent()
 	if elcanoErr != nil && neweraErr != nil {
 		log.Printf("Failed to fetch channels - both sources failed: elcano=%v, newera=%v", elcanoErr, neweraErr)
 		http.Error(w, "Bad Gateway", http.StatusBadGateway)
 		return
 	}
 
-	// Check if the acestream_id exists in any source
-	streamFound := false
-
-	if elcanoErr == nil {
-		elcanoStreams := parseM3UStreams(elcanoContent, "elcano")
-		for _, s := range elcanoStreams {
-			if s.AcestreamID == acestreamID {
-				streamFound = true
-				break
-			}
-		}
-	}
-
-	if !streamFound && neweraErr == nil {
-		neweraStreams := parseM3UStreams(neweraContent, "newera")
-		for _, s := range neweraStreams {
-			if s.AcestreamID == acestreamID {
-				streamFound = true
-				break
-			}
-		}
-	}
-
-	if !streamFound {
+	// Verify stream exists
+	if stream := findStreamByID(acestreamID, elcanoContent, neweraContent, elcanoErr, neweraErr); stream == nil {
 		http.Error(w, "Stream not found", http.StatusNotFound)
 		return
 	}
 
-	// Get existing override or create a new one
+	// Merge and save override
 	existingOverride := h.overridesMgr.Get(acestreamID)
-	var override overrides.ChannelOverride
+	override := mergeOverrideWithRequest(existingOverride, &req)
 
-	if existingOverride != nil {
-		// Copy existing override
-		override = *existingOverride
-	}
-
-	// Perform partial merge - only update fields that are present in the request
-	if req.Enabled != nil {
-		override.Enabled = req.Enabled
-	}
-
-	if req.TvgID != nil {
-		override.TvgID = req.TvgID
-	}
-
-	if req.TvgName != nil {
-		override.TvgName = req.TvgName
-	}
-
-	if req.TvgLogo != nil {
-		override.TvgLogo = req.TvgLogo
-	}
-
-	if req.GroupTitle != nil {
-		override.GroupTitle = req.GroupTitle
-	}
-
-	// Save the override to disk immediately
 	if err := h.overridesMgr.Set(acestreamID, override); err != nil {
 		log.Printf("Failed to save override for %s: %v", acestreamID, err)
 		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
@@ -469,51 +503,12 @@ func (h *ChannelsHandler) handleToggle(w http.ResponseWriter, r *http.Request) {
 
 	log.Printf("Updated stream %s with overrides", acestreamID)
 
-	// Return the updated stream wrapped in a response
-	var updatedStream *streamData
-
-	if elcanoErr == nil {
-		elcanoStreams := parseM3UStreams(elcanoContent, "elcano")
-		for _, s := range elcanoStreams {
-			if s.AcestreamID == acestreamID {
-				updatedStream = &s
-				break
-			}
-		}
-	}
-
-	if updatedStream == nil && neweraErr == nil {
-		neweraStreams := parseM3UStreams(neweraContent, "newera")
-		for _, s := range neweraStreams {
-			if s.AcestreamID == acestreamID {
-				updatedStream = &s
-				break
-			}
-		}
-	}
-
-	// Apply all overrides to the stream
+	// Build and return response
+	updatedStream := findStreamByID(acestreamID, elcanoContent, neweraContent, elcanoErr, neweraErr)
 	if updatedStream != nil {
-		updatedStream.HasOverride = true
-
-		if override.Enabled != nil {
-			updatedStream.Enabled = *override.Enabled
-		}
-		if override.TvgID != nil {
-			updatedStream.TvgID = *override.TvgID
-		}
-		if override.TvgName != nil {
-			updatedStream.TvgName = *override.TvgName
-		}
-		if override.TvgLogo != nil {
-			updatedStream.TvgLogo = *override.TvgLogo
-		}
-		if override.GroupTitle != nil {
-			updatedStream.GroupTitle = *override.GroupTitle
-		}
+		applyOverrideToStream(updatedStream, override)
 	}
 
-	// Return the updated stream as JSON
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
 
@@ -524,71 +519,33 @@ func (h *ChannelsHandler) handleToggle(w http.ResponseWriter, r *http.Request) {
 
 // handleDelete handles the DELETE /api/channels/{acestream_id}/override request
 func (h *ChannelsHandler) handleDelete(w http.ResponseWriter, r *http.Request) {
-	// Extract acestream_id from the URL path
-	// Expected format: /api/channels/{acestream_id}/override
+	// Extract and validate acestream_id
 	path := strings.TrimPrefix(r.URL.Path, "/api/channels/")
 	path = strings.TrimSuffix(path, "/override")
 	acestreamID := strings.TrimSpace(path)
 
-	// Validate acestream ID format (40 hex characters)
-	if len(acestreamID) != 40 {
-		http.Error(w, "Invalid acestream_id: must be 40 characters", http.StatusBadRequest)
+	if !validateAcestreamID(acestreamID) {
+		http.Error(w, "Invalid acestream_id: must be 40 hexadecimal characters", http.StatusBadRequest)
 		return
 	}
 
-	// Validate that it's hexadecimal
-	for _, c := range acestreamID {
-		if !((c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F')) {
-			http.Error(w, "Invalid acestream_id: must be hexadecimal", http.StatusBadRequest)
-			return
-		}
-	}
-
-	// Check if override exists for this acestream_id
+	// Check if override exists
 	existingOverride := h.overridesMgr.Get(acestreamID)
 	if existingOverride == nil {
 		http.Error(w, "No override found for this acestream_id", http.StatusNotFound)
 		return
 	}
 
-	// Check if the channel exists in any source
-	elcanoContent, _, _, elcanoErr := h.fetcher.FetchWithCache(h.elcanoURL)
-	neweraContent, _, _, neweraErr := h.fetcher.FetchWithCache(h.neweraURL)
-
-	// Check if both sources failed
+	// Fetch sources and verify stream exists
+	elcanoContent, neweraContent, elcanoErr, neweraErr := h.fetchSourcesContent()
 	if elcanoErr != nil && neweraErr != nil {
 		log.Printf("Failed to fetch channels - both sources failed: elcano=%v, newera=%v", elcanoErr, neweraErr)
 		http.Error(w, "Bad Gateway", http.StatusBadGateway)
 		return
 	}
 
-	// Check if the acestream_id exists in any source
-	streamFound := false
-	var originalStream *streamData
-
-	if elcanoErr == nil {
-		elcanoStreams := parseM3UStreams(elcanoContent, "elcano")
-		for _, s := range elcanoStreams {
-			if s.AcestreamID == acestreamID {
-				streamFound = true
-				originalStream = &s
-				break
-			}
-		}
-	}
-
-	if !streamFound && neweraErr == nil {
-		neweraStreams := parseM3UStreams(neweraContent, "newera")
-		for _, s := range neweraStreams {
-			if s.AcestreamID == acestreamID {
-				streamFound = true
-				originalStream = &s
-				break
-			}
-		}
-	}
-
-	if !streamFound {
+	originalStream := findStreamByID(acestreamID, elcanoContent, neweraContent, elcanoErr, neweraErr)
+	if originalStream == nil {
 		http.Error(w, "Stream not found", http.StatusNotFound)
 		return
 	}
@@ -602,7 +559,7 @@ func (h *ChannelsHandler) handleDelete(w http.ResponseWriter, r *http.Request) {
 
 	log.Printf("Deleted override for stream %s", acestreamID)
 
-	// Return the stream in its original state (without override)
+	// Return the stream in its original state
 	originalStream.HasOverride = false
 
 	w.Header().Set("Content-Type", "application/json")
