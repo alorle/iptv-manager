@@ -765,7 +765,7 @@ func TestIntegration_MethodNotAllowed(t *testing.T) {
 }
 
 // createPlaylistHandlerForTest creates a handler that fetches and rewrites M3U content
-func createPlaylistHandlerForTest(fetch *fetcher.Fetcher, rw *rewriter.Rewriter, mockURL string) http.HandlerFunc {
+func createPlaylistHandlerForTest(fetch fetcher.Interface, rw rewriter.Interface, mockURL string) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
@@ -786,7 +786,7 @@ func createPlaylistHandlerForTest(fetch *fetcher.Fetcher, rw *rewriter.Rewriter,
 }
 
 // setupEndpointsTestServer creates a test server with health and playlist endpoints
-func setupEndpointsTestServer(fetch *fetcher.Fetcher, rw *rewriter.Rewriter, mockURL string) *httptest.Server {
+func setupEndpointsTestServer(fetch fetcher.Interface, rw rewriter.Interface, mockURL string) *httptest.Server {
 	mux := http.NewServeMux()
 
 	mux.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
@@ -940,7 +940,7 @@ func mergeM3UContent(elcanoContent, neweraContent []byte, elcanoErr, neweraErr e
 }
 
 // createTestUnifiedPlaylistHandler creates handler for unified playlist endpoint in tests
-func createTestUnifiedPlaylistHandler(fetch *fetcher.Fetcher, rw *rewriter.Rewriter, elcanoURL, neweraURL string) http.HandlerFunc {
+func createTestUnifiedPlaylistHandler(fetch fetcher.Interface, rw rewriter.Interface, elcanoURL, neweraURL string) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)

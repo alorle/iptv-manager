@@ -18,7 +18,7 @@ type Fetcher struct {
 }
 
 // New creates a new Fetcher with the specified timeout and cache configuration
-func New(timeout time.Duration, storage cache.Storage, cacheTTL time.Duration) *Fetcher {
+func New(timeout time.Duration, storage cache.Storage, cacheTTL time.Duration) Interface {
 	return &Fetcher{
 		client: &http.Client{
 			Timeout: timeout,

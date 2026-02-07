@@ -50,10 +50,16 @@ func TestNew(t *testing.T) {
 	timeout := 10 * time.Second
 	cacheTTL := 1 * time.Hour
 
-	fetcher := New(timeout, storage, cacheTTL)
+	fetcherInterface := New(timeout, storage, cacheTTL)
 
-	if fetcher == nil {
+	if fetcherInterface == nil {
 		t.Fatal("Expected fetcher to be non-nil")
+	}
+
+	// Cast to concrete type to test internal fields
+	fetcher, ok := fetcherInterface.(*Fetcher)
+	if !ok {
+		t.Fatal("Expected fetcher to be of type *Fetcher")
 	}
 
 	if fetcher.client == nil {

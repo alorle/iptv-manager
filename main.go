@@ -26,11 +26,11 @@ import (
 
 // dependencies holds all initialized application components
 type dependencies struct {
-	storage      *cache.FileStorage
-	overridesMgr *overrides.Manager
+	storage      cache.Storage
+	overridesMgr overrides.Interface
 	epgCache     *epg.Cache
-	fetch        *fetcher.Fetcher
-	rewriter     *rewriter.Rewriter
+	fetch        fetcher.Interface
+	rewriter     rewriter.Interface
 	multiplexer  *multiplexer.Multiplexer
 	pidMgr       *pidmanager.Manager
 }

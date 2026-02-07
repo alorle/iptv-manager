@@ -12,12 +12,12 @@ import (
 
 // OverridesHandler handles CRUD operations for channel overrides
 type OverridesHandler struct {
-	overridesMgr *overrides.Manager
+	overridesMgr overrides.Interface
 	epgCache     TVGValidator
 }
 
 // NewOverridesHandler creates a new handler for the overrides API
-func NewOverridesHandler(overridesMgr *overrides.Manager, epgCache TVGValidator) *OverridesHandler {
+func NewOverridesHandler(overridesMgr overrides.Interface, epgCache TVGValidator) *OverridesHandler {
 	return &OverridesHandler{
 		overridesMgr: overridesMgr,
 		epgCache:     epgCache,

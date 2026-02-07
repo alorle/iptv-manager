@@ -20,7 +20,7 @@ const (
 )
 
 // Helper to create a temporary overrides manager for testing
-func createTestOverridesManager(t *testing.T) (*overrides.Manager, func()) {
+func createTestOverridesManager(t *testing.T) (overrides.Interface, func()) {
 	t.Helper()
 
 	// Create temporary directory

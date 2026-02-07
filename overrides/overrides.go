@@ -109,7 +109,7 @@ type Manager struct {
 // NewManager creates a new OverridesManager and loads the configuration
 // from the specified path. If the file doesn't exist, it starts with an
 // empty configuration.
-func NewManager(path string) (*Manager, error) {
+func NewManager(path string) (Interface, error) {
 	config, err := Load(path)
 	if err != nil {
 		return nil, fmt.Errorf("failed to load overrides: %w", err)

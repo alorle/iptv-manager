@@ -15,7 +15,7 @@ type Rewriter struct {
 }
 
 // New creates a new Rewriter with the specified stream base URL
-func New() *Rewriter {
+func New() Interface {
 	return &Rewriter{}
 }
 
@@ -310,7 +310,7 @@ func (r *Rewriter) RewriteM3U(content []byte, baseURL string) []byte {
 // ApplyOverrides applies channel overrides to M3U content.
 // It filters out disabled channels and replaces metadata according to configured overrides.
 // This function should be called BEFORE deduplication and sorting in the pipeline.
-func ApplyOverrides(m3u []byte, manager *overrides.Manager) []byte {
+func ApplyOverrides(m3u []byte, manager overrides.Interface) []byte {
 	if manager == nil {
 		return m3u
 	}

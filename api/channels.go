@@ -33,13 +33,13 @@ type Channel struct {
 
 // ChannelsHandler handles the GET /api/channels endpoint
 type ChannelsHandler struct {
-	fetcher      *fetcher.Fetcher
-	overridesMgr *overrides.Manager
+	fetcher      fetcher.Interface
+	overridesMgr overrides.Interface
 	playlistURLs []string
 }
 
 // NewChannelsHandler creates a new handler for the channels API
-func NewChannelsHandler(fetch *fetcher.Fetcher, overridesMgr *overrides.Manager, playlistURLs ...string) *ChannelsHandler {
+func NewChannelsHandler(fetch fetcher.Interface, overridesMgr overrides.Interface, playlistURLs ...string) *ChannelsHandler {
 	return &ChannelsHandler{
 		fetcher:      fetch,
 		overridesMgr: overridesMgr,
@@ -181,7 +181,7 @@ func groupStreamsByTvgID(streams []streamData) []Channel {
 }
 
 // applyOverrides applies override settings to channels and marks which ones have overrides
-func applyOverrides(channels []Channel, overridesMgr *overrides.Manager) []Channel {
+func applyOverrides(channels []Channel, overridesMgr overrides.Interface) []Channel {
 	allOverrides := overridesMgr.List()
 
 	for i := range channels {
