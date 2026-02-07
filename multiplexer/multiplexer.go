@@ -305,11 +305,11 @@ func (s *Stream) fanOut(ctx context.Context, cfg Config) {
 			for {
 				// Check if we should stop reconnecting
 				if ctx.Err() != nil || s.ClientCount() == 0 {
-					reason := "context cancelled"
+					reason := "context canceled"
 					if s.ClientCount() == 0 {
 						reason = "no clients remaining"
 					}
-					log.Printf("Stream %s: Stopping reconnection - no clients or context cancelled", s.ContentID)
+					log.Printf("Stream %s: Stopping reconnection - no clients or context canceled", s.ContentID)
 					if s.resLogger != nil {
 						s.resLogger.LogReconnectFailed(s.ContentID, reason, attemptNumber)
 					}
@@ -523,7 +523,7 @@ func (m *Multiplexer) GetOrCreateStream(ctx context.Context, contentID string, u
 	log.Printf("Multiplexer: Created new stream for content ID %s", contentID)
 
 	// Start the stream with multiplexer's independent context
-	// This ensures the upstream reading loop is not cancelled when a client disconnects
+	// This ensures the upstream reading loop is not canceled when a client disconnects
 	stream.Start(m.ctx, resp.Body, upstreamURL, m.cfg)
 
 	// Store the stream

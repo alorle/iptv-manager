@@ -793,7 +793,7 @@ func TestClientDisconnectDoesNotAffectOtherClients(t *testing.T) {
 			t.Errorf("Client 2 received wrong data after client 1 disconnect: %s", string(data))
 		}
 	case <-time.After(1 * time.Second):
-		t.Fatal("Client 2 timeout receiving second chunk - upstream may have been cancelled")
+		t.Fatal("Client 2 timeout receiving second chunk - upstream may have been canceled")
 	}
 
 	// Verify client 1's buffer is closed (it was disconnected)
