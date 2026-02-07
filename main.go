@@ -266,7 +266,9 @@ func main() {
 
 	handler.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte("OK"))
+		if _, err := w.Write([]byte("OK")); err != nil {
+			log.Printf("Error writing health response: %v", err)
+		}
 	})
 
 	// Prometheus metrics endpoint
@@ -394,7 +396,9 @@ func main() {
 		// Set content type
 		w.Header().Set("Content-Type", "audio/x-mpegurl")
 		w.WriteHeader(http.StatusOK)
-		w.Write(rewrittenContent)
+		if _, err := w.Write(rewrittenContent); err != nil {
+			log.Printf("Error writing elcano playlist: %v", err)
+		}
 	})
 
 	// NewEra playlist endpoint
@@ -436,7 +440,9 @@ func main() {
 		// Set content type
 		w.Header().Set("Content-Type", "audio/x-mpegurl")
 		w.WriteHeader(http.StatusOK)
-		w.Write(rewrittenContent)
+		if _, err := w.Write(rewrittenContent); err != nil {
+			log.Printf("Error writing newera playlist: %v", err)
+		}
 	})
 
 	// Unified playlist endpoint - merges all sources
@@ -557,7 +563,9 @@ func main() {
 		// Set content type
 		w.Header().Set("Content-Type", "audio/x-mpegurl")
 		w.WriteHeader(http.StatusOK)
-		w.Write(rewrittenContent)
+		if _, err := w.Write(rewrittenContent); err != nil {
+			log.Printf("Error writing unified playlist: %v", err)
+		}
 	})
 
 	// API endpoints for channels
