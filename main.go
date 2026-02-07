@@ -81,123 +81,136 @@ func getBaseURL(r *http.Request) string {
 	return fmt.Sprintf("%s://%s", scheme, r.Host)
 }
 
+// getEnvWithDefault returns the environment variable value or a default if not set
+func getEnvWithDefault(key, defaultValue string) string {
+	if val := os.Getenv(key); val != "" {
+		return val
+	}
+	return defaultValue
+}
+
+// parseIntEnv parses an integer environment variable with a default value
+// Returns an error if the value is invalid or not positive
+func parseIntEnv(key string, defaultValue int) (int, error) {
+	valStr := os.Getenv(key)
+	if valStr == "" {
+		return defaultValue, nil
+	}
+
+	val, err := strconv.Atoi(valStr)
+	if err != nil {
+		return 0, fmt.Errorf("invalid %s: %w", key, err)
+	}
+
+	if val <= 0 {
+		return 0, fmt.Errorf("%s must be positive", key)
+	}
+
+	return val, nil
+}
+
+// parseBoolEnv parses a boolean environment variable with a default value
+// Accepts: "true", "1" for true; anything else for false
+func parseBoolEnv(key string, defaultValue bool) bool {
+	valStr := os.Getenv(key)
+	if valStr == "" {
+		return defaultValue
+	}
+	return valStr == "true" || valStr == "1"
+}
+
+// parseDurationEnv parses a duration environment variable with a default value
+// Returns an error if the value is invalid or not positive
+func parseDurationEnv(key string, defaultValue time.Duration) (time.Duration, error) {
+	valStr := os.Getenv(key)
+	if valStr == "" {
+		return defaultValue, nil
+	}
+
+	val, err := time.ParseDuration(valStr)
+	if err != nil {
+		return 0, fmt.Errorf("invalid %s: %w", key, err)
+	}
+
+	if val <= 0 {
+		return 0, fmt.Errorf("%s must be positive", key)
+	}
+
+	return val, nil
+}
+
+// parseRequiredDuration parses a required duration environment variable
+// Returns an error if the variable is not set, invalid, or not positive
+func parseRequiredDuration(key string) (time.Duration, error) {
+	valStr := os.Getenv(key)
+	if valStr == "" {
+		return 0, fmt.Errorf("%s environment variable is required", key)
+	}
+
+	val, err := time.ParseDuration(valStr)
+	if err != nil {
+		return 0, fmt.Errorf("invalid %s format (expected duration like '1h', '30m'): %w", key, err)
+	}
+
+	if val <= 0 {
+		return 0, fmt.Errorf("%s must be positive, got: %s", key, valStr)
+	}
+
+	return val, nil
+}
+
+// validateCacheDir validates and normalizes the cache directory path
+func validateCacheDir(dir string) (string, error) {
+	if dir == "" {
+		return "", fmt.Errorf("CACHE_DIR environment variable is required")
+	}
+
+	// Ensure cache directory is an absolute path
+	if !filepath.IsAbs(dir) {
+		absPath, err := filepath.Abs(dir)
+		if err != nil {
+			return "", fmt.Errorf("failed to resolve absolute path for CACHE_DIR: %w", err)
+		}
+		return absPath, nil
+	}
+
+	return dir, nil
+}
+
 func loadConfig() (*Config, error) {
 	cfg := &Config{
-		HTTPAddress:            os.Getenv("HTTP_ADDRESS"),
-		HTTPPort:               os.Getenv("HTTP_PORT"),
-		AcestreamPlayerBaseURL: os.Getenv("ACESTREAM_PLAYER_BASE_URL"),
-		AcestreamEngineURL:     os.Getenv("ACESTREAM_ENGINE_URL"),
-		CacheDir:               os.Getenv("CACHE_DIR"),
+		HTTPAddress:            getEnvWithDefault("HTTP_ADDRESS", "127.0.0.1"),
+		HTTPPort:               getEnvWithDefault("HTTP_PORT", "8080"),
+		AcestreamPlayerBaseURL: getEnvWithDefault("ACESTREAM_PLAYER_BASE_URL", "http://127.0.0.1:6878/ace/getstream"),
+		AcestreamEngineURL:     getEnvWithDefault("ACESTREAM_ENGINE_URL", "http://127.0.0.1:6878"),
+		UseMultiplexing:        parseBoolEnv("USE_MULTIPLEXING", true),
 	}
 
-	// Set defaults
-	if cfg.HTTPAddress == "" {
-		cfg.HTTPAddress = "127.0.0.1"
+	var err error
+
+	// Parse integer values
+	if cfg.StreamBufferSize, err = parseIntEnv("STREAM_BUFFER_SIZE", 1024*1024); err != nil {
+		return nil, err
 	}
-	if cfg.HTTPPort == "" {
-		cfg.HTTPPort = "8080"
-	}
-	if cfg.AcestreamPlayerBaseURL == "" {
-		cfg.AcestreamPlayerBaseURL = "http://127.0.0.1:6878/ace/getstream"
-	}
-	if cfg.AcestreamEngineURL == "" {
-		cfg.AcestreamEngineURL = "http://127.0.0.1:6878"
+	if cfg.ProxyBufferSize, err = parseIntEnv("PROXY_BUFFER_SIZE", 4194304); err != nil {
+		return nil, err
 	}
 
-	// Parse STREAM_BUFFER_SIZE (default 1MB)
-	bufferSizeStr := os.Getenv("STREAM_BUFFER_SIZE")
-	if bufferSizeStr == "" {
-		cfg.StreamBufferSize = 1024 * 1024 // 1MB default
-	} else {
-		bufferSize, err := strconv.Atoi(bufferSizeStr)
-		if err != nil {
-			return nil, fmt.Errorf("invalid STREAM_BUFFER_SIZE: %w", err)
-		}
-		if bufferSize <= 0 {
-			return nil, fmt.Errorf("STREAM_BUFFER_SIZE must be positive")
-		}
-		cfg.StreamBufferSize = bufferSize
+	// Parse duration values
+	if cfg.ProxyReadTimeout, err = parseDurationEnv("PROXY_READ_TIMEOUT", 5*time.Second); err != nil {
+		return nil, err
+	}
+	if cfg.ProxyWriteTimeout, err = parseDurationEnv("PROXY_WRITE_TIMEOUT", 10*time.Second); err != nil {
+		return nil, err
 	}
 
-	// Parse USE_MULTIPLEXING (default true)
-	useMultiplexingStr := os.Getenv("USE_MULTIPLEXING")
-	if useMultiplexingStr == "" || useMultiplexingStr == "true" || useMultiplexingStr == "1" {
-		cfg.UseMultiplexing = true
-	} else {
-		cfg.UseMultiplexing = false
+	// Parse required values
+	if cfg.CacheDir, err = validateCacheDir(os.Getenv("CACHE_DIR")); err != nil {
+		return nil, err
 	}
-
-	// Parse PROXY_READ_TIMEOUT (default 5s)
-	readTimeoutStr := os.Getenv("PROXY_READ_TIMEOUT")
-	if readTimeoutStr == "" {
-		cfg.ProxyReadTimeout = 5 * time.Second
-	} else {
-		readTimeout, err := time.ParseDuration(readTimeoutStr)
-		if err != nil {
-			return nil, fmt.Errorf("invalid PROXY_READ_TIMEOUT: %w", err)
-		}
-		if readTimeout <= 0 {
-			return nil, fmt.Errorf("PROXY_READ_TIMEOUT must be positive")
-		}
-		cfg.ProxyReadTimeout = readTimeout
+	if cfg.CacheTTL, err = parseRequiredDuration("CACHE_TTL"); err != nil {
+		return nil, err
 	}
-
-	// Parse PROXY_WRITE_TIMEOUT (default 10s)
-	writeTimeoutStr := os.Getenv("PROXY_WRITE_TIMEOUT")
-	if writeTimeoutStr == "" {
-		cfg.ProxyWriteTimeout = 10 * time.Second
-	} else {
-		writeTimeout, err := time.ParseDuration(writeTimeoutStr)
-		if err != nil {
-			return nil, fmt.Errorf("invalid PROXY_WRITE_TIMEOUT: %w", err)
-		}
-		if writeTimeout <= 0 {
-			return nil, fmt.Errorf("PROXY_WRITE_TIMEOUT must be positive")
-		}
-		cfg.ProxyWriteTimeout = writeTimeout
-	}
-
-	// Parse PROXY_BUFFER_SIZE (default 4MB = 4194304 bytes)
-	bufferSizeEnvStr := os.Getenv("PROXY_BUFFER_SIZE")
-	if bufferSizeEnvStr == "" {
-		cfg.ProxyBufferSize = 4194304 // 4MB default
-	} else {
-		proxyBufferSize, err := strconv.Atoi(bufferSizeEnvStr)
-		if err != nil {
-			return nil, fmt.Errorf("invalid PROXY_BUFFER_SIZE: %w", err)
-		}
-		if proxyBufferSize <= 0 {
-			return nil, fmt.Errorf("PROXY_BUFFER_SIZE must be positive")
-		}
-		cfg.ProxyBufferSize = proxyBufferSize
-	}
-
-	// Validate and set CACHE_DIR
-	if cfg.CacheDir == "" {
-		return nil, fmt.Errorf("CACHE_DIR environment variable is required")
-	}
-	// Ensure cache directory is an absolute path
-	if !filepath.IsAbs(cfg.CacheDir) {
-		absPath, err := filepath.Abs(cfg.CacheDir)
-		if err != nil {
-			return nil, fmt.Errorf("failed to resolve absolute path for CACHE_DIR: %w", err)
-		}
-		cfg.CacheDir = absPath
-	}
-
-	// Parse CACHE_TTL
-	cacheTTLStr := os.Getenv("CACHE_TTL")
-	if cacheTTLStr == "" {
-		return nil, fmt.Errorf("CACHE_TTL environment variable is required")
-	}
-	ttl, err := time.ParseDuration(cacheTTLStr)
-	if err != nil {
-		return nil, fmt.Errorf("invalid CACHE_TTL format (expected duration like '1h', '30m'): %w", err)
-	}
-	if ttl <= 0 {
-		return nil, fmt.Errorf("CACHE_TTL must be positive, got: %s", cacheTTLStr)
-	}
-	cfg.CacheTTL = ttl
 
 	return cfg, nil
 }
