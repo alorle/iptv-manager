@@ -130,7 +130,7 @@ func TestLoad_PermissionError(t *testing.T) {
 	if err := os.WriteFile(tmpFile, []byte("test: data"), 0000); err != nil {
 		t.Fatalf("Failed to create test file: %v", err)
 	}
-	defer os.Chmod(tmpFile, 0644) // Cleanup
+	defer func() { _ = os.Chmod(tmpFile, 0644) }() // Cleanup
 
 	// Load should return error
 	config, err := Load(tmpFile)

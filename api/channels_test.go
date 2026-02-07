@@ -23,7 +23,7 @@ acestream://1234567890abcdef1234567890abcdef12345678
 acestream://abcdef1234567890abcdef1234567890abcdef12
 `
 
-func setupTestHandler(t *testing.T) (*ChannelsHandler, *httptest.Server, func()) {
+func setupTestHandler(t *testing.T) (*ChannelsHandler, func()) {
 	// Create temporary directory for overrides
 	tmpDir := t.TempDir()
 	overridesPath := filepath.Join(tmpDir, "overrides.yaml")
@@ -38,7 +38,7 @@ func setupTestHandler(t *testing.T) (*ChannelsHandler, *httptest.Server, func())
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/x-mpegurl")
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte(mockM3U))
+		_, _ = w.Write([]byte(mockM3U))
 	}))
 
 	// Create fetcher with temp cache
@@ -55,14 +55,14 @@ func setupTestHandler(t *testing.T) (*ChannelsHandler, *httptest.Server, func())
 
 	cleanup := func() {
 		server.Close()
-		os.RemoveAll(tmpDir)
+		_ = os.RemoveAll(tmpDir)
 	}
 
-	return handler, server, cleanup
+	return handler, cleanup
 }
 
 func TestDeleteOverride_Success(t *testing.T) {
-	handler, _, cleanup := setupTestHandler(t)
+	handler, cleanup := setupTestHandler(t)
 	defer cleanup()
 
 	acestreamID := "1234567890abcdef1234567890abcdef12345678"
@@ -124,7 +124,7 @@ func TestDeleteOverride_Success(t *testing.T) {
 }
 
 func TestDeleteOverride_NoOverride(t *testing.T) {
-	handler, _, cleanup := setupTestHandler(t)
+	handler, cleanup := setupTestHandler(t)
 	defer cleanup()
 
 	acestreamID := "1234567890abcdef1234567890abcdef12345678"
@@ -147,7 +147,7 @@ func TestDeleteOverride_NoOverride(t *testing.T) {
 }
 
 func TestDeleteOverride_InvalidID(t *testing.T) {
-	handler, _, cleanup := setupTestHandler(t)
+	handler, cleanup := setupTestHandler(t)
 	defer cleanup()
 
 	tests := []struct {
@@ -196,7 +196,7 @@ func TestDeleteOverride_InvalidID(t *testing.T) {
 }
 
 func TestDeleteOverride_ChannelNotFound(t *testing.T) {
-	handler, _, cleanup := setupTestHandler(t)
+	handler, cleanup := setupTestHandler(t)
 	defer cleanup()
 
 	// Valid ID but not in sources
@@ -207,7 +207,7 @@ func TestDeleteOverride_ChannelNotFound(t *testing.T) {
 	override := overrides.ChannelOverride{
 		Enabled: boolPtr(false),
 	}
-	handler.overridesMgr.Set(acestreamID, override)
+	_ = handler.overridesMgr.Set(acestreamID, override)
 
 	// Try to delete it
 	req := httptest.NewRequest(http.MethodDelete, "/api/channels/"+acestreamID+"/override", nil)
@@ -227,7 +227,7 @@ func TestDeleteOverride_ChannelNotFound(t *testing.T) {
 }
 
 func TestDeleteOverride_MethodNotAllowed(t *testing.T) {
-	handler, _, cleanup := setupTestHandler(t)
+	handler, cleanup := setupTestHandler(t)
 	defer cleanup()
 
 	acestreamID := "1234567890abcdef1234567890abcdef12345678"

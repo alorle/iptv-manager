@@ -26,13 +26,13 @@ func createTestOverridesManager(t *testing.T) (*overrides.Manager, func()) {
 	overridesPath := filepath.Join(tmpDir, "overrides.yaml")
 	mgr, err := overrides.NewManager(overridesPath)
 	if err != nil {
-		os.RemoveAll(tmpDir)
+		_ = os.RemoveAll(tmpDir)
 		t.Fatalf("Failed to create overrides manager: %v", err)
 	}
 
 	// Return cleanup function
 	cleanup := func() {
-		os.RemoveAll(tmpDir)
+		_ = os.RemoveAll(tmpDir)
 	}
 
 	return mgr, cleanup

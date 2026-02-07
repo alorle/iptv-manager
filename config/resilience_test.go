@@ -71,14 +71,14 @@ func TestLoadFromEnv_ValidValues(t *testing.T) {
 	clearEnvVars()
 
 	// Set valid environment variables
-	os.Setenv("RECONNECT_BUFFER_SIZE", "4MB")
-	os.Setenv("RECONNECT_MAX_BACKOFF", "1m")
-	os.Setenv("RECONNECT_INITIAL_BACKOFF", "1s")
-	os.Setenv("CB_FAILURE_THRESHOLD", "10")
-	os.Setenv("CB_TIMEOUT", "45s")
-	os.Setenv("CB_HALF_OPEN_REQUESTS", "3")
-	os.Setenv("HEALTH_CHECK_INTERVAL", "15s")
-	os.Setenv("LOG_LEVEL", "debug")
+	_ = os.Setenv("RECONNECT_BUFFER_SIZE", "4MB")
+	_ = os.Setenv("RECONNECT_MAX_BACKOFF", "1m")
+	_ = os.Setenv("RECONNECT_INITIAL_BACKOFF", "1s")
+	_ = os.Setenv("CB_FAILURE_THRESHOLD", "10")
+	_ = os.Setenv("CB_TIMEOUT", "45s")
+	_ = os.Setenv("CB_HALF_OPEN_REQUESTS", "3")
+	_ = os.Setenv("HEALTH_CHECK_INTERVAL", "15s")
+	_ = os.Setenv("LOG_LEVEL", "debug")
 
 	defer clearEnvVars()
 

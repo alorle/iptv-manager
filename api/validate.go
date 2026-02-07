@@ -57,7 +57,7 @@ func (h *ValidateHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if strings.TrimSpace(req.TvgID) == "" {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
-		json.NewEncoder(w).Encode(ValidateResponse{Valid: true})
+		_ = json.NewEncoder(w).Encode(ValidateResponse{Valid: true})
 		return
 	}
 

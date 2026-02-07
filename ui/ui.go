@@ -67,7 +67,7 @@ func (h *uiHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	defer file.Close()
+	defer func() { _ = file.Close() }()
 
 	// Get file info for content length and modification time
 	stat, err := file.Stat()

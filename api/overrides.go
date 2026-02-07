@@ -78,7 +78,7 @@ type OverrideResponse struct {
 }
 
 // handleGet handles GET /api/overrides/:acestreamId
-func (h *OverridesHandler) handleGet(w http.ResponseWriter, r *http.Request, acestreamID string) {
+func (h *OverridesHandler) handleGet(w http.ResponseWriter, _ *http.Request, acestreamID string) {
 	override := h.overridesMgr.Get(acestreamID)
 	if override == nil {
 		http.Error(w, "Override not found", http.StatusNotFound)
@@ -165,7 +165,7 @@ func (h *OverridesHandler) handlePut(w http.ResponseWriter, r *http.Request, ace
 }
 
 // handleDelete handles DELETE /api/overrides/:acestreamId
-func (h *OverridesHandler) handleDelete(w http.ResponseWriter, r *http.Request, acestreamID string) {
+func (h *OverridesHandler) handleDelete(w http.ResponseWriter, _ *http.Request, acestreamID string) {
 	// Check if override exists
 	if h.overridesMgr.Get(acestreamID) == nil {
 		http.Error(w, "Override not found", http.StatusNotFound)
@@ -185,7 +185,7 @@ func (h *OverridesHandler) handleDelete(w http.ResponseWriter, r *http.Request, 
 }
 
 // handleList handles GET /api/overrides
-func (h *OverridesHandler) handleList(w http.ResponseWriter, r *http.Request) {
+func (h *OverridesHandler) handleList(w http.ResponseWriter, _ *http.Request) {
 	allOverrides := h.overridesMgr.List()
 
 	// Convert map to array of responses
