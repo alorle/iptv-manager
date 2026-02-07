@@ -76,7 +76,7 @@ func TestStreamHandler_MissingID(t *testing.T) {
 	pidMgr := pidmanager.NewManager()
 	mux := multiplexer.New(multiplexer.DefaultConfig())
 
-	handler := createStreamHandler(mux, pidMgr, "http://localhost:6878")
+	handler := createTestStreamHandler(mux, pidMgr, "http://localhost:6878")
 
 	req := httptest.NewRequest(http.MethodGet, "/stream", nil)
 	w := httptest.NewRecorder()
@@ -96,7 +96,7 @@ func TestStreamHandler_InvalidID(t *testing.T) {
 	pidMgr := pidmanager.NewManager()
 	mux := multiplexer.New(multiplexer.DefaultConfig())
 
-	handler := createStreamHandler(mux, pidMgr, "http://localhost:6878")
+	handler := createTestStreamHandler(mux, pidMgr, "http://localhost:6878")
 
 	tests := []struct {
 		name string
@@ -129,7 +129,7 @@ func TestStreamHandler_MethodNotAllowed(t *testing.T) {
 	pidMgr := pidmanager.NewManager()
 	mux := multiplexer.New(multiplexer.DefaultConfig())
 
-	handler := createStreamHandler(mux, pidMgr, "http://localhost:6878")
+	handler := createTestStreamHandler(mux, pidMgr, "http://localhost:6878")
 
 	methods := []string{http.MethodPost, http.MethodPut, http.MethodDelete}
 
@@ -172,7 +172,7 @@ func TestStreamHandler_WithMockEngine(t *testing.T) {
 	pidMgr := pidmanager.NewManager()
 	mux := multiplexer.New(multiplexer.DefaultConfig())
 
-	handler := createStreamHandler(mux, pidMgr, mockEngine.URL)
+	handler := createTestStreamHandler(mux, pidMgr, mockEngine.URL)
 
 	req := httptest.NewRequest(http.MethodGet, "/stream?id=0123456789abcdef0123456789abcdef01234567", nil)
 	req.RemoteAddr = testRemoteAddr
@@ -197,7 +197,7 @@ func TestStreamHandler_EngineConnectionError(t *testing.T) {
 	mux := multiplexer.New(multiplexer.DefaultConfig())
 
 	// Use invalid engine URL
-	handler := createStreamHandler(mux, pidMgr, "http://localhost:99999")
+	handler := createTestStreamHandler(mux, pidMgr, "http://localhost:99999")
 
 	req := httptest.NewRequest(http.MethodGet, "/stream?id=0123456789abcdef0123456789abcdef01234567", nil)
 	req.RemoteAddr = testRemoteAddr
@@ -236,7 +236,7 @@ func TestStreamHandler_TranscodeParameters(t *testing.T) {
 	pidMgr := pidmanager.NewManager()
 	mux := multiplexer.New(multiplexer.DefaultConfig())
 
-	handler := createStreamHandler(mux, pidMgr, mockEngine.URL)
+	handler := createTestStreamHandler(mux, pidMgr, mockEngine.URL)
 
 	req := httptest.NewRequest(http.MethodGet, "/stream?id=0123456789abcdef0123456789abcdef01234567&transcode_audio=mp3", nil)
 	req.RemoteAddr = testRemoteAddr
@@ -305,7 +305,7 @@ func TestHealthHandler(t *testing.T) {
 }
 
 // Helper function to create stream handler for testing
-func createStreamHandler(mux *multiplexer.Multiplexer, pidMgr *pidmanager.Manager, engineURL string) http.HandlerFunc {
+func createTestStreamHandler(mux *multiplexer.Multiplexer, pidMgr *pidmanager.Manager, engineURL string) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)

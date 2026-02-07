@@ -324,22 +324,175 @@ func main() {
 	}
 }
 
-// setupHandlers configures all HTTP routes and handlers
-func setupHandlers(cfg *Config, deps *dependencies) http.Handler {
-	handler := http.NewServeMux()
-
-	handler.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusOK)
-		if _, err := w.Write([]byte("OK")); err != nil {
-			log.Printf("Error writing health response: %v", err)
+// createUnifiedPlaylistHandler creates an HTTP handler for the unified playlist endpoint
+func createUnifiedPlaylistHandler(deps *dependencies) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+			return
 		}
-	})
 
-	// Prometheus metrics endpoint
-	handler.Handle("/metrics", promhttp.Handler())
+		baseURL := getBaseURL(r)
 
-	// Stream handler function - shared by /stream and /ace/getstream
-	streamHandler := func(w http.ResponseWriter, r *http.Request) {
+		// Fetch both sources
+		elcanoContent, elcanoFromCache, elcanoStale, elcanoErr := deps.fetch.FetchWithCache(elcanoIPFSURL)
+		neweraContent, neweraFromCache, neweraStale, neweraErr := deps.fetch.FetchWithCache(neweraIPFSURL)
+
+		// Check if both sources failed
+		if elcanoErr != nil && neweraErr != nil {
+			log.Printf("Failed to fetch unified playlist - both sources failed: elcano=%v, newera=%v", elcanoErr, neweraErr)
+			http.Error(w, "Bad Gateway", http.StatusBadGateway)
+			return
+		}
+
+		// Build merged content starting with M3U header
+		var mergedContent strings.Builder
+		mergedContent.WriteString("#EXTM3U\n")
+
+		// Add elcano content if available
+		if elcanoErr == nil {
+			// Log cache status for elcano
+			if elcanoFromCache {
+				if elcanoStale {
+					log.Printf("Using stale cache for elcano in unified playlist")
+				} else {
+					log.Printf("Using fresh cache for elcano in unified playlist")
+				}
+			} else {
+				log.Printf("Using fresh content for elcano in unified playlist")
+			}
+
+			// Parse and add elcano streams (skip header line)
+			elcanoStr := string(elcanoContent)
+			if strings.HasPrefix(elcanoStr, "#EXTM3U") {
+				elcanoStr = strings.TrimPrefix(elcanoStr, "#EXTM3U")
+				elcanoStr = strings.TrimLeft(elcanoStr, "\n")
+			}
+			mergedContent.WriteString(elcanoStr)
+		} else {
+			log.Printf("Skipping elcano source in unified playlist: %v", elcanoErr)
+		}
+
+		// Add newera content if available
+		if neweraErr == nil {
+			// Log cache status for newera
+			if neweraFromCache {
+				if neweraStale {
+					log.Printf("Using stale cache for newera in unified playlist")
+				} else {
+					log.Printf("Using fresh cache for newera in unified playlist")
+				}
+			} else {
+				log.Printf("Using fresh content for newera in unified playlist")
+			}
+
+			// Parse and add newera streams (skip header line)
+			neweraStr := string(neweraContent)
+			if strings.HasPrefix(neweraStr, "#EXTM3U") {
+				neweraStr = strings.TrimPrefix(neweraStr, "#EXTM3U")
+				neweraStr = strings.TrimLeft(neweraStr, "\n")
+			}
+			if mergedContent.Len() > len("#EXTM3U\n") {
+				mergedContent.WriteString("\n")
+			}
+			mergedContent.WriteString(neweraStr)
+		} else {
+			log.Printf("Skipping newera source in unified playlist: %v", neweraErr)
+		}
+
+		// Clean up orphaned overrides if we have fresh data from at least one source
+		hasFreshData := (elcanoErr == nil && !elcanoStale) || (neweraErr == nil && !neweraStale)
+		if hasFreshData {
+			// Collect all valid acestream IDs from both sources
+			var validIDs []string
+			if elcanoErr == nil {
+				elcanoIDs := rewriter.ExtractAcestreamIDs(elcanoContent)
+				validIDs = append(validIDs, elcanoIDs...)
+			}
+			if neweraErr == nil {
+				neweraIDs := rewriter.ExtractAcestreamIDs(neweraContent)
+				validIDs = append(validIDs, neweraIDs...)
+			}
+
+			// Clean orphaned overrides
+			if deletedCount, err := deps.overridesMgr.CleanOrphans(validIDs); err != nil {
+				log.Printf("WARNING: Failed to clean orphaned overrides: %v", err)
+			} else if deletedCount > 0 {
+				log.Printf("Cleaned up %d orphaned override(s)", deletedCount)
+			}
+		} else {
+			log.Printf("Skipping orphan cleanup - using only stale cache data")
+		}
+
+		// Apply channel overrides BEFORE deduplication and sorting
+		mergedBytes := []byte(mergedContent.String())
+		overriddenContent := rewriter.ApplyOverrides(mergedBytes, deps.overridesMgr)
+
+		// Apply deduplication by acestream ID
+		deduplicatedContent := rewriter.DeduplicateStreams(overriddenContent)
+
+		// Apply alphabetical sorting by display name
+		sortedContent := rewriter.SortStreamsByName(deduplicatedContent)
+
+		// Rewrite acestream:// URLs and remove logos
+		rewrittenContent := deps.rewriter.RewriteM3U(sortedContent, baseURL)
+
+		// Set content type
+		w.Header().Set("Content-Type", "audio/x-mpegurl")
+		w.WriteHeader(http.StatusOK)
+		if _, err := w.Write(rewrittenContent); err != nil {
+			log.Printf("Error writing unified playlist: %v", err)
+		}
+	}
+}
+
+// createPlaylistHandler creates an HTTP handler for serving a single playlist source
+func createPlaylistHandler(deps *dependencies, sourceURL string, sourceName string) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+
+		baseURL := getBaseURL(r)
+
+		// Fetch with cache fallback
+		content, fromCache, stale, err := deps.fetch.FetchWithCache(sourceURL)
+		if err != nil {
+			log.Printf("Failed to fetch %s playlist: %v", sourceName, err)
+			http.Error(w, "Bad Gateway", http.StatusBadGateway)
+			return
+		}
+
+		// Log cache status
+		if fromCache {
+			if stale {
+				log.Printf("Serving stale cache for %s playlist", sourceName)
+			} else {
+				log.Printf("Serving fresh cache for %s playlist", sourceName)
+			}
+		} else {
+			log.Printf("Serving fresh content for %s playlist", sourceName)
+		}
+
+		// Apply channel overrides
+		content = rewriter.ApplyOverrides(content, deps.overridesMgr)
+
+		// Rewrite acestream:// URLs
+		rewrittenContent := deps.rewriter.RewriteM3U(content, baseURL)
+
+		// Set content type
+		w.Header().Set("Content-Type", "audio/x-mpegurl")
+		w.WriteHeader(http.StatusOK)
+		if _, err := w.Write(rewrittenContent); err != nil {
+			log.Printf("Error writing %s playlist: %v", sourceName, err)
+		}
+	}
+}
+
+// createStreamHandler creates the HTTP handler for streaming endpoints
+func createStreamHandler(cfg *Config, deps *dependencies) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
 		// Allow GET and HEAD requests (VLC sends HEAD to probe stream before playing)
 		if r.Method != http.MethodGet && r.Method != http.MethodHead {
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
@@ -410,223 +563,35 @@ func setupHandlers(cfg *Config, deps *dependencies) http.Handler {
 			log.Printf("Cleaned up %d disconnected sessions", cleaned)
 		}
 	}
+}
 
-	// Stream proxy endpoint with multiplexing
+// setupHandlers configures all HTTP routes and handlers
+func setupHandlers(cfg *Config, deps *dependencies) http.Handler {
+	handler := http.NewServeMux()
+
+	handler.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		if _, err := w.Write([]byte("OK")); err != nil {
+			log.Printf("Error writing health response: %v", err)
+		}
+	})
+
+	// Prometheus metrics endpoint
+	handler.Handle("/metrics", promhttp.Handler())
+
+	// Stream handler - shared by /stream and /ace/getstream
+	streamHandler := createStreamHandler(cfg, deps)
 	handler.HandleFunc("/stream", streamHandler)
-
-	// Acexy-compatible endpoint - uses same logic as /stream
 	handler.HandleFunc("/ace/getstream", streamHandler)
 
 	// Elcano playlist endpoint
-	handler.HandleFunc("/playlists/elcano.m3u", func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodGet {
-			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-			return
-		}
-
-		baseURL := getBaseURL(r)
-
-		sourceURL := elcanoIPFSURL
-
-		// Fetch with cache fallback
-		content, fromCache, stale, err := deps.fetch.FetchWithCache(sourceURL)
-		if err != nil {
-			log.Printf("Failed to fetch elcano playlist: %v", err)
-			http.Error(w, "Bad Gateway", http.StatusBadGateway)
-			return
-		}
-
-		// Log cache status
-		if fromCache {
-			if stale {
-				log.Printf("Serving stale cache for elcano playlist")
-			} else {
-				log.Printf("Serving fresh cache for elcano playlist")
-			}
-		} else {
-			log.Printf("Serving fresh content for elcano playlist")
-		}
-
-		// Apply channel overrides (US-007)
-		content = rewriter.ApplyOverrides(content, deps.overridesMgr)
-
-		// Rewrite acestream:// URLs
-		rewrittenContent := deps.rewriter.RewriteM3U(content, baseURL)
-
-		// Set content type
-		w.Header().Set("Content-Type", "audio/x-mpegurl")
-		w.WriteHeader(http.StatusOK)
-		if _, err := w.Write(rewrittenContent); err != nil {
-			log.Printf("Error writing elcano playlist: %v", err)
-		}
-	})
+	handler.HandleFunc("/playlists/elcano.m3u", createPlaylistHandler(deps, elcanoIPFSURL, "elcano"))
 
 	// NewEra playlist endpoint
-	handler.HandleFunc("/playlists/newera.m3u", func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodGet {
-			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-			return
-		}
-
-		baseURL := getBaseURL(r)
-
-		sourceURL := neweraIPFSURL
-
-		// Fetch with cache fallback
-		content, fromCache, stale, err := deps.fetch.FetchWithCache(sourceURL)
-		if err != nil {
-			log.Printf("Failed to fetch newera playlist: %v", err)
-			http.Error(w, "Bad Gateway", http.StatusBadGateway)
-			return
-		}
-
-		// Log cache status
-		if fromCache {
-			if stale {
-				log.Printf("Serving stale cache for newera playlist")
-			} else {
-				log.Printf("Serving fresh cache for newera playlist")
-			}
-		} else {
-			log.Printf("Serving fresh content for newera playlist")
-		}
-
-		// Apply channel overrides (US-007)
-		content = rewriter.ApplyOverrides(content, deps.overridesMgr)
-
-		// Rewrite acestream:// URLs
-		rewrittenContent := deps.rewriter.RewriteM3U(content, baseURL)
-
-		// Set content type
-		w.Header().Set("Content-Type", "audio/x-mpegurl")
-		w.WriteHeader(http.StatusOK)
-		if _, err := w.Write(rewrittenContent); err != nil {
-			log.Printf("Error writing newera playlist: %v", err)
-		}
-	})
+	handler.HandleFunc("/playlists/newera.m3u", createPlaylistHandler(deps, neweraIPFSURL, "newera"))
 
 	// Unified playlist endpoint - merges all sources
-	handler.HandleFunc("/playlist.m3u", func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodGet {
-			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-			return
-		}
-
-		baseURL := getBaseURL(r)
-
-		elcanoURL := elcanoIPFSURL
-		neweraURL := neweraIPFSURL
-
-		// Fetch both sources
-		elcanoContent, elcanoFromCache, elcanoStale, elcanoErr := deps.fetch.FetchWithCache(elcanoURL)
-		neweraContent, neweraFromCache, neweraStale, neweraErr := deps.fetch.FetchWithCache(neweraURL)
-
-		// Check if both sources failed
-		if elcanoErr != nil && neweraErr != nil {
-			log.Printf("Failed to fetch unified playlist - both sources failed: elcano=%v, newera=%v", elcanoErr, neweraErr)
-			http.Error(w, "Bad Gateway", http.StatusBadGateway)
-			return
-		}
-
-		// Build merged content starting with M3U header
-		var mergedContent strings.Builder
-		mergedContent.WriteString("#EXTM3U\n")
-
-		// Add elcano content if available
-		if elcanoErr == nil {
-			// Log cache status for elcano
-			if elcanoFromCache {
-				if elcanoStale {
-					log.Printf("Using stale cache for elcano in unified playlist")
-				} else {
-					log.Printf("Using fresh cache for elcano in unified playlist")
-				}
-			} else {
-				log.Printf("Using fresh content for elcano in unified playlist")
-			}
-
-			// Parse and add elcano streams (skip header line)
-			elcanoStr := string(elcanoContent)
-			if strings.HasPrefix(elcanoStr, "#EXTM3U") {
-				elcanoStr = strings.TrimPrefix(elcanoStr, "#EXTM3U")
-				elcanoStr = strings.TrimLeft(elcanoStr, "\n")
-			}
-			mergedContent.WriteString(elcanoStr)
-		} else {
-			log.Printf("Skipping elcano source in unified playlist: %v", elcanoErr)
-		}
-
-		// Add newera content if available
-		if neweraErr == nil {
-			// Log cache status for newera
-			if neweraFromCache {
-				if neweraStale {
-					log.Printf("Using stale cache for newera in unified playlist")
-				} else {
-					log.Printf("Using fresh cache for newera in unified playlist")
-				}
-			} else {
-				log.Printf("Using fresh content for newera in unified playlist")
-			}
-
-			// Parse and add newera streams (skip header line)
-			neweraStr := string(neweraContent)
-			if strings.HasPrefix(neweraStr, "#EXTM3U") {
-				neweraStr = strings.TrimPrefix(neweraStr, "#EXTM3U")
-				neweraStr = strings.TrimLeft(neweraStr, "\n")
-			}
-			if mergedContent.Len() > len("#EXTM3U\n") {
-				mergedContent.WriteString("\n")
-			}
-			mergedContent.WriteString(neweraStr)
-		} else {
-			log.Printf("Skipping newera source in unified playlist: %v", neweraErr)
-		}
-
-		// Clean up orphaned overrides if we have fresh data from at least one source (US-008)
-		hasFreshData := (elcanoErr == nil && !elcanoStale) || (neweraErr == nil && !neweraStale)
-		if hasFreshData {
-			// Collect all valid acestream IDs from both sources
-			var validIDs []string
-			if elcanoErr == nil {
-				elcanoIDs := rewriter.ExtractAcestreamIDs(elcanoContent)
-				validIDs = append(validIDs, elcanoIDs...)
-			}
-			if neweraErr == nil {
-				neweraIDs := rewriter.ExtractAcestreamIDs(neweraContent)
-				validIDs = append(validIDs, neweraIDs...)
-			}
-
-			// Clean orphaned overrides
-			if deletedCount, err := deps.overridesMgr.CleanOrphans(validIDs); err != nil {
-				log.Printf("WARNING: Failed to clean orphaned overrides: %v", err)
-			} else if deletedCount > 0 {
-				log.Printf("Cleaned up %d orphaned override(s)", deletedCount)
-			}
-		} else {
-			log.Printf("Skipping orphan cleanup - using only stale cache data")
-		}
-
-		// Apply channel overrides BEFORE deduplication and sorting (US-007)
-		mergedBytes := []byte(mergedContent.String())
-		overriddenContent := rewriter.ApplyOverrides(mergedBytes, deps.overridesMgr)
-
-		// Apply deduplication by acestream ID (US-003)
-		deduplicatedContent := rewriter.DeduplicateStreams(overriddenContent)
-
-		// Apply alphabetical sorting by display name (US-004)
-		sortedContent := rewriter.SortStreamsByName(deduplicatedContent)
-
-		// Rewrite acestream:// URLs and remove logos (US-005)
-		rewrittenContent := deps.rewriter.RewriteM3U(sortedContent, baseURL)
-
-		// Set content type
-		w.Header().Set("Content-Type", "audio/x-mpegurl")
-		w.WriteHeader(http.StatusOK)
-		if _, err := w.Write(rewrittenContent); err != nil {
-			log.Printf("Error writing unified playlist: %v", err)
-		}
-	})
+	handler.HandleFunc("/playlist.m3u", createUnifiedPlaylistHandler(deps))
 
 	// API endpoints for channels
 	elcanoURL := elcanoIPFSURL
