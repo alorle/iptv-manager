@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useBulkEditForm, type BulkEditField } from '../hooks/useBulkEditForm'
 import { LoadingSpinner } from './LoadingSpinner'
 import './BulkEditModal.css'
 
@@ -8,42 +8,9 @@ interface BulkEditModalProps {
   onSubmit: (field: string, value: string | boolean) => Promise<void>
 }
 
-type BulkEditField = 'enabled' | 'tvg_id' | 'tvg_name' | 'tvg_logo' | 'group_title'
-
 export function BulkEditModal({ selectedCount, onClose, onSubmit }: BulkEditModalProps) {
-  const [field, setField] = useState<BulkEditField>('enabled')
-  const [value, setValue] = useState<string>('true')
-  const [submitting, setSubmitting] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-    setSubmitting(true)
-    setError(null)
-
-    try {
-      let processedValue: string | boolean = value
-
-      // Convert enabled field to boolean
-      if (field === 'enabled') {
-        processedValue = value === 'true'
-      }
-
-      await onSubmit(field, processedValue)
-      onClose()
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to update channels')
-    } finally {
-      setSubmitting(false)
-    }
-  }
-
-  // Reset value when field changes
-  const handleFieldChange = (newField: BulkEditField) => {
-    setField(newField)
-    // Set default value based on field type
-    setValue(newField === 'enabled' ? 'true' : '')
-  }
+  const { field, value, submitting, error, handleFieldChange, setValue, handleSubmit } =
+    useBulkEditForm()
 
   return (
     <div className="modal-overlay" onClick={onClose}>
@@ -55,7 +22,7 @@ export function BulkEditModal({ selectedCount, onClose, onSubmit }: BulkEditModa
           </button>
         </div>
 
-        <form onSubmit={handleSubmit}>
+        <form onSubmit={(e) => handleSubmit(e, onSubmit, onClose)}>
           <div className="modal-body">
             <div className="form-group">
               <label htmlFor="field-select">Field to Update</label>
