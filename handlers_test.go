@@ -163,7 +163,7 @@ func TestStreamHandler_WithMockEngine(t *testing.T) {
 		// Simulate streaming response
 		w.Header().Set("Content-Type", "video/mp2t")
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte("mock stream data"))
+		_, _ = w.Write([]byte("mock stream data"))
 	}))
 	defer mockEngine.Close()
 
@@ -227,7 +227,7 @@ func TestStreamHandler_TranscodeParameters(t *testing.T) {
 
 		w.Header().Set("Content-Type", "video/mp2t")
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte("mock data"))
+		_, _ = w.Write([]byte("mock data"))
 	}))
 	defer mockEngine.Close()
 
@@ -263,7 +263,7 @@ func TestStreamHandler_PIDReuse(t *testing.T) {
 	firstPID := pidMgr.GetOrCreatePID(contentID, clientID)
 
 	// Disconnect (release PID but don't cleanup yet)
-	pidMgr.ReleasePID(firstPID)
+	_ = pidMgr.ReleasePID(firstPID)
 
 	// Reconnection from same client - should reuse PID
 	secondPID := pidMgr.GetOrCreatePID(contentID, clientID)
@@ -273,7 +273,7 @@ func TestStreamHandler_PIDReuse(t *testing.T) {
 	}
 
 	// After cleanup, new PID should be generated
-	pidMgr.ReleasePID(secondPID)
+	_ = pidMgr.ReleasePID(secondPID)
 	pidMgr.CleanupDisconnected()
 
 	thirdPID := pidMgr.GetOrCreatePID(contentID, clientID)
@@ -288,7 +288,7 @@ func TestHealthHandler(t *testing.T) {
 
 	healthHandler := func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte("OK"))
+		_, _ = w.Write([]byte("OK"))
 	}
 
 	healthHandler(w, req)
@@ -338,7 +338,7 @@ func createStreamHandler(mux *multiplexer.Multiplexer, pidMgr *pidmanager.Manage
 			}
 		}
 
-		pidMgr.ReleasePID(pid)
+		_ = pidMgr.ReleasePID(pid)
 		pidMgr.CleanupDisconnected()
 	}
 }
