@@ -317,36 +317,110 @@ func (s *Stream) fanOut(ctx context.Context, cfg Config) {
 }
 
 // attemptReconnection attempts to reconnect to the upstream server
+// shouldStopReconnecting checks if reconnection should stop due to context cancellation or no clients
+func (s *Stream) shouldStopReconnecting(ctx context.Context, attemptNumber int) bool {
+	if ctx.Err() == nil && s.ClientCount() > 0 {
+		return false
+	}
+
+	reason := "context canceled"
+	if s.ClientCount() == 0 {
+		reason = "no clients remaining"
+	}
+
+	log.Printf("Stream %s: Stopping reconnection - no clients or context canceled", s.ContentID)
+	if s.resLogger != nil {
+		s.resLogger.LogReconnectFailed(s.ContentID, reason, attemptNumber)
+	}
+
+	return true
+}
+
+// waitForCircuitBreaker waits for the circuit breaker to close if it's open
+// Returns false if context is canceled while waiting
+func (s *Stream) waitForCircuitBreaker(ctx context.Context, cfg Config, attemptNumber int) bool {
+	if s.circuitBreaker.State() != circuitbreaker.StateOpen {
+		return true
+	}
+
+	log.Printf("Stream %s: Circuit breaker is OPEN, skipping reconnection attempt %d", s.ContentID, attemptNumber)
+
+	// Wait for circuit breaker timeout before checking again
+	select {
+	case <-time.After(cfg.ResilienceConfig.CBTimeout):
+		return true
+	case <-ctx.Done():
+		return false
+	}
+}
+
+// connectToUpstream attempts to establish a new connection to the upstream server
+func (s *Stream) connectToUpstream(ctx context.Context) (io.ReadCloser, error) {
+	var newUpstream io.ReadCloser
+
+	err := s.circuitBreaker.Execute(func() error {
+		req, err := http.NewRequestWithContext(ctx, "GET", s.upstreamURL, nil)
+		if err != nil {
+			return fmt.Errorf("failed to create request: %w", err)
+		}
+
+		resp, err := s.httpClient.Do(req)
+		if err != nil {
+			return fmt.Errorf("failed to connect to upstream: %w", err)
+		}
+
+		if resp.StatusCode != http.StatusOK {
+			if closeErr := resp.Body.Close(); closeErr != nil {
+				log.Printf("Stream %s: warning: failed to close response body: %v", s.ContentID, closeErr)
+			}
+			return fmt.Errorf("upstream returned status %d", resp.StatusCode)
+		}
+
+		newUpstream = resp.Body
+		return nil
+	})
+
+	return newUpstream, err
+}
+
+// handleReconnectionSuccess processes a successful reconnection
+func (s *Stream) handleReconnectionSuccess(newUpstream io.ReadCloser, attemptNumber int) {
+	downtime := time.Since(s.reconnectStart)
+	log.Printf("Stream %s: Reconnection attempt #%d succeeded - resuming normal streaming", s.ContentID, attemptNumber)
+
+	if s.resLogger != nil {
+		s.resLogger.LogReconnectSuccess(s.ContentID, downtime)
+	}
+
+	metrics.RecordUpstreamReconnection(s.ContentID)
+
+	s.mu.Lock()
+	s.upstream = newUpstream
+	s.mu.Unlock()
+}
+
+// calculateNextBackoff calculates the next backoff duration using exponential backoff
+func calculateNextBackoff(current, max time.Duration) time.Duration {
+	next := current * 2
+	if next > max {
+		return max
+	}
+	return next
+}
+
 // Returns true if reconnection succeeded, false if it should stop trying
 func (s *Stream) attemptReconnection(ctx context.Context, cfg Config, attemptNumber *int) bool {
 	backoff := cfg.ResilienceConfig.ReconnectInitialBackoff
 
 	for {
 		// Check if we should stop reconnecting
-		if ctx.Err() != nil || s.ClientCount() == 0 {
-			reason := "context canceled"
-			if s.ClientCount() == 0 {
-				reason = "no clients remaining"
-			}
-			log.Printf("Stream %s: Stopping reconnection - no clients or context canceled", s.ContentID)
-			if s.resLogger != nil {
-				s.resLogger.LogReconnectFailed(s.ContentID, reason, *attemptNumber)
-			}
+		if s.shouldStopReconnecting(ctx, *attemptNumber) {
 			return false
 		}
 
-		// Check circuit breaker state before attempting reconnection
-		cbState := s.circuitBreaker.State()
-		if cbState == circuitbreaker.StateOpen {
-			log.Printf("Stream %s: Circuit breaker is OPEN, skipping reconnection attempt %d", s.ContentID, *attemptNumber)
-
-			// Wait for circuit breaker timeout before checking again
-			select {
-			case <-time.After(cfg.ResilienceConfig.CBTimeout):
-				continue
-			case <-ctx.Done():
-				return false
-			}
+		// Check circuit breaker state and wait if needed
+		if !s.waitForCircuitBreaker(ctx, cfg, *attemptNumber) {
+			return false
 		}
 
 		// Log reconnection attempt
@@ -363,57 +437,17 @@ func (s *Stream) attemptReconnection(ctx context.Context, cfg Config, attemptNum
 			return false
 		}
 
-		// Attempt to reconnect through circuit breaker
-		var newUpstream io.ReadCloser
-		reconnectErr := s.circuitBreaker.Execute(func() error {
-			req, err := http.NewRequestWithContext(ctx, "GET", s.upstreamURL, nil)
-			if err != nil {
-				return fmt.Errorf("failed to create request: %w", err)
-			}
-
-			resp, err := s.httpClient.Do(req)
-			if err != nil {
-				return fmt.Errorf("failed to connect to upstream: %w", err)
-			}
-
-			if resp.StatusCode != http.StatusOK {
-				if closeErr := resp.Body.Close(); closeErr != nil {
-					log.Printf("Stream %s: warning: failed to close response body: %v", s.ContentID, closeErr)
-				}
-				return fmt.Errorf("upstream returned status %d", resp.StatusCode)
-			}
-
-			newUpstream = resp.Body
-			return nil
-		})
-
+		// Attempt to reconnect
+		newUpstream, reconnectErr := s.connectToUpstream(ctx)
 		if reconnectErr != nil {
 			log.Printf("Stream %s: Reconnection attempt #%d failed: %v", s.ContentID, *attemptNumber, reconnectErr)
-
-			// Calculate next backoff (exponential)
-			backoff = backoff * 2
-			if backoff > cfg.ResilienceConfig.ReconnectMaxBackoff {
-				backoff = cfg.ResilienceConfig.ReconnectMaxBackoff
-			}
-
+			backoff = calculateNextBackoff(backoff, cfg.ResilienceConfig.ReconnectMaxBackoff)
 			*attemptNumber++
 			continue
 		}
 
 		// Reconnection successful
-		downtime := time.Since(s.reconnectStart)
-		log.Printf("Stream %s: Reconnection attempt #%d succeeded - resuming normal streaming", s.ContentID, *attemptNumber)
-		if s.resLogger != nil {
-			s.resLogger.LogReconnectSuccess(s.ContentID, downtime)
-		}
-
-		// Record reconnection metric
-		metrics.RecordUpstreamReconnection(s.ContentID)
-
-		s.mu.Lock()
-		s.upstream = newUpstream
-		s.mu.Unlock()
-
+		s.handleReconnectionSuccess(newUpstream, *attemptNumber)
 		return true
 	}
 }
