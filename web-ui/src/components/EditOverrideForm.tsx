@@ -5,10 +5,9 @@ import { useTvgIdValidation } from '../hooks/useTvgIdValidation'
 import { useChannelOverrideMutations } from '../hooks/useChannelOverrideMutations'
 import { useFocusManagement } from '../hooks/useFocusManagement'
 import { ConfirmDialog } from './ConfirmDialog'
-import { LoadingSpinner } from './LoadingSpinner'
-import { FormField } from './FormField'
-import { TvgIdField } from './TvgIdField'
-import { CustomAttributesSection } from './CustomAttributesSection'
+import { FormHeader } from './FormHeader'
+import { FormActions } from './FormActions'
+import { OverrideFormFields } from './OverrideFormFields'
 import type { useToast } from '../hooks/useToast'
 import './EditOverrideForm.css'
 
@@ -105,124 +104,47 @@ export function EditOverrideForm({ channel, onClose, onSave, toast }: EditOverri
       onKeyDown={handleKeyDown}
     >
       <div ref={modalRef} className="edit-override-form" onClick={(e) => e.stopPropagation()}>
-        <div className="form-header">
-          <h2 id="edit-form-title">Edit Channel Override</h2>
-          <button
-            ref={closeButtonRef}
-            className="close-button"
-            onClick={onClose}
-            aria-label="Close dialog"
-            type="button"
-          >
-            ×
-          </button>
-        </div>
+        <FormHeader
+          title="Edit Channel Override"
+          onClose={onClose}
+          closeButtonRef={closeButtonRef}
+        />
 
-        <div className="form-content">
-          <div className="channel-info">
-            <h3>{stream.name}</h3>
-            <p className="acestream-id">ID: {stream.acestream_id}</p>
-          </div>
+        <OverrideFormFields
+          stream={stream}
+          channel={channel}
+          enabled={enabled}
+          tvgId={tvgId}
+          tvgName={tvgName}
+          tvgLogo={tvgLogo}
+          groupTitle={groupTitle}
+          customAttributes={customAttributes}
+          forceCheck={forceCheck}
+          validating={validating}
+          validationError={validationError}
+          tvgIdValidation={tvgIdValidation}
+          isTvgIdInvalid={isTvgIdInvalid}
+          onEnabledChange={setEnabled}
+          onTvgIdChange={setTvgId}
+          onTvgNameChange={setTvgName}
+          onTvgLogoChange={setTvgLogo}
+          onGroupTitleChange={setGroupTitle}
+          onForceCheckChange={setForceCheck}
+          onTvgIdBlur={handleTvgIdBlur}
+          onSuggestionClick={handleSuggestionClick}
+          onAddCustomAttribute={handleAddCustomAttribute}
+          onRemoveCustomAttribute={handleRemoveCustomAttribute}
+          onCustomAttributeChange={handleCustomAttributeChange}
+        />
 
-          {validationError && <div className="error-message">{validationError}</div>}
-
-          <div className="form-field">
-            <label>
-              <input
-                type="checkbox"
-                checked={enabled}
-                onChange={(e) => setEnabled(e.target.checked)}
-              />
-              <span className="toggle-label">Channel Enabled</span>
-            </label>
-          </div>
-
-          <TvgIdField
-            tvgId={tvgId}
-            validating={validating}
-            validation={tvgIdValidation}
-            isTvgIdInvalid={isTvgIdInvalid}
-            originalTvgId={channel.tvg_id}
-            onTvgIdChange={setTvgId}
-            onTvgIdBlur={handleTvgIdBlur}
-            onSuggestionClick={handleSuggestionClick}
-          />
-
-          <FormField label="TVG-Name" htmlFor="tvg-name">
-            <input
-              id="tvg-name"
-              type="text"
-              value={tvgName}
-              onChange={(e) => setTvgName(e.target.value)}
-              placeholder={stream.tvg_name || 'Original TVG-Name'}
-            />
-          </FormField>
-
-          <FormField label="TVG-Logo URL" htmlFor="tvg-logo">
-            <input
-              id="tvg-logo"
-              type="text"
-              value={tvgLogo}
-              onChange={(e) => setTvgLogo(e.target.value)}
-              placeholder={channel.tvg_logo || 'Original TVG-Logo'}
-            />
-          </FormField>
-
-          <FormField label="Group Title" htmlFor="group-title">
-            <input
-              id="group-title"
-              type="text"
-              value={groupTitle}
-              onChange={(e) => setGroupTitle(e.target.value)}
-              placeholder={channel.group_title || 'Original Group Title'}
-            />
-          </FormField>
-
-          <CustomAttributesSection
-            customAttributes={customAttributes}
-            onAdd={handleAddCustomAttribute}
-            onRemove={handleRemoveCustomAttribute}
-            onChange={handleCustomAttributeChange}
-          />
-
-          {isTvgIdInvalid && (
-            <div className="form-field">
-              <label>
-                <input
-                  type="checkbox"
-                  checked={forceCheck}
-                  onChange={(e) => setForceCheck(e.target.checked)}
-                />
-                <span className="force-label">Force save (skip validation)</span>
-              </label>
-            </div>
-          )}
-        </div>
-
-        <div className="form-actions">
-          <button className="save-button" onClick={handleSave} disabled={saving || !canSave}>
-            {saving ? (
-              <>
-                Saving
-                <LoadingSpinner size="small" inline />
-              </>
-            ) : (
-              'Save'
-            )}
-          </button>
-          <button className="cancel-button" onClick={onClose} disabled={saving}>
-            Cancel
-          </button>
-          {stream.has_override && (
-            <button
-              className="delete-button"
-              onClick={() => setShowDeleteConfirm(true)}
-              disabled={saving}
-            >
-              Delete Override
-            </button>
-          )}
-        </div>
+        <FormActions
+          saving={saving}
+          canSave={canSave}
+          hasOverride={stream.has_override}
+          onSave={handleSave}
+          onCancel={onClose}
+          onDelete={() => setShowDeleteConfirm(true)}
+        />
       </div>
 
       {showDeleteConfirm && (
