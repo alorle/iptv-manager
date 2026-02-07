@@ -1,7 +1,6 @@
 package multiplexer
 
 import (
-	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -11,39 +10,6 @@ import (
 	"github.com/alorle/iptv-manager/circuitbreaker"
 	"github.com/alorle/iptv-manager/config"
 )
-
-// mockReadCloser simulates an upstream connection that can fail and reconnect
-type mockReadCloser struct {
-	data      []byte
-	pos       int
-	failAfter int
-	readCount int
-	closed    bool
-}
-
-func (m *mockReadCloser) Read(p []byte) (n int, err error) {
-	if m.closed {
-		return 0, io.EOF
-	}
-
-	m.readCount++
-	if m.failAfter > 0 && m.readCount > m.failAfter {
-		return 0, io.ErrUnexpectedEOF
-	}
-
-	if m.pos >= len(m.data) {
-		return 0, io.EOF
-	}
-
-	n = copy(p, m.data[m.pos:])
-	m.pos += n
-	return n, nil
-}
-
-func (m *mockReadCloser) Close() error {
-	m.closed = true
-	return nil
-}
 
 func TestStream_RingBufferDuringReconnection(t *testing.T) {
 	// Create a simple test configuration
