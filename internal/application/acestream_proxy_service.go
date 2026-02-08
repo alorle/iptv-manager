@@ -52,10 +52,8 @@ func (s *AceStreamProxyService) StreamToClient(ctx context.Context, infoHash str
 	// Generate unique PID for this client
 	pid := s.pidGen.Generate()
 
-	s.logger.Info("client connecting to stream", "infohash", infoHash, "pid", pid)
-
 	// Register the client session
-	session, isNew, err := s.sessions.AddClient(infoHash, pid)
+	session, isNew, err := s.sessions.AddClient(infoHash, pid, s.logger)
 	if err != nil {
 		s.logger.Error("failed to register client", "infohash", infoHash, "pid", pid, "error", err)
 		return fmt.Errorf("failed to register client: %w", err)
@@ -66,7 +64,7 @@ func (s *AceStreamProxyService) StreamToClient(ctx context.Context, infoHash str
 
 	// If this is a new session, start the stream with the engine
 	if isNew {
-		s.logger.Info("starting new stream session", "infohash", infoHash, "pid", pid)
+		s.logger.Info("creating new stream session", "infohash", infoHash, "pid", pid)
 		if err := s.startEngineStream(ctx, session); err != nil {
 			s.logger.Error("failed to start engine stream", "infohash", infoHash, "pid", pid, "error", err)
 			s.sessions.RemoveClient(infoHash, pid)
@@ -94,13 +92,15 @@ func (s *AceStreamProxyService) startEngineStream(ctx context.Context, session *
 		return fmt.Errorf("no PID available to start stream")
 	}
 
+	s.logger.Info("starting stream in engine", "infohash", session.InfoHash(), "pid", firstPID)
+
 	streamURL, err := s.engine.StartStream(ctx, session.InfoHash(), firstPID)
 	if err != nil {
 		session.SetError(err)
 		return err
 	}
 
-	s.logger.Info("stream started", "infohash", session.InfoHash(), "pid", firstPID, "stream_url", streamURL)
+	s.logger.Info("stream ready", "infohash", session.InfoHash(), "stream_url", streamURL)
 	session.SetStreamURL(streamURL)
 	session.MarkReady()
 	return nil
@@ -111,13 +111,18 @@ func (s *AceStreamProxyService) waitForStreamReady(ctx context.Context, session 
 	ticker := time.NewTicker(100 * time.Millisecond)
 	defer ticker.Stop()
 
-	timeout := time.After(30 * time.Second)
+	const timeoutDuration = 30 * time.Second
+	startTime := time.Now()
+	timeout := time.After(timeoutDuration)
 
 	for {
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
 		case <-timeout:
+			s.logger.Error("timeout waiting for stream ready",
+				"infohash", session.InfoHash(),
+				"duration", timeoutDuration)
 			return fmt.Errorf("timeout waiting for stream to be ready")
 		case <-ticker.C:
 			if session.IsReady() {
@@ -126,6 +131,10 @@ func (s *AceStreamProxyService) waitForStreamReady(ctx context.Context, session 
 			if err := session.GetError(); err != nil {
 				return err
 			}
+			s.logger.Debug("polling stream ready state",
+				"infohash", session.InfoHash(),
+				"state", "waiting",
+				"elapsed", time.Since(startTime))
 		}
 	}
 }
@@ -135,6 +144,7 @@ func (s *AceStreamProxyService) streamWithReconnection(ctx context.Context, sess
 	const maxRetries = 3
 	retryDelay := 2 * time.Second
 
+	var lastErr error
 	for attempt := 0; attempt < maxRetries; attempt++ {
 		streamURL := session.GetStreamURL()
 		if streamURL == "" {
@@ -146,16 +156,22 @@ func (s *AceStreamProxyService) streamWithReconnection(ctx context.Context, sess
 			return err
 		}
 
-		s.logger.Warn("stream content error", "infohash", session.InfoHash(), "pid", pid, "attempt", attempt+1, "error", err)
+		lastErr = err
 
 		// Check if we should retry
 		if attempt < maxRetries-1 {
+			s.logger.Warn("reconnection attempt",
+				"infohash", session.InfoHash(),
+				"attempt", attempt+1,
+				"max_attempts", maxRetries,
+				"delay", retryDelay,
+				"previous_error", err)
+
 			// Try to restart the stream
 			select {
 			case <-ctx.Done():
 				return ctx.Err()
 			case <-time.After(retryDelay):
-				s.logger.Info("retrying stream", "infohash", session.InfoHash(), "pid", pid, "attempt", attempt+2)
 				// Attempt to restart the stream
 				if restartErr := s.restartStream(ctx, session, pid); restartErr != nil {
 					s.logger.Error("stream restart failed", "infohash", session.InfoHash(), "pid", pid, "error", restartErr)
@@ -163,12 +179,14 @@ func (s *AceStreamProxyService) streamWithReconnection(ctx context.Context, sess
 				}
 				retryDelay *= 2 // Exponential backoff
 			}
-		} else {
-			return fmt.Errorf("stream failed after %d attempts: %w", maxRetries, err)
 		}
 	}
 
-	return fmt.Errorf("stream failed after maximum retries")
+	s.logger.Error("reconnection retries exhausted",
+		"infohash", session.InfoHash(),
+		"final_error", lastErr)
+
+	return fmt.Errorf("stream failed after %d attempts: %w", maxRetries, lastErr)
 }
 
 // restartStream attempts to restart a failed stream.
@@ -191,13 +209,18 @@ func (s *AceStreamProxyService) cleanupClient(infoHash, pid string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	s.logger.Info("client disconnected", "infohash", infoHash, "pid", pid)
+	remainingClients, isLast := s.sessions.RemoveClient(infoHash, pid)
 
-	isLast := s.sessions.RemoveClient(infoHash, pid)
+	s.logger.Info("client disconnecting",
+		"infohash", infoHash,
+		"pid", pid,
+		"remaining_clients", remainingClients)
 
 	// If this was the last client, stop the stream
 	if isLast {
-		s.logger.Info("last client disconnected, stopping stream", "infohash", infoHash, "pid", pid)
+		s.logger.Info("stopping stream (last client disconnected)",
+			"infohash", infoHash)
+
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
 
@@ -234,7 +257,7 @@ func newSessionRegistry() *sessionRegistry {
 
 // AddClient adds a client to a session, creating the session if needed.
 // Returns the session, whether it's new, and any error.
-func (r *sessionRegistry) AddClient(infoHash, pid string) (*streamSession, bool, error) {
+func (r *sessionRegistry) AddClient(infoHash, pid string, logger *slog.Logger) (*streamSession, bool, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
@@ -245,28 +268,35 @@ func (r *sessionRegistry) AddClient(infoHash, pid string) (*streamSession, bool,
 	}
 
 	session.AddPID(pid)
+
+	logger.Info("client registered to session",
+		"infohash", infoHash,
+		"pid", pid,
+		"client_count", session.ClientCount())
+
 	return session, !exists, nil
 }
 
 // RemoveClient removes a client from a session.
-// Returns true if this was the last client and the session was removed.
-func (r *sessionRegistry) RemoveClient(infoHash, pid string) bool {
+// Returns the remaining client count and true if this was the last client (session removed).
+func (r *sessionRegistry) RemoveClient(infoHash, pid string) (int, bool) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
 	session, exists := r.sessions[infoHash]
 	if !exists {
-		return false
+		return 0, false
 	}
 
 	session.RemovePID(pid)
+	remainingClients := session.ClientCount()
 
-	if session.ClientCount() == 0 {
+	if remainingClients == 0 {
 		delete(r.sessions, infoHash)
-		return true
+		return 0, true
 	}
 
-	return false
+	return remainingClients, false
 }
 
 // GetAllSessions returns information about all active sessions.
