@@ -373,6 +373,7 @@ type mockAceStreamEngine struct {
 	getStatsFunc      func(ctx context.Context, pid string) (stats driven.StreamStats, err error)
 	stopStreamFunc    func(ctx context.Context, pid string) error
 	streamContentFunc func(ctx context.Context, streamURL string, dst io.Writer) error
+	pingFunc          func(ctx context.Context) error
 }
 
 func (m *mockAceStreamEngine) StartStream(ctx context.Context, infoHash, pid string) (string, error) {
@@ -399,6 +400,13 @@ func (m *mockAceStreamEngine) StopStream(ctx context.Context, pid string) error 
 func (m *mockAceStreamEngine) StreamContent(ctx context.Context, streamURL string, dst io.Writer) error {
 	if m.streamContentFunc != nil {
 		return m.streamContentFunc(ctx, streamURL, dst)
+	}
+	return nil
+}
+
+func (m *mockAceStreamEngine) Ping(ctx context.Context) error {
+	if m.pingFunc != nil {
+		return m.pingFunc(ctx)
 	}
 	return nil
 }

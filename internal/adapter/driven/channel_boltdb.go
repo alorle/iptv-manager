@@ -178,3 +178,21 @@ func (r *ChannelBoltDBRepository) Delete(ctx context.Context, name string) error
 		return bucket.Delete(key)
 	})
 }
+
+// Ping checks if the BoltDB database is accessible and operational.
+func (r *ChannelBoltDBRepository) Ping(ctx context.Context) error {
+	// Check context cancellation
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+
+	// Perform a simple read transaction to verify DB is accessible
+	return r.db.View(func(tx *bbolt.Tx) error {
+		// Simply verify we can start a transaction and access a bucket
+		bucket := tx.Bucket([]byte(channelsBucket))
+		if bucket == nil {
+			return errors.New("channels bucket not found")
+		}
+		return nil
+	})
+}

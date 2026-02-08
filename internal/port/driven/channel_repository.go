@@ -23,4 +23,8 @@ type ChannelRepository interface {
 	// Delete removes a channel by its name. Returns channel.ErrChannelNotFound
 	// if the channel does not exist.
 	Delete(ctx context.Context, name string) error
+
+	// Ping checks if the repository (database) is accessible and operational.
+	// Returns nil if healthy, otherwise returns an error describing the issue.
+	Ping(ctx context.Context) error
 }

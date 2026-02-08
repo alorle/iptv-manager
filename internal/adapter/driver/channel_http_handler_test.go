@@ -20,6 +20,7 @@ type mockChannelRepository struct {
 	findByNameFunc func(ctx context.Context, name string) (channel.Channel, error)
 	findAllFunc    func(ctx context.Context) ([]channel.Channel, error)
 	deleteFunc     func(ctx context.Context, name string) error
+	pingFunc       func(ctx context.Context) error
 }
 
 func (m *mockChannelRepository) Save(ctx context.Context, ch channel.Channel) error {
@@ -46,6 +47,13 @@ func (m *mockChannelRepository) FindAll(ctx context.Context) ([]channel.Channel,
 func (m *mockChannelRepository) Delete(ctx context.Context, name string) error {
 	if m.deleteFunc != nil {
 		return m.deleteFunc(ctx, name)
+	}
+	return nil
+}
+
+func (m *mockChannelRepository) Ping(ctx context.Context) error {
+	if m.pingFunc != nil {
+		return m.pingFunc(ctx)
 	}
 	return nil
 }

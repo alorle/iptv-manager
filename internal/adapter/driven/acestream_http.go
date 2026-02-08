@@ -238,3 +238,26 @@ func (a *AceStreamHTTPAdapter) GetEngineStats(ctx context.Context) (EngineStats,
 func (a *AceStreamHTTPAdapter) SetHTTPClient(client *http.Client) {
 	a.httpClient = client
 }
+
+// Ping checks if the AceStream engine is accessible and operational.
+func (a *AceStreamHTTPAdapter) Ping(ctx context.Context) error {
+	// Try to access the manifest endpoint as a health check
+	reqURL := fmt.Sprintf("%s/ace/manifest.json", a.baseURL)
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, reqURL, nil)
+	if err != nil {
+		return fmt.Errorf("failed to create ping request: %w", err)
+	}
+
+	resp, err := a.httpClient.Do(req)
+	if err != nil {
+		return fmt.Errorf("acestream engine not reachable: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("acestream engine returned status %d", resp.StatusCode)
+	}
+
+	return nil
+}
