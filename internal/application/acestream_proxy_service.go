@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"sync"
 	"time"
 
@@ -28,14 +29,16 @@ type AceStreamProxyService struct {
 	sessions *sessionRegistry
 	mu       sync.Mutex
 	pidGen   *pidGenerator
+	logger   *slog.Logger
 }
 
 // NewAceStreamProxyService creates a new proxy service with the given engine.
-func NewAceStreamProxyService(engine driven.AceStreamEngine) *AceStreamProxyService {
+func NewAceStreamProxyService(engine driven.AceStreamEngine, logger *slog.Logger) *AceStreamProxyService {
 	return &AceStreamProxyService{
 		engine:   engine,
 		sessions: newSessionRegistry(),
 		pidGen:   newPIDGenerator(),
+		logger:   logger,
 	}
 }
 
@@ -49,9 +52,12 @@ func (s *AceStreamProxyService) StreamToClient(ctx context.Context, infoHash str
 	// Generate unique PID for this client
 	pid := s.pidGen.Generate()
 
+	s.logger.Info("client connecting to stream", "infohash", infoHash, "pid", pid)
+
 	// Register the client session
 	session, isNew, err := s.sessions.AddClient(infoHash, pid)
 	if err != nil {
+		s.logger.Error("failed to register client", "infohash", infoHash, "pid", pid, "error", err)
 		return fmt.Errorf("failed to register client: %w", err)
 	}
 
@@ -60,13 +66,17 @@ func (s *AceStreamProxyService) StreamToClient(ctx context.Context, infoHash str
 
 	// If this is a new session, start the stream with the engine
 	if isNew {
+		s.logger.Info("starting new stream session", "infohash", infoHash, "pid", pid)
 		if err := s.startEngineStream(ctx, session); err != nil {
+			s.logger.Error("failed to start engine stream", "infohash", infoHash, "pid", pid, "error", err)
 			s.sessions.RemoveClient(infoHash, pid)
 			return fmt.Errorf("failed to start engine stream: %w", err)
 		}
 	} else {
+		s.logger.Debug("joining existing stream session", "infohash", infoHash, "pid", pid)
 		// Wait for the stream to be ready if another client is starting it
 		if err := s.waitForStreamReady(ctx, session); err != nil {
+			s.logger.Error("stream not ready", "infohash", infoHash, "pid", pid, "error", err)
 			s.sessions.RemoveClient(infoHash, pid)
 			return err
 		}
@@ -90,6 +100,7 @@ func (s *AceStreamProxyService) startEngineStream(ctx context.Context, session *
 		return err
 	}
 
+	s.logger.Info("stream started", "infohash", session.InfoHash(), "pid", firstPID, "stream_url", streamURL)
 	session.SetStreamURL(streamURL)
 	session.MarkReady()
 	return nil
@@ -135,6 +146,8 @@ func (s *AceStreamProxyService) streamWithReconnection(ctx context.Context, sess
 			return err
 		}
 
+		s.logger.Warn("stream content error", "infohash", session.InfoHash(), "pid", pid, "attempt", attempt+1, "error", err)
+
 		// Check if we should retry
 		if attempt < maxRetries-1 {
 			// Try to restart the stream
@@ -142,8 +155,10 @@ func (s *AceStreamProxyService) streamWithReconnection(ctx context.Context, sess
 			case <-ctx.Done():
 				return ctx.Err()
 			case <-time.After(retryDelay):
+				s.logger.Info("retrying stream", "infohash", session.InfoHash(), "pid", pid, "attempt", attempt+2)
 				// Attempt to restart the stream
 				if restartErr := s.restartStream(ctx, session, pid); restartErr != nil {
+					s.logger.Error("stream restart failed", "infohash", session.InfoHash(), "pid", pid, "error", restartErr)
 					return fmt.Errorf("stream failed and could not restart: %w", err)
 				}
 				retryDelay *= 2 // Exponential backoff
@@ -176,17 +191,19 @@ func (s *AceStreamProxyService) cleanupClient(infoHash, pid string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
+	s.logger.Info("client disconnected", "infohash", infoHash, "pid", pid)
+
 	isLast := s.sessions.RemoveClient(infoHash, pid)
 
 	// If this was the last client, stop the stream
 	if isLast {
+		s.logger.Info("last client disconnected, stopping stream", "infohash", infoHash, "pid", pid)
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
 
 		// Use the PID that was just removed to stop the stream
 		if err := s.engine.StopStream(ctx, pid); err != nil {
-			// Log error but don't fail cleanup
-			_ = err
+			s.logger.Error("failed to stop stream", "infohash", infoHash, "pid", pid, "error", err)
 		}
 	}
 }

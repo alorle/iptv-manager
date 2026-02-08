@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log/slog"
 	"net/http"
 	"net/url"
 	"time"
@@ -17,16 +18,18 @@ import (
 type AceStreamHTTPAdapter struct {
 	baseURL    string
 	httpClient *http.Client
+	logger     *slog.Logger
 }
 
 // NewAceStreamHTTPAdapter creates a new HTTP adapter for AceStream Engine.
 // baseURL should point to the AceStream Engine HTTP API (e.g., http://localhost:6878).
-func NewAceStreamHTTPAdapter(baseURL string) *AceStreamHTTPAdapter {
+func NewAceStreamHTTPAdapter(baseURL string, logger *slog.Logger) *AceStreamHTTPAdapter {
 	return &AceStreamHTTPAdapter{
 		baseURL: baseURL,
 		httpClient: &http.Client{
 			Timeout: 30 * time.Second,
 		},
+		logger: logger,
 	}
 }
 
@@ -40,6 +43,8 @@ func (a *AceStreamHTTPAdapter) StartStream(ctx context.Context, infoHash, pid st
 
 	reqURL := fmt.Sprintf("%s/ace/getstream?%s", a.baseURL, params.Encode())
 
+	a.logger.Debug("requesting stream from engine", "infohash", infoHash, "pid", pid, "url", reqURL)
+
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, reqURL, nil)
 	if err != nil {
 		return "", fmt.Errorf("failed to create start stream request: %w", err)
@@ -47,12 +52,14 @@ func (a *AceStreamHTTPAdapter) StartStream(ctx context.Context, infoHash, pid st
 
 	resp, err := a.httpClient.Do(req)
 	if err != nil {
+		a.logger.Error("failed to connect to acestream engine", "infohash", infoHash, "pid", pid, "error", err)
 		return "", fmt.Errorf("failed to start stream: %w", err)
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
+		a.logger.Error("acestream engine returned error", "infohash", infoHash, "pid", pid, "status", resp.StatusCode, "body", string(body))
 		return "", fmt.Errorf("engine returned status %d: %s", resp.StatusCode, string(body))
 	}
 
@@ -70,6 +77,8 @@ func (a *AceStreamHTTPAdapter) StartStream(ctx context.Context, infoHash, pid st
 	if result.Response.StreamURL == "" {
 		return "", fmt.Errorf("engine did not return a stream URL")
 	}
+
+	a.logger.Info("acestream engine returned stream url", "infohash", infoHash, "pid", pid, "stream_url", result.Response.StreamURL)
 
 	return result.Response.StreamURL, nil
 }
@@ -132,6 +141,8 @@ func (a *AceStreamHTTPAdapter) StopStream(ctx context.Context, pid string) error
 
 	reqURL := fmt.Sprintf("%s/ace/stop?%s", a.baseURL, params.Encode())
 
+	a.logger.Debug("stopping stream on engine", "pid", pid, "url", reqURL)
+
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, reqURL, nil)
 	if err != nil {
 		return fmt.Errorf("failed to create stop stream request: %w", err)
@@ -139,14 +150,18 @@ func (a *AceStreamHTTPAdapter) StopStream(ctx context.Context, pid string) error
 
 	resp, err := a.httpClient.Do(req)
 	if err != nil {
+		a.logger.Error("failed to stop stream on engine", "pid", pid, "error", err)
 		return fmt.Errorf("failed to stop stream: %w", err)
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
+		a.logger.Error("engine returned error on stop", "pid", pid, "status", resp.StatusCode, "body", string(body))
 		return fmt.Errorf("engine returned status %d: %s", resp.StatusCode, string(body))
 	}
+
+	a.logger.Info("stream stopped on engine", "pid", pid)
 
 	return nil
 }
@@ -244,6 +259,8 @@ func (a *AceStreamHTTPAdapter) Ping(ctx context.Context) error {
 	// Try to access the manifest endpoint as a health check
 	reqURL := fmt.Sprintf("%s/ace/manifest.json", a.baseURL)
 
+	a.logger.Debug("pinging acestream engine", "url", reqURL)
+
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, reqURL, nil)
 	if err != nil {
 		return fmt.Errorf("failed to create ping request: %w", err)
@@ -251,13 +268,17 @@ func (a *AceStreamHTTPAdapter) Ping(ctx context.Context) error {
 
 	resp, err := a.httpClient.Do(req)
 	if err != nil {
+		a.logger.Error("acestream engine not reachable", "url", reqURL, "error", err)
 		return fmt.Errorf("acestream engine not reachable: %w", err)
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
+		a.logger.Error("acestream engine returned error on ping", "url", reqURL, "status", resp.StatusCode)
 		return fmt.Errorf("acestream engine returned status %d", resp.StatusCode)
 	}
+
+	a.logger.Debug("acestream engine is healthy", "url", reqURL)
 
 	return nil
 }

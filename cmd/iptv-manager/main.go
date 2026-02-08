@@ -3,9 +3,11 @@ package main
 import (
 	"context"
 	"log"
+	"log/slog"
 	"net/http"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
@@ -19,6 +21,7 @@ type config struct {
 	Port               string
 	AceStreamEngineURL string
 	DBPath             string
+	LogLevel           slog.Level
 }
 
 func loadConfig() config {
@@ -37,15 +40,43 @@ func loadConfig() config {
 		dbPath = "iptv-manager.db"
 	}
 
+	logLevel := slog.LevelInfo
+	if logLevelStr := os.Getenv("LOG_LEVEL"); logLevelStr != "" {
+		switch strings.ToUpper(logLevelStr) {
+		case "DEBUG":
+			logLevel = slog.LevelDebug
+		case "INFO":
+			logLevel = slog.LevelInfo
+		case "WARN":
+			logLevel = slog.LevelWarn
+		case "ERROR":
+			logLevel = slog.LevelError
+		}
+	}
+
 	return config{
 		Port:               port,
 		AceStreamEngineURL: aceStreamURL,
 		DBPath:             dbPath,
+		LogLevel:           logLevel,
 	}
 }
 
 func main() {
 	cfg := loadConfig()
+
+	// Create structured logger
+	logger := slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{
+		Level: cfg.LogLevel,
+	}))
+	slog.SetDefault(logger)
+
+	logger.Info("starting iptv-manager",
+		"port", cfg.Port,
+		"acestream_url", cfg.AceStreamEngineURL,
+		"db_path", cfg.DBPath,
+		"log_level", cfg.LogLevel.String(),
+	)
 
 	// Open BoltDB
 	db, err := bbolt.Open(cfg.DBPath, 0600, &bbolt.Options{Timeout: 1 * time.Second})
@@ -69,21 +100,21 @@ func main() {
 		log.Fatalf("failed to create stream repository: %v", err)
 	}
 
-	aceStreamEngine := driven.NewAceStreamHTTPAdapter(cfg.AceStreamEngineURL)
+	aceStreamEngine := driven.NewAceStreamHTTPAdapter(cfg.AceStreamEngineURL, logger)
 
 	// Create application services
 	channelService := application.NewChannelService(channelRepo, streamRepo)
 	streamService := application.NewStreamService(streamRepo, channelRepo)
 	playlistService := application.NewPlaylistService(streamRepo)
 	healthService := application.NewHealthService(channelRepo, aceStreamEngine)
-	aceStreamProxyService := application.NewAceStreamProxyService(aceStreamEngine)
+	aceStreamProxyService := application.NewAceStreamProxyService(aceStreamEngine, logger)
 
 	// Create HTTP handlers
 	channelHandler := driver.NewChannelHTTPHandler(channelService)
 	streamHandler := driver.NewStreamHTTPHandler(streamService)
 	playlistHandler := driver.NewPlaylistHTTPHandler(playlistService)
 	healthHandler := driver.NewHealthHTTPHandler(healthService)
-	aceStreamHandler := driver.NewAceStreamHTTPHandler(aceStreamProxyService)
+	aceStreamHandler := driver.NewAceStreamHTTPHandler(aceStreamProxyService, logger)
 
 	// Register routes
 	mux := http.NewServeMux()
@@ -106,9 +137,7 @@ func main() {
 
 	// Start server in a goroutine
 	go func() {
-		log.Printf("Starting IPTV Manager on port %s", cfg.Port)
-		log.Printf("AceStream Engine URL: %s", cfg.AceStreamEngineURL)
-		log.Printf("Database: %s", cfg.DBPath)
+		logger.Info("http server listening", "addr", server.Addr)
 		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 			log.Fatalf("server error: %v", err)
 		}
@@ -119,14 +148,14 @@ func main() {
 	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
 	<-sigChan
 
-	log.Println("Shutting down gracefully...")
+	logger.Info("shutdown signal received, shutting down gracefully")
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
 	if err := server.Shutdown(ctx); err != nil {
-		log.Printf("server shutdown error: %v", err)
+		logger.Error("server shutdown error", "error", err)
 	}
 
-	log.Println("Server stopped")
+	logger.Info("server stopped")
 }

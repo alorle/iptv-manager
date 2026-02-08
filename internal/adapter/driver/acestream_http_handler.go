@@ -2,6 +2,7 @@ package driver
 
 import (
 	"errors"
+	"log/slog"
 	"net/http"
 
 	"github.com/alorle/iptv-manager/internal/application"
@@ -10,12 +11,14 @@ import (
 // AceStreamHTTPHandler handles HTTP requests for AceStream proxy.
 type AceStreamHTTPHandler struct {
 	proxyService *application.AceStreamProxyService
+	logger       *slog.Logger
 }
 
 // NewAceStreamHTTPHandler creates a new HTTP handler for AceStream proxy.
-func NewAceStreamHTTPHandler(proxyService *application.AceStreamProxyService) *AceStreamHTTPHandler {
+func NewAceStreamHTTPHandler(proxyService *application.AceStreamProxyService, logger *slog.Logger) *AceStreamHTTPHandler {
 	return &AceStreamHTTPHandler{
 		proxyService: proxyService,
+		logger:       logger,
 	}
 }
 
@@ -29,9 +32,12 @@ func (h *AceStreamHTTPHandler) ServeHTTP(w http.ResponseWriter, r *http.Request)
 	// Extract infohash from query parameter
 	infoHash := r.URL.Query().Get("id")
 	if infoHash == "" {
+		h.logger.Warn("request missing infohash parameter", "remote_addr", r.RemoteAddr)
 		writeError(w, http.StatusBadRequest, "missing 'id' query parameter")
 		return
 	}
+
+	h.logger.Info("stream request received", "infohash", infoHash, "remote_addr", r.RemoteAddr)
 
 	// Set appropriate headers for streaming
 	w.Header().Set("Content-Type", "video/mpeg")
@@ -45,18 +51,23 @@ func (h *AceStreamHTTPHandler) ServeHTTP(w http.ResponseWriter, r *http.Request)
 	if err != nil {
 		// Log error but don't write response as streaming may have started
 		if errors.Is(err, application.ErrInvalidInfoHash) {
+			h.logger.Warn("invalid infohash", "infohash", infoHash, "remote_addr", r.RemoteAddr)
 			// Only write error if we haven't started streaming
 			writeError(w, http.StatusBadRequest, err.Error())
 			return
 		}
 		if errors.Is(err, application.ErrEngineUnavailable) {
+			h.logger.Error("acestream engine unavailable", "infohash", infoHash, "remote_addr", r.RemoteAddr)
 			writeError(w, http.StatusServiceUnavailable, "acestream engine unavailable")
 			return
 		}
 		// For other errors during streaming, the connection will be closed
 		// which is appropriate for streaming failures
+		h.logger.Error("stream error", "infohash", infoHash, "remote_addr", r.RemoteAddr, "error", err)
 		return
 	}
+
+	h.logger.Info("stream completed", "infohash", infoHash, "remote_addr", r.RemoteAddr)
 }
 
 // activeStreamsResponse represents active stream information.

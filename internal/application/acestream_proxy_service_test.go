@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"io"
+	"log/slog"
 	"strings"
 	"sync"
 	"testing"
@@ -35,7 +36,7 @@ func TestAceStreamProxyService_StreamToClient(t *testing.T) {
 			},
 		}
 
-		service := NewAceStreamProxyService(mockEngine)
+		service := NewAceStreamProxyService(mockEngine, slog.Default())
 		var buf bytes.Buffer
 
 		err := service.StreamToClient(context.Background(), "test-infohash", &buf)
@@ -56,7 +57,7 @@ func TestAceStreamProxyService_StreamToClient(t *testing.T) {
 
 	t.Run("returns error for empty infohash", func(t *testing.T) {
 		mockEngine := &mockAceStreamEngine{}
-		service := NewAceStreamProxyService(mockEngine)
+		service := NewAceStreamProxyService(mockEngine, slog.Default())
 		var buf bytes.Buffer
 
 		err := service.StreamToClient(context.Background(), "", &buf)
@@ -73,7 +74,7 @@ func TestAceStreamProxyService_StreamToClient(t *testing.T) {
 			},
 		}
 
-		service := NewAceStreamProxyService(mockEngine)
+		service := NewAceStreamProxyService(mockEngine, slog.Default())
 		var buf bytes.Buffer
 
 		err := service.StreamToClient(context.Background(), "test-infohash", &buf)
@@ -108,7 +109,7 @@ func TestAceStreamProxyService_StreamToClient(t *testing.T) {
 			},
 		}
 
-		service := NewAceStreamProxyService(mockEngine)
+		service := NewAceStreamProxyService(mockEngine, slog.Default())
 
 		// Start first client
 		var buf1 bytes.Buffer
@@ -196,7 +197,7 @@ func TestAceStreamProxyService_StreamToClient(t *testing.T) {
 			},
 		}
 
-		service := NewAceStreamProxyService(mockEngine)
+		service := NewAceStreamProxyService(mockEngine, slog.Default())
 		var buf bytes.Buffer
 
 		err := service.StreamToClient(context.Background(), "test-infohash", &buf)
@@ -231,7 +232,7 @@ func TestAceStreamProxyService_StreamToClient(t *testing.T) {
 			},
 		}
 
-		service := NewAceStreamProxyService(mockEngine)
+		service := NewAceStreamProxyService(mockEngine, slog.Default())
 		ctx, cancel := context.WithCancel(context.Background())
 		var buf bytes.Buffer
 
@@ -273,7 +274,7 @@ func TestAceStreamProxyService_Reconnection(t *testing.T) {
 			},
 		}
 
-		service := NewAceStreamProxyService(mockEngine)
+		service := NewAceStreamProxyService(mockEngine, slog.Default())
 		var buf bytes.Buffer
 
 		err := service.StreamToClient(context.Background(), "test-infohash", &buf)
@@ -303,7 +304,7 @@ func TestAceStreamProxyService_Reconnection(t *testing.T) {
 			},
 		}
 
-		service := NewAceStreamProxyService(mockEngine)
+		service := NewAceStreamProxyService(mockEngine, slog.Default())
 		var buf bytes.Buffer
 
 		err := service.StreamToClient(context.Background(), "test-infohash", &buf)
@@ -332,7 +333,7 @@ func TestAceStreamProxyService_GetActiveStreams(t *testing.T) {
 			},
 		}
 
-		service := NewAceStreamProxyService(mockEngine)
+		service := NewAceStreamProxyService(mockEngine, slog.Default())
 
 		// Start two clients on different infohashes
 		go func() {
