@@ -43,7 +43,7 @@ func (a *AceStreamHTTPAdapter) StartStream(ctx context.Context, infoHash, pid st
 
 	reqURL := fmt.Sprintf("%s/ace/getstream?%s", a.baseURL, params.Encode())
 
-	a.logger.Debug("requesting stream from engine", "infohash", infoHash, "pid", pid, "url", reqURL)
+	a.logger.Debug("engine request", "method", http.MethodGet, "url", reqURL, "pid", pid)
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, reqURL, nil)
 	if err != nil {
@@ -52,14 +52,20 @@ func (a *AceStreamHTTPAdapter) StartStream(ctx context.Context, infoHash, pid st
 
 	resp, err := a.httpClient.Do(req)
 	if err != nil {
-		a.logger.Error("failed to connect to acestream engine", "infohash", infoHash, "pid", pid, "error", err)
+		a.logger.Warn("engine network error", "error", err, "url", reqURL, "timeout", a.httpClient.Timeout)
 		return "", fmt.Errorf("failed to start stream: %w", err)
 	}
 	defer resp.Body.Close()
 
+	a.logger.Debug("engine response", "status_code", resp.StatusCode, "content_type", resp.Header.Get("Content-Type"), "content_length", resp.Header.Get("Content-Length"))
+
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
-		a.logger.Error("acestream engine returned error", "infohash", infoHash, "pid", pid, "status", resp.StatusCode, "body", string(body))
+		bodyStr := string(body)
+		if len(bodyStr) > 500 {
+			bodyStr = bodyStr[:500]
+		}
+		a.logger.Error("engine http error", "status_code", resp.StatusCode, "body", bodyStr, "url", reqURL)
 		return "", fmt.Errorf("engine returned status %d: %s", resp.StatusCode, string(body))
 	}
 
@@ -78,8 +84,6 @@ func (a *AceStreamHTTPAdapter) StartStream(ctx context.Context, infoHash, pid st
 		return "", fmt.Errorf("engine did not return a stream URL")
 	}
 
-	a.logger.Info("acestream engine returned stream url", "infohash", infoHash, "pid", pid, "stream_url", result.Response.StreamURL)
-
 	return result.Response.StreamURL, nil
 }
 
@@ -91,6 +95,8 @@ func (a *AceStreamHTTPAdapter) GetStats(ctx context.Context, pid string) (driven
 
 	reqURL := fmt.Sprintf("%s/ace/stat?%s", a.baseURL, params.Encode())
 
+	a.logger.Debug("engine request", "method", http.MethodGet, "url", reqURL, "pid", pid)
+
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, reqURL, nil)
 	if err != nil {
 		return driven.StreamStats{}, fmt.Errorf("failed to create stats request: %w", err)
@@ -98,12 +104,20 @@ func (a *AceStreamHTTPAdapter) GetStats(ctx context.Context, pid string) (driven
 
 	resp, err := a.httpClient.Do(req)
 	if err != nil {
+		a.logger.Warn("engine network error", "error", err, "url", reqURL, "timeout", a.httpClient.Timeout)
 		return driven.StreamStats{}, fmt.Errorf("failed to get stats: %w", err)
 	}
 	defer resp.Body.Close()
 
+	a.logger.Debug("engine response", "status_code", resp.StatusCode, "content_type", resp.Header.Get("Content-Type"), "content_length", resp.Header.Get("Content-Length"))
+
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
+		bodyStr := string(body)
+		if len(bodyStr) > 500 {
+			bodyStr = bodyStr[:500]
+		}
+		a.logger.Error("engine http error", "status_code", resp.StatusCode, "body", bodyStr, "url", reqURL)
 		return driven.StreamStats{}, fmt.Errorf("engine returned status %d: %s", resp.StatusCode, string(body))
 	}
 
@@ -141,7 +155,7 @@ func (a *AceStreamHTTPAdapter) StopStream(ctx context.Context, pid string) error
 
 	reqURL := fmt.Sprintf("%s/ace/stop?%s", a.baseURL, params.Encode())
 
-	a.logger.Debug("stopping stream on engine", "pid", pid, "url", reqURL)
+	a.logger.Debug("engine request", "method", http.MethodGet, "url", reqURL, "pid", pid)
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, reqURL, nil)
 	if err != nil {
@@ -150,18 +164,22 @@ func (a *AceStreamHTTPAdapter) StopStream(ctx context.Context, pid string) error
 
 	resp, err := a.httpClient.Do(req)
 	if err != nil {
-		a.logger.Error("failed to stop stream on engine", "pid", pid, "error", err)
+		a.logger.Warn("engine network error", "error", err, "url", reqURL, "timeout", a.httpClient.Timeout)
 		return fmt.Errorf("failed to stop stream: %w", err)
 	}
 	defer resp.Body.Close()
 
+	a.logger.Debug("engine response", "status_code", resp.StatusCode, "content_type", resp.Header.Get("Content-Type"), "content_length", resp.Header.Get("Content-Length"))
+
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
-		a.logger.Error("engine returned error on stop", "pid", pid, "status", resp.StatusCode, "body", string(body))
+		bodyStr := string(body)
+		if len(bodyStr) > 500 {
+			bodyStr = bodyStr[:500]
+		}
+		a.logger.Error("engine http error", "status_code", resp.StatusCode, "body", bodyStr, "url", reqURL)
 		return fmt.Errorf("engine returned status %d: %s", resp.StatusCode, string(body))
 	}
-
-	a.logger.Info("stream stopped on engine", "pid", pid)
 
 	return nil
 }
@@ -169,6 +187,8 @@ func (a *AceStreamHTTPAdapter) StopStream(ctx context.Context, pid string) error
 // StreamContent establishes a streaming connection and copies the stream data
 // to the provided writer.
 func (a *AceStreamHTTPAdapter) StreamContent(ctx context.Context, streamURL string, dst io.Writer) error {
+	a.logger.Debug("starting content stream", "stream_url", streamURL)
+
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, streamURL, nil)
 	if err != nil {
 		return fmt.Errorf("failed to create stream content request: %w", err)
@@ -176,11 +196,20 @@ func (a *AceStreamHTTPAdapter) StreamContent(ctx context.Context, streamURL stri
 
 	resp, err := a.httpClient.Do(req)
 	if err != nil {
+		a.logger.Warn("engine network error", "error", err, "url", streamURL, "timeout", a.httpClient.Timeout)
 		return fmt.Errorf("failed to connect to stream: %w", err)
 	}
 	defer resp.Body.Close()
 
+	a.logger.Debug("engine response", "status_code", resp.StatusCode, "content_type", resp.Header.Get("Content-Type"), "content_length", resp.Header.Get("Content-Length"))
+
 	if resp.StatusCode != http.StatusOK {
+		bodyBytes, _ := io.ReadAll(resp.Body)
+		bodyStr := string(bodyBytes)
+		if len(bodyStr) > 500 {
+			bodyStr = bodyStr[:500]
+		}
+		a.logger.Error("engine http error", "status_code", resp.StatusCode, "body", bodyStr, "url", streamURL)
 		return fmt.Errorf("stream returned status %d", resp.StatusCode)
 	}
 
@@ -199,7 +228,14 @@ func (a *AceStreamHTTPAdapter) StreamContent(ctx context.Context, streamURL stri
 
 	// Stream the content efficiently
 	_, err = io.Copy(dst, resp.Body)
-	if err != nil && err != context.Canceled {
+
+	// Log completion with reason
+	if err == nil {
+		a.logger.Info("content stream completed", "stream_url", streamURL, "reason", "EOF")
+	} else if err == context.Canceled {
+		a.logger.Info("content stream completed", "stream_url", streamURL, "reason", "canceled")
+	} else {
+		a.logger.Info("content stream completed", "stream_url", streamURL, "reason", "error", "error", err)
 		return fmt.Errorf("failed to stream content: %w", err)
 	}
 
@@ -219,6 +255,8 @@ type EngineStats struct {
 func (a *AceStreamHTTPAdapter) GetEngineStats(ctx context.Context) (EngineStats, error) {
 	reqURL := fmt.Sprintf("%s/ace/manifest.json", a.baseURL)
 
+	a.logger.Debug("engine request", "method", http.MethodGet, "url", reqURL, "pid", "")
+
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, reqURL, nil)
 	if err != nil {
 		return EngineStats{}, fmt.Errorf("failed to create engine stats request: %w", err)
@@ -226,12 +264,20 @@ func (a *AceStreamHTTPAdapter) GetEngineStats(ctx context.Context) (EngineStats,
 
 	resp, err := a.httpClient.Do(req)
 	if err != nil {
+		a.logger.Warn("engine network error", "error", err, "url", reqURL, "timeout", a.httpClient.Timeout)
 		return EngineStats{}, fmt.Errorf("failed to get engine stats: %w", err)
 	}
 	defer resp.Body.Close()
 
+	a.logger.Debug("engine response", "status_code", resp.StatusCode, "content_type", resp.Header.Get("Content-Type"), "content_length", resp.Header.Get("Content-Length"))
+
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
+		bodyStr := string(body)
+		if len(bodyStr) > 500 {
+			bodyStr = bodyStr[:500]
+		}
+		a.logger.Error("engine http error", "status_code", resp.StatusCode, "body", bodyStr, "url", reqURL)
 		return EngineStats{}, fmt.Errorf("engine returned status %d: %s", resp.StatusCode, string(body))
 	}
 
@@ -259,7 +305,7 @@ func (a *AceStreamHTTPAdapter) Ping(ctx context.Context) error {
 	// Try to access the manifest endpoint as a health check
 	reqURL := fmt.Sprintf("%s/ace/manifest.json", a.baseURL)
 
-	a.logger.Debug("pinging acestream engine", "url", reqURL)
+	a.logger.Debug("engine request", "method", http.MethodGet, "url", reqURL, "pid", "")
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, reqURL, nil)
 	if err != nil {
@@ -268,17 +314,22 @@ func (a *AceStreamHTTPAdapter) Ping(ctx context.Context) error {
 
 	resp, err := a.httpClient.Do(req)
 	if err != nil {
-		a.logger.Error("acestream engine not reachable", "url", reqURL, "error", err)
+		a.logger.Warn("engine network error", "error", err, "url", reqURL, "timeout", a.httpClient.Timeout)
 		return fmt.Errorf("acestream engine not reachable: %w", err)
 	}
 	defer resp.Body.Close()
 
+	a.logger.Debug("engine response", "status_code", resp.StatusCode, "content_type", resp.Header.Get("Content-Type"), "content_length", resp.Header.Get("Content-Length"))
+
 	if resp.StatusCode != http.StatusOK {
-		a.logger.Error("acestream engine returned error on ping", "url", reqURL, "status", resp.StatusCode)
+		bodyBytes, _ := io.ReadAll(resp.Body)
+		bodyStr := string(bodyBytes)
+		if len(bodyStr) > 500 {
+			bodyStr = bodyStr[:500]
+		}
+		a.logger.Error("engine http error", "status_code", resp.StatusCode, "body", bodyStr, "url", reqURL)
 		return fmt.Errorf("acestream engine returned status %d", resp.StatusCode)
 	}
-
-	a.logger.Debug("acestream engine is healthy", "url", reqURL)
 
 	return nil
 }

@@ -4,6 +4,7 @@ import (
 	"errors"
 	"log/slog"
 	"net/http"
+	"time"
 
 	"github.com/alorle/iptv-manager/internal/application"
 )
@@ -32,12 +33,15 @@ func (h *AceStreamHTTPHandler) ServeHTTP(w http.ResponseWriter, r *http.Request)
 	// Extract infohash from query parameter
 	infoHash := r.URL.Query().Get("id")
 	if infoHash == "" {
-		h.logger.Warn("request missing infohash parameter", "remote_addr", r.RemoteAddr)
+		h.logger.Warn("validation error", "error", "missing infohash", "remote_addr", r.RemoteAddr)
 		writeError(w, http.StatusBadRequest, "missing 'id' query parameter")
 		return
 	}
 
-	h.logger.Info("stream request received", "infohash", infoHash, "remote_addr", r.RemoteAddr)
+	userAgent := r.Header.Get("User-Agent")
+	h.logger.Info("stream request received", "remote_addr", r.RemoteAddr, "infohash", infoHash, "user_agent", userAgent)
+
+	startTime := time.Now()
 
 	// Set appropriate headers for streaming
 	w.Header().Set("Content-Type", "video/mpeg")
@@ -48,26 +52,31 @@ func (h *AceStreamHTTPHandler) ServeHTTP(w http.ResponseWriter, r *http.Request)
 
 	// Stream to client
 	err := h.proxyService.StreamToClient(r.Context(), infoHash, w)
+	duration := time.Since(startTime)
+
 	if err != nil {
 		// Log error but don't write response as streaming may have started
 		if errors.Is(err, application.ErrInvalidInfoHash) {
-			h.logger.Warn("invalid infohash", "infohash", infoHash, "remote_addr", r.RemoteAddr)
+			h.logger.Warn("validation error", "error", "invalid infohash", "remote_addr", r.RemoteAddr, "infohash", infoHash)
 			// Only write error if we haven't started streaming
 			writeError(w, http.StatusBadRequest, err.Error())
+			h.logger.Info("request completed", "remote_addr", r.RemoteAddr, "infohash", infoHash, "duration", duration, "reason", "validation_error")
 			return
 		}
 		if errors.Is(err, application.ErrEngineUnavailable) {
-			h.logger.Error("acestream engine unavailable", "infohash", infoHash, "remote_addr", r.RemoteAddr)
+			h.logger.Error("service error", "error", "engine unavailable", "remote_addr", r.RemoteAddr, "infohash", infoHash)
 			writeError(w, http.StatusServiceUnavailable, "acestream engine unavailable")
+			h.logger.Info("request completed", "remote_addr", r.RemoteAddr, "infohash", infoHash, "duration", duration, "reason", "engine_unavailable")
 			return
 		}
 		// For other errors during streaming, the connection will be closed
 		// which is appropriate for streaming failures
-		h.logger.Error("stream error", "infohash", infoHash, "remote_addr", r.RemoteAddr, "error", err)
+		h.logger.Error("service error", "error", "stream failed", "remote_addr", r.RemoteAddr, "infohash", infoHash, "details", err)
+		h.logger.Info("request completed", "remote_addr", r.RemoteAddr, "infohash", infoHash, "duration", duration, "reason", "stream_error")
 		return
 	}
 
-	h.logger.Info("stream completed", "infohash", infoHash, "remote_addr", r.RemoteAddr)
+	h.logger.Info("request completed", "remote_addr", r.RemoteAddr, "infohash", infoHash, "duration", duration, "reason", "success")
 }
 
 // activeStreamsResponse represents active stream information.
@@ -89,6 +98,8 @@ func (h *AceStreamHTTPHandler) HandleActiveStreams(w http.ResponseWriter, r *htt
 	}
 
 	activeStreams := h.proxyService.GetActiveStreams()
+
+	h.logger.Debug("listing active streams", "stream_count", len(activeStreams))
 
 	response := activeStreamsResponse{
 		Streams: make([]streamInfo, len(activeStreams)),
