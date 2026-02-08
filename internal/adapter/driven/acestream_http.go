@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/alorle/iptv-manager/internal/port/driven"
+	"github.com/alorle/iptv-manager/internal/streaming"
 )
 
 // AceStreamHTTPAdapter implements the AceStreamEngine port using HTTP calls
@@ -186,8 +187,8 @@ func (a *AceStreamHTTPAdapter) StopStream(ctx context.Context, pid string) error
 
 // StreamContent establishes a streaming connection and copies the stream data
 // to the provided writer.
-func (a *AceStreamHTTPAdapter) StreamContent(ctx context.Context, streamURL string, dst io.Writer) error {
-	a.logger.Debug("starting content stream", "stream_url", streamURL)
+func (a *AceStreamHTTPAdapter) StreamContent(ctx context.Context, streamURL string, dst io.Writer, infoHash, pid string, writeTimeout time.Duration) error {
+	a.logger.Debug("starting content stream", "stream_url", streamURL, "infohash", infoHash, "pid", pid, "write_timeout", writeTimeout)
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, streamURL, nil)
 	if err != nil {
@@ -226,16 +227,23 @@ func (a *AceStreamHTTPAdapter) StreamContent(ctx context.Context, streamURL stri
 		}
 	}
 
-	// Stream the content efficiently
-	_, err = io.Copy(dst, resp.Body)
+	// Wrap the writer with timeout support
+	timeoutWriter := streaming.NewTimeoutWriter(dst, writeTimeout, a.logger, infoHash, pid)
+
+	// Stream the content efficiently with timeout protection
+	bytesWritten, err := io.Copy(timeoutWriter, resp.Body)
 
 	// Log completion with reason
 	if err == nil {
-		a.logger.Info("content stream completed", "stream_url", streamURL, "reason", "EOF")
+		a.logger.Info("content stream completed", "stream_url", streamURL, "infohash", infoHash, "pid", pid, "bytes_written", bytesWritten, "reason", "EOF")
 	} else if err == context.Canceled {
-		a.logger.Info("content stream completed", "stream_url", streamURL, "reason", "canceled")
+		a.logger.Info("content stream completed", "stream_url", streamURL, "infohash", infoHash, "pid", pid, "bytes_written", bytesWritten, "reason", "canceled")
+	} else if err == streaming.ErrWriteTimeout {
+		// Slow client detected - this is logged by TimeoutWriter
+		a.logger.Info("content stream completed", "stream_url", streamURL, "infohash", infoHash, "pid", pid, "bytes_written", bytesWritten, "reason", "slow_client")
+		return err
 	} else {
-		a.logger.Info("content stream completed", "stream_url", streamURL, "reason", "error", "error", err)
+		a.logger.Info("content stream completed", "stream_url", streamURL, "infohash", infoHash, "pid", pid, "bytes_written", bytesWritten, "reason", "error", "error", err)
 		return fmt.Errorf("failed to stream content: %w", err)
 	}
 

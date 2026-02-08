@@ -25,20 +25,22 @@ var (
 // Multiple clients can connect to the same infohash, each receiving a unique PID.
 // The service manages session lifecycle and cleanup.
 type AceStreamProxyService struct {
-	engine   driven.AceStreamEngine
-	sessions *sessionRegistry
-	mu       sync.Mutex
-	pidGen   *pidGenerator
-	logger   *slog.Logger
+	engine       driven.AceStreamEngine
+	sessions     *sessionRegistry
+	mu           sync.Mutex
+	pidGen       *pidGenerator
+	logger       *slog.Logger
+	writeTimeout time.Duration
 }
 
 // NewAceStreamProxyService creates a new proxy service with the given engine.
-func NewAceStreamProxyService(engine driven.AceStreamEngine, logger *slog.Logger) *AceStreamProxyService {
+func NewAceStreamProxyService(engine driven.AceStreamEngine, logger *slog.Logger, writeTimeout time.Duration) *AceStreamProxyService {
 	return &AceStreamProxyService{
-		engine:   engine,
-		sessions: newSessionRegistry(),
-		pidGen:   newPIDGenerator(),
-		logger:   logger,
+		engine:       engine,
+		sessions:     newSessionRegistry(),
+		pidGen:       newPIDGenerator(),
+		logger:       logger,
+		writeTimeout: writeTimeout,
 	}
 }
 
@@ -151,7 +153,7 @@ func (s *AceStreamProxyService) streamWithReconnection(ctx context.Context, sess
 			return fmt.Errorf("stream URL not available")
 		}
 
-		err := s.engine.StreamContent(ctx, streamURL, dst)
+		err := s.engine.StreamContent(ctx, streamURL, dst, session.InfoHash(), pid, s.writeTimeout)
 		if err == nil || err == context.Canceled {
 			return err
 		}

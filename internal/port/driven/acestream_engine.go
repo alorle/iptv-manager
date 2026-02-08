@@ -3,6 +3,7 @@ package driven
 import (
 	"context"
 	"io"
+	"time"
 )
 
 // AceStreamEngine defines the interface for interacting with the AceStream Engine HTTP API.
@@ -22,7 +23,8 @@ type AceStreamEngine interface {
 
 	// StreamContent establishes a streaming connection and copies the stream data
 	// to the provided writer. This method blocks until the stream ends or an error occurs.
-	StreamContent(ctx context.Context, streamURL string, dst io.Writer) error
+	// The metadata (infoHash, pid) is used for logging slow client disconnections.
+	StreamContent(ctx context.Context, streamURL string, dst io.Writer, infoHash, pid string, writeTimeout time.Duration) error
 
 	// Ping checks if the AceStream engine is accessible and operational.
 	// Returns nil if healthy, otherwise returns an error describing the issue.

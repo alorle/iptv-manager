@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	"github.com/alorle/iptv-manager/internal/application"
 	"github.com/alorle/iptv-manager/internal/channel"
@@ -66,7 +67,7 @@ func (m *mockAceStreamEngine) StopStream(ctx context.Context, pid string) error 
 	return nil
 }
 
-func (m *mockAceStreamEngine) StreamContent(ctx context.Context, streamURL string, dst io.Writer) error {
+func (m *mockAceStreamEngine) StreamContent(ctx context.Context, streamURL string, dst io.Writer, infoHash, pid string, writeTimeout time.Duration) error {
 	return nil
 }
 

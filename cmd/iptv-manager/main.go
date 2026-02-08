@@ -22,6 +22,7 @@ type config struct {
 	AceStreamEngineURL string
 	DBPath             string
 	LogLevel           slog.Level
+	StreamWriteTimeout time.Duration
 }
 
 func loadConfig() config {
@@ -54,11 +55,19 @@ func loadConfig() config {
 		}
 	}
 
+	streamWriteTimeout := 10 * time.Second
+	if timeoutStr := os.Getenv("STREAM_WRITE_TIMEOUT"); timeoutStr != "" {
+		if parsedTimeout, err := time.ParseDuration(timeoutStr); err == nil {
+			streamWriteTimeout = parsedTimeout
+		}
+	}
+
 	return config{
 		Port:               port,
 		AceStreamEngineURL: aceStreamURL,
 		DBPath:             dbPath,
 		LogLevel:           logLevel,
+		StreamWriteTimeout: streamWriteTimeout,
 	}
 }
 
@@ -76,6 +85,7 @@ func main() {
 		"acestream_url", cfg.AceStreamEngineURL,
 		"db_path", cfg.DBPath,
 		"log_level", cfg.LogLevel.String(),
+		"stream_write_timeout", cfg.StreamWriteTimeout,
 	)
 
 	// Open BoltDB
@@ -107,7 +117,7 @@ func main() {
 	streamService := application.NewStreamService(streamRepo, channelRepo)
 	playlistService := application.NewPlaylistService(streamRepo)
 	healthService := application.NewHealthService(channelRepo, aceStreamEngine)
-	aceStreamProxyService := application.NewAceStreamProxyService(aceStreamEngine, logger)
+	aceStreamProxyService := application.NewAceStreamProxyService(aceStreamEngine, logger, cfg.StreamWriteTimeout)
 
 	// Create HTTP handlers
 	channelHandler := driver.NewChannelHTTPHandler(channelService)

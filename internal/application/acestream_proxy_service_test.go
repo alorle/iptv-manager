@@ -24,7 +24,7 @@ func TestAceStreamProxyService_StreamToClient(t *testing.T) {
 				}
 				return "http://localhost:6878/stream/test", nil
 			},
-			streamContentFunc: func(ctx context.Context, streamURL string, dst io.Writer) error {
+			streamContentFunc: func(ctx context.Context, streamURL string, dst io.Writer, infoHash, pid string, writeTimeout time.Duration) error {
 				if streamURL != "http://localhost:6878/stream/test" {
 					t.Errorf("expected stream URL 'http://localhost:6878/stream/test', got %q", streamURL)
 				}
@@ -36,7 +36,7 @@ func TestAceStreamProxyService_StreamToClient(t *testing.T) {
 			},
 		}
 
-		service := NewAceStreamProxyService(mockEngine, slog.Default())
+		service := NewAceStreamProxyService(mockEngine, slog.Default(), 10*time.Second)
 		var buf bytes.Buffer
 
 		err := service.StreamToClient(context.Background(), "test-infohash", &buf)
@@ -57,7 +57,7 @@ func TestAceStreamProxyService_StreamToClient(t *testing.T) {
 
 	t.Run("returns error for empty infohash", func(t *testing.T) {
 		mockEngine := &mockAceStreamEngine{}
-		service := NewAceStreamProxyService(mockEngine, slog.Default())
+		service := NewAceStreamProxyService(mockEngine, slog.Default(), 10*time.Second)
 		var buf bytes.Buffer
 
 		err := service.StreamToClient(context.Background(), "", &buf)
@@ -74,7 +74,7 @@ func TestAceStreamProxyService_StreamToClient(t *testing.T) {
 			},
 		}
 
-		service := NewAceStreamProxyService(mockEngine, slog.Default())
+		service := NewAceStreamProxyService(mockEngine, slog.Default(), 10*time.Second)
 		var buf bytes.Buffer
 
 		err := service.StreamToClient(context.Background(), "test-infohash", &buf)
@@ -99,7 +99,7 @@ func TestAceStreamProxyService_StreamToClient(t *testing.T) {
 				mu.Unlock()
 				return "http://localhost:6878/stream/test", nil
 			},
-			streamContentFunc: func(ctx context.Context, streamURL string, dst io.Writer) error {
+			streamContentFunc: func(ctx context.Context, streamURL string, dst io.Writer, infoHash, pid string, writeTimeout time.Duration) error {
 				<-blockStream // Block until we're ready to finish
 				_, err := dst.Write(streamContent)
 				return err
@@ -109,7 +109,7 @@ func TestAceStreamProxyService_StreamToClient(t *testing.T) {
 			},
 		}
 
-		service := NewAceStreamProxyService(mockEngine, slog.Default())
+		service := NewAceStreamProxyService(mockEngine, slog.Default(), 10*time.Second)
 
 		// Start first client
 		var buf1 bytes.Buffer
@@ -187,7 +187,7 @@ func TestAceStreamProxyService_StreamToClient(t *testing.T) {
 			startStreamFunc: func(ctx context.Context, infoHash, pid string) (string, error) {
 				return "http://localhost:6878/stream/test", nil
 			},
-			streamContentFunc: func(ctx context.Context, streamURL string, dst io.Writer) error {
+			streamContentFunc: func(ctx context.Context, streamURL string, dst io.Writer, infoHash, pid string, writeTimeout time.Duration) error {
 				_, err := dst.Write([]byte("content"))
 				return err
 			},
@@ -197,7 +197,7 @@ func TestAceStreamProxyService_StreamToClient(t *testing.T) {
 			},
 		}
 
-		service := NewAceStreamProxyService(mockEngine, slog.Default())
+		service := NewAceStreamProxyService(mockEngine, slog.Default(), 10*time.Second)
 		var buf bytes.Buffer
 
 		err := service.StreamToClient(context.Background(), "test-infohash", &buf)
@@ -223,7 +223,7 @@ func TestAceStreamProxyService_StreamToClient(t *testing.T) {
 			startStreamFunc: func(ctx context.Context, infoHash, pid string) (string, error) {
 				return "http://localhost:6878/stream/test", nil
 			},
-			streamContentFunc: func(ctx context.Context, streamURL string, dst io.Writer) error {
+			streamContentFunc: func(ctx context.Context, streamURL string, dst io.Writer, infoHash, pid string, writeTimeout time.Duration) error {
 				<-ctx.Done()
 				return ctx.Err()
 			},
@@ -232,7 +232,7 @@ func TestAceStreamProxyService_StreamToClient(t *testing.T) {
 			},
 		}
 
-		service := NewAceStreamProxyService(mockEngine, slog.Default())
+		service := NewAceStreamProxyService(mockEngine, slog.Default(), 10*time.Second)
 		ctx, cancel := context.WithCancel(context.Background())
 		var buf bytes.Buffer
 
@@ -259,7 +259,7 @@ func TestAceStreamProxyService_Reconnection(t *testing.T) {
 			startStreamFunc: func(ctx context.Context, infoHash, pid string) (string, error) {
 				return "http://localhost:6878/stream/test", nil
 			},
-			streamContentFunc: func(ctx context.Context, streamURL string, dst io.Writer) error {
+			streamContentFunc: func(ctx context.Context, streamURL string, dst io.Writer, infoHash, pid string, writeTimeout time.Duration) error {
 				attemptCount++
 				if attemptCount == 1 {
 					// Fail first attempt
@@ -274,7 +274,7 @@ func TestAceStreamProxyService_Reconnection(t *testing.T) {
 			},
 		}
 
-		service := NewAceStreamProxyService(mockEngine, slog.Default())
+		service := NewAceStreamProxyService(mockEngine, slog.Default(), 10*time.Second)
 		var buf bytes.Buffer
 
 		err := service.StreamToClient(context.Background(), "test-infohash", &buf)
@@ -296,7 +296,7 @@ func TestAceStreamProxyService_Reconnection(t *testing.T) {
 			startStreamFunc: func(ctx context.Context, infoHash, pid string) (string, error) {
 				return "http://localhost:6878/stream/test", nil
 			},
-			streamContentFunc: func(ctx context.Context, streamURL string, dst io.Writer) error {
+			streamContentFunc: func(ctx context.Context, streamURL string, dst io.Writer, infoHash, pid string, writeTimeout time.Duration) error {
 				return errors.New("persistent error")
 			},
 			stopStreamFunc: func(ctx context.Context, pid string) error {
@@ -304,7 +304,7 @@ func TestAceStreamProxyService_Reconnection(t *testing.T) {
 			},
 		}
 
-		service := NewAceStreamProxyService(mockEngine, slog.Default())
+		service := NewAceStreamProxyService(mockEngine, slog.Default(), 10*time.Second)
 		var buf bytes.Buffer
 
 		err := service.StreamToClient(context.Background(), "test-infohash", &buf)
@@ -324,7 +324,7 @@ func TestAceStreamProxyService_GetActiveStreams(t *testing.T) {
 			startStreamFunc: func(ctx context.Context, infoHash, pid string) (string, error) {
 				return "http://localhost:6878/stream/" + infoHash, nil
 			},
-			streamContentFunc: func(ctx context.Context, streamURL string, dst io.Writer) error {
+			streamContentFunc: func(ctx context.Context, streamURL string, dst io.Writer, infoHash, pid string, writeTimeout time.Duration) error {
 				<-blockChan // Block until we're done testing
 				return nil
 			},
@@ -333,7 +333,7 @@ func TestAceStreamProxyService_GetActiveStreams(t *testing.T) {
 			},
 		}
 
-		service := NewAceStreamProxyService(mockEngine, slog.Default())
+		service := NewAceStreamProxyService(mockEngine, slog.Default(), 10*time.Second)
 
 		// Start two clients on different infohashes
 		go func() {
@@ -373,7 +373,7 @@ type mockAceStreamEngine struct {
 	startStreamFunc   func(ctx context.Context, infoHash, pid string) (streamURL string, err error)
 	getStatsFunc      func(ctx context.Context, pid string) (stats driven.StreamStats, err error)
 	stopStreamFunc    func(ctx context.Context, pid string) error
-	streamContentFunc func(ctx context.Context, streamURL string, dst io.Writer) error
+	streamContentFunc func(ctx context.Context, streamURL string, dst io.Writer, infoHash, pid string, writeTimeout time.Duration) error
 	pingFunc          func(ctx context.Context) error
 }
 
@@ -398,9 +398,9 @@ func (m *mockAceStreamEngine) StopStream(ctx context.Context, pid string) error 
 	return nil
 }
 
-func (m *mockAceStreamEngine) StreamContent(ctx context.Context, streamURL string, dst io.Writer) error {
+func (m *mockAceStreamEngine) StreamContent(ctx context.Context, streamURL string, dst io.Writer, infoHash, pid string, writeTimeout time.Duration) error {
 	if m.streamContentFunc != nil {
-		return m.streamContentFunc(ctx, streamURL, dst)
+		return m.streamContentFunc(ctx, streamURL, dst, infoHash, pid, writeTimeout)
 	}
 	return nil
 }
