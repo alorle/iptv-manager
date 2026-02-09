@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<tv>
+  <channel id="hbo.channel">
+    <display-name>HBO</display-name>
+    <display-name>HBO España</display-name>
+    <icon src="https://example.com/logos/hbo.png"/>
+  </channel>
+  <channel id="espn.channel">
+    <display-name>ESPN</display-name>
+    <icon src="https://example.com/logos/espn.png"/>
+  </channel>
+  <channel id="cnn.channel">
+    <display-name>CNN International</display-name>
+  </channel>
+  <channel id="minimal.channel">
+  </channel>
+</tv>
