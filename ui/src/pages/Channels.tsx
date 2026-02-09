@@ -41,6 +41,10 @@ export default function Channels() {
   const [formError, setFormError] = useState<string | null>(null);
   const [sheetOpen, setSheetOpen] = useState(false);
   const [selectedChannel, setSelectedChannel] = useState<string | null>(null);
+  const [streamDialogOpen, setStreamDialogOpen] = useState(false);
+  const [streamInfoHash, setStreamInfoHash] = useState("");
+  const [streamSubmitting, setStreamSubmitting] = useState(false);
+  const [streamFormError, setStreamFormError] = useState<string | null>(null);
 
   const fetchData = async () => {
     try {
@@ -193,6 +197,62 @@ export default function Channels() {
     return streams.filter((s) => s.channel_name === channelName);
   };
 
+  const handleCreateStream = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setStreamFormError(null);
+
+    if (!streamInfoHash.trim()) {
+      setStreamFormError("Info Hash is required");
+      return;
+    }
+
+    if (!selectedChannel) {
+      setStreamFormError("No channel selected");
+      return;
+    }
+
+    setStreamSubmitting(true);
+
+    try {
+      const response = await fetch("/api/streams", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ info_hash: streamInfoHash, channel_name: selectedChannel }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        if (response.status === 409) {
+          setStreamFormError(errorData.error || "Stream already exists");
+        } else if (response.status === 400) {
+          setStreamFormError(errorData.error || "Invalid stream data");
+        } else {
+          setStreamFormError("Failed to create stream");
+        }
+        return;
+      }
+
+      toast.success("Stream created successfully");
+      setStreamDialogOpen(false);
+      setStreamInfoHash("");
+      await fetchData();
+    } catch (err) {
+      setStreamFormError(err instanceof Error ? err.message : "An error occurred");
+    } finally {
+      setStreamSubmitting(false);
+    }
+  };
+
+  const handleStreamDialogOpenChange = (open: boolean) => {
+    setStreamDialogOpen(open);
+    if (!open) {
+      setStreamInfoHash("");
+      setStreamFormError(null);
+    }
+  };
+
   if (loading) {
     return (
       <div>
@@ -331,7 +391,11 @@ export default function Channels() {
           <div className="mt-6">
             <div className="flex justify-between items-center mb-4">
               <h3 className="text-sm font-medium">Streams</h3>
-              <Button size="sm" variant="outline">
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => setStreamDialogOpen(true)}
+              >
                 <Plus className="h-4 w-4 mr-1" />
                 Add stream
               </Button>
@@ -366,6 +430,56 @@ export default function Channels() {
           </div>
         </SheetContent>
       </Sheet>
+
+      <Dialog open={streamDialogOpen} onOpenChange={handleStreamDialogOpenChange}>
+        <DialogContent>
+          <form onSubmit={handleCreateStream}>
+            <DialogHeader>
+              <DialogTitle>Add stream</DialogTitle>
+              <DialogDescription>
+                Add a new stream to {selectedChannel}
+              </DialogDescription>
+            </DialogHeader>
+            <div className="grid gap-4 py-4">
+              <div className="grid gap-2">
+                <Label htmlFor="stream-info-hash">Info Hash</Label>
+                <Input
+                  id="stream-info-hash"
+                  value={streamInfoHash}
+                  onChange={(e) => setStreamInfoHash(e.target.value)}
+                  placeholder="Enter stream info hash"
+                  disabled={streamSubmitting}
+                />
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="stream-channel">Channel</Label>
+                <Input
+                  id="stream-channel"
+                  value={selectedChannel || ""}
+                  disabled
+                  readOnly
+                />
+              </div>
+              {streamFormError && (
+                <p className="text-sm text-red-600">{streamFormError}</p>
+              )}
+            </div>
+            <DialogFooter>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setStreamDialogOpen(false)}
+                disabled={streamSubmitting}
+              >
+                Cancel
+              </Button>
+              <Button type="submit" disabled={streamSubmitting}>
+                {streamSubmitting ? "Creating..." : "Create"}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
