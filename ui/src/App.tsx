@@ -1,10 +1,16 @@
 import { Routes, Route, Link } from "react-router-dom";
+import { Button } from "@/components/ui/button";
 
 function Home() {
   return (
     <div>
       <h1 className="text-2xl font-bold">IPTV Manager</h1>
       <p className="mt-2 text-gray-600">Dashboard coming soon.</p>
+      <div className="mt-4 flex gap-2">
+        <Button>Default Button</Button>
+        <Button variant="secondary">Secondary</Button>
+        <Button variant="outline">Outline</Button>
+      </div>
     </div>
   );
 }
