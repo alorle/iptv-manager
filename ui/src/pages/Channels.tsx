@@ -9,10 +9,17 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle,
+} from "@/components/ui/sheet";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
-import { Trash2 } from "lucide-react";
+import { Trash2, Plus } from "lucide-react";
 
 interface Channel {
   name: string;
@@ -32,6 +39,8 @@ export default function Channels() {
   const [channelName, setChannelName] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
+  const [sheetOpen, setSheetOpen] = useState(false);
+  const [selectedChannel, setSelectedChannel] = useState<string | null>(null);
 
   const fetchData = async () => {
     try {
@@ -148,6 +157,42 @@ export default function Channels() {
     }
   };
 
+  const handleChannelClick = (channelName: string) => {
+    setSelectedChannel(channelName);
+    setSheetOpen(true);
+  };
+
+  const handleDeleteStream = async (infoHash: string) => {
+    if (!confirm(`Are you sure you want to delete stream "${infoHash}"?`)) {
+      return;
+    }
+
+    try {
+      const response = await fetch(`/api/streams/${encodeURIComponent(infoHash)}`, {
+        method: "DELETE",
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ error: "Failed to delete stream" }));
+        if (response.status === 404) {
+          toast.error(errorData.error || "Stream not found");
+        } else {
+          toast.error(errorData.error || "Failed to delete stream");
+        }
+        return;
+      }
+
+      toast.success(`Stream "${infoHash}" deleted successfully`);
+      await fetchData();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "An error occurred");
+    }
+  };
+
+  const getChannelStreams = (channelName: string): Stream[] => {
+    return streams.filter((s) => s.channel_name === channelName);
+  };
+
   if (loading) {
     return (
       <div>
@@ -191,18 +236,27 @@ export default function Channels() {
           </thead>
           <tbody className="bg-white divide-y divide-gray-200">
             {channels.map((channel) => (
-              <tr key={channel.name} className="hover:bg-gray-50">
-                <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+              <tr key={channel.name} className="hover:bg-gray-50 cursor-pointer">
+                <td
+                  className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900"
+                  onClick={() => handleChannelClick(channel.name)}
+                >
                   {channel.name}
                 </td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                <td
+                  className="px-6 py-4 whitespace-nowrap text-sm text-gray-500"
+                  onClick={() => handleChannelClick(channel.name)}
+                >
                   {getStreamCount(channel.name)}
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                   <Button
                     variant="ghost"
                     size="sm"
-                    onClick={() => handleDeleteChannel(channel.name)}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleDeleteChannel(channel.name);
+                    }}
                     className="text-red-600 hover:text-red-900 hover:bg-red-50"
                   >
                     <Trash2 className="h-4 w-4" />
@@ -265,6 +319,53 @@ export default function Channels() {
         </Dialog>
       </div>
       {renderContent()}
+
+      <Sheet open={sheetOpen} onOpenChange={setSheetOpen}>
+        <SheetContent className="w-[400px] sm:w-[540px] overflow-y-auto">
+          <SheetHeader>
+            <SheetTitle>{selectedChannel}</SheetTitle>
+            <SheetDescription>
+              Manage streams for this channel
+            </SheetDescription>
+          </SheetHeader>
+          <div className="mt-6">
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="text-sm font-medium">Streams</h3>
+              <Button size="sm" variant="outline">
+                <Plus className="h-4 w-4 mr-1" />
+                Add stream
+              </Button>
+            </div>
+            {selectedChannel && getChannelStreams(selectedChannel).length === 0 ? (
+              <p className="text-sm text-gray-500">No streams found for this channel.</p>
+            ) : (
+              <div className="space-y-2">
+                {selectedChannel &&
+                  getChannelStreams(selectedChannel).map((stream) => (
+                    <div
+                      key={stream.info_hash}
+                      className="flex items-center justify-between p-3 border rounded-lg hover:bg-gray-50"
+                    >
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium text-gray-900 truncate">
+                          {stream.info_hash}
+                        </p>
+                      </div>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => handleDeleteStream(stream.info_hash)}
+                        className="ml-2 text-red-600 hover:text-red-900 hover:bg-red-50"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  ))}
+              </div>
+            )}
+          </div>
+        </SheetContent>
+      </Sheet>
     </div>
   );
 }
