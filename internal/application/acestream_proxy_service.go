@@ -46,6 +46,10 @@ func NewAceStreamProxyService(engine driven.AceStreamEngine, logger *slog.Logger
 
 // StreamToClient initiates a stream for the given infohash and streams content
 // to the provided writer. Returns when the stream ends or an error occurs.
+//
+// The first client for an infohash starts the engine stream and a background
+// goroutine that reads from the engine and broadcasts to all subscribers.
+// Subsequent clients subscribe to the same broadcast.
 func (s *AceStreamProxyService) StreamToClient(ctx context.Context, infoHash string, dst io.Writer) error {
 	if infoHash == "" {
 		return ErrInvalidInfoHash
@@ -64,7 +68,7 @@ func (s *AceStreamProxyService) StreamToClient(ctx context.Context, infoHash str
 	// Ensure cleanup on exit
 	defer s.cleanupClient(infoHash, pid)
 
-	// If this is a new session, start the stream with the engine
+	// If this is a new session, start the engine stream and the broadcast pump
 	if isNew {
 		s.logger.Info("creating new stream session", "infohash", infoHash, "pid", pid)
 		if err := s.startEngineStream(ctx, session); err != nil {
@@ -72,6 +76,10 @@ func (s *AceStreamProxyService) StreamToClient(ctx context.Context, infoHash str
 			s.sessions.RemoveClient(infoHash, pid)
 			return fmt.Errorf("failed to start engine stream: %w", err)
 		}
+
+		engineCtx, engineCancel := context.WithCancel(context.Background())
+		session.SetEngineCancel(engineCancel)
+		go s.pumpEngineToSession(engineCtx, session)
 	} else {
 		s.logger.Debug("joining existing stream session", "infohash", infoHash, "pid", pid)
 		// Wait for the stream to be ready if another client is starting it
@@ -82,8 +90,26 @@ func (s *AceStreamProxyService) StreamToClient(ctx context.Context, infoHash str
 		}
 	}
 
-	// Stream content to the client with reconnection support
-	return s.streamWithReconnection(ctx, session, pid, dst)
+	// Subscribe to the broadcaster — blocks until stream ends or client disconnects
+	return session.GetBroadcaster().Subscribe(ctx, pid, dst, s.writeTimeout)
+}
+
+// pumpEngineToSession reads from the engine stream and writes to the session
+// broadcaster, which fans out data to all subscribed clients.
+func (s *AceStreamProxyService) pumpEngineToSession(ctx context.Context, session *streamSession) {
+	broadcaster := session.GetBroadcaster()
+
+	pid := session.GetFirstPID()
+	err := s.streamWithReconnection(ctx, session, pid, broadcaster)
+
+	if err != nil && err != context.Canceled {
+		s.logger.Error("engine pump ended with error",
+			"infohash", session.InfoHash(),
+			"error", err)
+		broadcaster.CloseWithError(err)
+	} else {
+		broadcaster.Close()
+	}
 }
 
 // startEngineStream initiates the stream with the AceStream engine.
@@ -110,6 +136,14 @@ func (s *AceStreamProxyService) startEngineStream(ctx context.Context, session *
 
 // waitForStreamReady waits for the stream to become ready.
 func (s *AceStreamProxyService) waitForStreamReady(ctx context.Context, session *streamSession) error {
+	// Check immediately before polling
+	if session.IsReady() {
+		return nil
+	}
+	if err := session.GetError(); err != nil {
+		return err
+	}
+
 	ticker := time.NewTicker(100 * time.Millisecond)
 	defer ticker.Stop()
 
@@ -211,6 +245,9 @@ func (s *AceStreamProxyService) cleanupClient(infoHash, pid string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
+	// Grab session before removal so we can access engineCancel
+	session := s.sessions.GetSession(infoHash)
+
 	remainingClients, isLast := s.sessions.RemoveClient(infoHash, pid)
 
 	s.logger.Info("client disconnecting",
@@ -218,10 +255,13 @@ func (s *AceStreamProxyService) cleanupClient(infoHash, pid string) {
 		"pid", pid,
 		"remaining_clients", remainingClients)
 
-	// If this was the last client, stop the stream
-	if isLast {
+	// If this was the last client, cancel the engine pump and stop the stream
+	if isLast && session != nil {
 		s.logger.Info("stopping stream (last client disconnected)",
 			"infohash", infoHash)
+
+		// Cancel the engine pump goroutine
+		session.CancelEngine()
 
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
@@ -265,7 +305,7 @@ func (r *sessionRegistry) AddClient(infoHash, pid string, logger *slog.Logger) (
 
 	session, exists := r.sessions[infoHash]
 	if !exists {
-		session = newStreamSession(infoHash)
+		session = newStreamSession(infoHash, logger)
 		r.sessions[infoHash] = session
 	}
 
@@ -301,6 +341,13 @@ func (r *sessionRegistry) RemoveClient(infoHash, pid string) (int, bool) {
 	return remainingClients, false
 }
 
+// GetSession returns the session for the given infohash, or nil if not found.
+func (r *sessionRegistry) GetSession(infoHash string) *streamSession {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	return r.sessions[infoHash]
+}
+
 // GetAllSessions returns information about all active sessions.
 func (r *sessionRegistry) GetAllSessions() []StreamInfo {
 	r.mu.RLock()
@@ -319,18 +366,21 @@ func (r *sessionRegistry) GetAllSessions() []StreamInfo {
 
 // streamSession represents an active stream with multiple clients.
 type streamSession struct {
-	mu        sync.RWMutex
-	infoHash  string
-	pids      map[string]struct{}
-	streamURL string
-	ready     bool
-	err       error
+	mu           sync.RWMutex
+	infoHash     string
+	pids         map[string]struct{}
+	streamURL    string
+	ready        bool
+	err          error
+	broadcaster  *streamBroadcaster
+	engineCancel context.CancelFunc
 }
 
-func newStreamSession(infoHash string) *streamSession {
+func newStreamSession(infoHash string, logger *slog.Logger) *streamSession {
 	return &streamSession{
-		infoHash: infoHash,
-		pids:     make(map[string]struct{}),
+		infoHash:    infoHash,
+		pids:        make(map[string]struct{}),
+		broadcaster: newStreamBroadcaster(infoHash, logger),
 	}
 }
 
@@ -411,6 +461,24 @@ func (s *streamSession) GetError() error {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	return s.err
+}
+
+func (s *streamSession) GetBroadcaster() *streamBroadcaster {
+	return s.broadcaster
+}
+
+func (s *streamSession) SetEngineCancel(cancel context.CancelFunc) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.engineCancel = cancel
+}
+
+func (s *streamSession) CancelEngine() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.engineCancel != nil {
+		s.engineCancel()
+	}
 }
 
 // pidGenerator generates unique PIDs for clients.
