@@ -2,6 +2,7 @@ package application
 
 import (
 	"context"
+	"time"
 
 	"github.com/alorle/iptv-manager/internal/channel"
 	"github.com/alorle/iptv-manager/internal/port/driven"
@@ -66,4 +67,23 @@ func (s *ChannelService) DeleteChannel(ctx context.Context, name string) error {
 
 	// Delete the channel
 	return s.channelRepo.Delete(ctx, name)
+}
+
+// UpdateEPGMapping updates the EPG mapping for a channel to a manual mapping.
+// Returns channel.ErrChannelNotFound if the channel does not exist.
+func (s *ChannelService) UpdateEPGMapping(ctx context.Context, channelName string, epgID string) error {
+	ch, err := s.channelRepo.FindByName(ctx, channelName)
+	if err != nil {
+		return err
+	}
+
+	// Create manual mapping with current time
+	mapping, err := channel.NewEPGMapping(epgID, channel.MappingManual, time.Now())
+	if err != nil {
+		return err
+	}
+
+	ch.SetEPGMapping(mapping)
+
+	return s.channelRepo.Save(ctx, ch)
 }
