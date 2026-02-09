@@ -347,7 +347,7 @@ type EngineStats struct {
 // GetEngineStats retrieves overall engine statistics.
 // This is useful for monitoring and debugging.
 func (a *AceStreamHTTPAdapter) GetEngineStats(ctx context.Context) (EngineStats, error) {
-	reqURL := fmt.Sprintf("%s/ace/manifest.json", a.baseURL)
+	reqURL := fmt.Sprintf("%s/webui/api/service?method=get_version", a.baseURL)
 
 	a.logger.Debug("engine request", "method", http.MethodGet, "url", reqURL, "pid", "")
 
@@ -413,8 +413,7 @@ func (a *AceStreamHTTPAdapter) Ping(ctx context.Context) error {
 	ctx, cancel := context.WithTimeout(ctx, a.pingTimeout)
 	defer cancel()
 
-	// Try to access the manifest endpoint as a health check
-	reqURL := fmt.Sprintf("%s/ace/manifest.json", a.baseURL)
+	reqURL := fmt.Sprintf("%s/webui/api/service?method=get_version", a.baseURL)
 
 	a.logger.Debug("engine request", "method", http.MethodGet, "url", reqURL, "pid", "", "timeout", a.pingTimeout)
 
