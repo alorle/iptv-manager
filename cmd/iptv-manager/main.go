@@ -20,6 +20,7 @@ import (
 type config struct {
 	Port               string
 	AceStreamEngineURL string
+	EPGURL             string
 	DBPath             string
 	LogLevel           slog.Level
 	StreamWriteTimeout time.Duration
@@ -34,6 +35,11 @@ func loadConfig() config {
 	aceStreamURL := os.Getenv("ACESTREAM_ENGINE_URL")
 	if aceStreamURL == "" {
 		aceStreamURL = "http://localhost:6878"
+	}
+
+	epgURL := os.Getenv("EPG_URL")
+	if epgURL == "" {
+		epgURL = "https://www.tdtchannels.com/epg/TV.xml"
 	}
 
 	dbPath := os.Getenv("DB_PATH")
@@ -65,6 +71,7 @@ func loadConfig() config {
 	return config{
 		Port:               port,
 		AceStreamEngineURL: aceStreamURL,
+		EPGURL:             epgURL,
 		DBPath:             dbPath,
 		LogLevel:           logLevel,
 		StreamWriteTimeout: streamWriteTimeout,
@@ -83,6 +90,7 @@ func main() {
 	logger.Info("starting iptv-manager",
 		"port", cfg.Port,
 		"acestream_url", cfg.AceStreamEngineURL,
+		"epg_url", cfg.EPGURL,
 		"db_path", cfg.DBPath,
 		"log_level", cfg.LogLevel.String(),
 		"stream_write_timeout", cfg.StreamWriteTimeout,
@@ -112,12 +120,22 @@ func main() {
 
 	aceStreamEngine := driven.NewAceStreamHTTPAdapter(cfg.AceStreamEngineURL, logger)
 
+	subscriptionRepo, err := driven.NewSubscriptionBoltDBRepository(db)
+	if err != nil {
+		log.Fatalf("failed to create subscription repository: %v", err)
+	}
+
+	epgFetcher := driven.NewEPGXMLFetcher(cfg.EPGURL, &http.Client{Timeout: 30 * time.Second})
+
+	acestreamSource := driven.NewAcestreamHTTPSource()
+
 	// Create application services
 	channelService := application.NewChannelService(channelRepo, streamRepo)
 	streamService := application.NewStreamService(streamRepo, channelRepo)
 	playlistService := application.NewPlaylistService(streamRepo)
 	healthService := application.NewHealthService(channelRepo, aceStreamEngine)
 	aceStreamProxyService := application.NewAceStreamProxyService(aceStreamEngine, logger, cfg.StreamWriteTimeout)
+	epgSyncService := application.NewEPGSyncService(epgFetcher, acestreamSource, channelRepo, streamRepo, subscriptionRepo)
 
 	// Create HTTP handlers
 	channelHandler := driver.NewChannelHTTPHandler(channelService)
@@ -158,12 +176,41 @@ func main() {
 		}
 	}()
 
+	// Background EPG sync
+	syncCtx, syncCancel := context.WithCancel(context.Background())
+	defer syncCancel()
+
+	go func() {
+		ticker := time.NewTicker(6 * time.Hour)
+		defer ticker.Stop()
+
+		logger.Info("epg sync scheduler started", "interval", "6h")
+
+		for {
+			select {
+			case <-ticker.C:
+				logger.Info("starting scheduled epg sync")
+				if err := epgSyncService.SyncChannels(syncCtx); err != nil {
+					logger.Error("epg sync failed", "error", err)
+				} else {
+					logger.Info("epg sync completed successfully")
+				}
+			case <-syncCtx.Done():
+				logger.Info("epg sync scheduler stopped")
+				return
+			}
+		}
+	}()
+
 	// Graceful shutdown
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
 	<-sigChan
 
 	logger.Info("shutdown signal received, shutting down gracefully")
+
+	// Cancel background sync
+	syncCancel()
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
