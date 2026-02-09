@@ -160,7 +160,7 @@ func (h *EPGHTTPHandler) handleUpdateMapping(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	// Update the EPG mapping to the new manual mapping
+	// Update the EPG mapping to the new manual mapping (or clear it if empty)
 	err := h.channelService.UpdateEPGMapping(r.Context(), channelName, req.EPGID)
 	if err != nil {
 		writeError(w, http.StatusNotFound, "channel not found")
@@ -176,7 +176,13 @@ func (h *EPGHTTPHandler) handleUpdateMapping(w http.ResponseWriter, r *http.Requ
 
 	mapping := ch.EPGMapping()
 	if mapping == nil {
-		writeError(w, http.StatusInternalServerError, "internal server error")
+		// Return empty mapping response when cleared
+		writeJSON(w, http.StatusOK, mappingResponse{
+			ChannelName: ch.Name(),
+			EPGID:       "",
+			Source:      "",
+			LastSynced:  "",
+		})
 		return
 	}
 

@@ -70,6 +70,7 @@ func (s *ChannelService) DeleteChannel(ctx context.Context, name string) error {
 }
 
 // UpdateEPGMapping updates the EPG mapping for a channel to a manual mapping.
+// If epgID is empty, the mapping is cleared instead.
 // Returns channel.ErrChannelNotFound if the channel does not exist.
 func (s *ChannelService) UpdateEPGMapping(ctx context.Context, channelName string, epgID string) error {
 	ch, err := s.channelRepo.FindByName(ctx, channelName)
@@ -77,13 +78,17 @@ func (s *ChannelService) UpdateEPGMapping(ctx context.Context, channelName strin
 		return err
 	}
 
-	// Create manual mapping with current time
-	mapping, err := channel.NewEPGMapping(epgID, channel.MappingManual, time.Now())
-	if err != nil {
-		return err
+	// If epgID is empty, clear the mapping
+	if epgID == "" {
+		ch.ClearEPGMapping()
+	} else {
+		// Create manual mapping with current time
+		mapping, err := channel.NewEPGMapping(epgID, channel.MappingManual, time.Now())
+		if err != nil {
+			return err
+		}
+		ch.SetEPGMapping(mapping)
 	}
-
-	ch.SetEPGMapping(mapping)
 
 	return s.channelRepo.Save(ctx, ch)
 }

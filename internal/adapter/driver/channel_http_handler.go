@@ -30,9 +30,18 @@ type channelRequest struct {
 	Name string `json:"name"`
 }
 
+// epgMappingResponse represents an EPG mapping in JSON format.
+type epgMappingResponse struct {
+	EPGID      string `json:"epg_id"`
+	Source     string `json:"source"`
+	LastSynced string `json:"last_synced"`
+}
+
 // channelResponse represents a channel in JSON format.
 type channelResponse struct {
-	Name string `json:"name"`
+	Name       string              `json:"name"`
+	Status     string              `json:"status"`
+	EPGMapping *epgMappingResponse `json:"epg_mapping,omitempty"`
 }
 
 // writeJSON writes a JSON response with the given status code.
@@ -82,6 +91,24 @@ func (h *ChannelHTTPHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	writeError(w, http.StatusMethodNotAllowed, "method not allowed")
 }
 
+// toChannelResponse converts a channel domain object to an API response.
+func toChannelResponse(ch channel.Channel) channelResponse {
+	resp := channelResponse{
+		Name:   ch.Name(),
+		Status: string(ch.Status()),
+	}
+
+	if mapping := ch.EPGMapping(); mapping != nil {
+		resp.EPGMapping = &epgMappingResponse{
+			EPGID:      mapping.EPGID(),
+			Source:     string(mapping.Source()),
+			LastSynced: mapping.LastSynced().Format("2006-01-02T15:04:05Z07:00"),
+		}
+	}
+
+	return resp
+}
+
 // handleCreate handles POST /channels
 func (h *ChannelHTTPHandler) handleCreate(w http.ResponseWriter, r *http.Request) {
 	var req channelRequest
@@ -104,7 +131,7 @@ func (h *ChannelHTTPHandler) handleCreate(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	writeJSON(w, http.StatusCreated, channelResponse{Name: ch.Name()})
+	writeJSON(w, http.StatusCreated, toChannelResponse(ch))
 }
 
 // handleList handles GET /channels
@@ -117,7 +144,7 @@ func (h *ChannelHTTPHandler) handleList(w http.ResponseWriter, r *http.Request) 
 
 	response := make([]channelResponse, len(channels))
 	for i, ch := range channels {
-		response[i] = channelResponse{Name: ch.Name()}
+		response[i] = toChannelResponse(ch)
 	}
 
 	writeJSON(w, http.StatusOK, response)
@@ -135,7 +162,7 @@ func (h *ChannelHTTPHandler) handleGet(w http.ResponseWriter, r *http.Request, n
 		return
 	}
 
-	writeJSON(w, http.StatusOK, channelResponse{Name: ch.Name()})
+	writeJSON(w, http.StatusOK, toChannelResponse(ch))
 }
 
 // handleDelete handles DELETE /channels/{name}

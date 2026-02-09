@@ -135,6 +135,7 @@ func main() {
 	playlistService := application.NewPlaylistService(streamRepo)
 	healthService := application.NewHealthService(channelRepo, aceStreamEngine)
 	aceStreamProxyService := application.NewAceStreamProxyService(aceStreamEngine, logger, cfg.StreamWriteTimeout)
+	subscriptionService := application.NewSubscriptionService(subscriptionRepo, epgFetcher)
 	epgSyncService := application.NewEPGSyncService(epgFetcher, acestreamSource, channelRepo, streamRepo, subscriptionRepo)
 
 	// Create HTTP handlers
@@ -143,6 +144,8 @@ func main() {
 	playlistHandler := driver.NewPlaylistHTTPHandler(playlistService)
 	healthHandler := driver.NewHealthHTTPHandler(healthService)
 	aceStreamHandler := driver.NewAceStreamHTTPHandler(aceStreamProxyService, logger)
+	epgHandler := driver.NewEPGHTTPHandler(epgSyncService, subscriptionService, channelService)
+	subscriptionHandler := driver.NewSubscriptionHTTPHandler(subscriptionService)
 
 	// Register API routes
 	apiMux := http.NewServeMux()
@@ -151,6 +154,9 @@ func main() {
 	apiMux.Handle("/streams", streamHandler)
 	apiMux.Handle("/streams/", streamHandler)
 	apiMux.Handle("/health", healthHandler)
+	apiMux.Handle("/epg/", epgHandler)
+	apiMux.Handle("/subscriptions", subscriptionHandler)
+	apiMux.Handle("/subscriptions/", subscriptionHandler)
 
 	// Root router: API under /api/, streaming routes at root, SPA for everything else
 	rootMux := http.NewServeMux()
