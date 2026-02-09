@@ -12,6 +12,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
+import { Trash2 } from "lucide-react";
 
 interface Stream {
   info_hash: string;
@@ -128,6 +129,28 @@ export default function Streams() {
     }
   };
 
+  const handleDeleteStream = async (infoHash: string) => {
+    try {
+      const response = await fetch(`/api/streams/${infoHash}`, {
+        method: "DELETE",
+      });
+
+      if (!response.ok) {
+        if (response.status === 404) {
+          toast.error("Stream not found");
+        } else {
+          toast.error("Failed to delete stream");
+        }
+        return;
+      }
+
+      toast.success("Stream deleted successfully");
+      await fetchStreams();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "An error occurred");
+    }
+  };
+
   const filteredChannels = channels.filter((channel) =>
     channel.name.toLowerCase().includes(searchTerm.toLowerCase())
   );
@@ -168,6 +191,9 @@ export default function Streams() {
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                 Channel Name
               </th>
+              <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                Actions
+              </th>
             </tr>
           </thead>
           <tbody className="bg-white divide-y divide-gray-200">
@@ -178,6 +204,16 @@ export default function Streams() {
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                   {stream.channel_name}
+                </td>
+                <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => handleDeleteStream(stream.info_hash)}
+                    className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
                 </td>
               </tr>
             ))}
