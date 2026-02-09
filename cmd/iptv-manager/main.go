@@ -126,20 +126,25 @@ func main() {
 	healthHandler := driver.NewHealthHTTPHandler(healthService)
 	aceStreamHandler := driver.NewAceStreamHTTPHandler(aceStreamProxyService, logger)
 
-	// Register routes
-	mux := http.NewServeMux()
-	mux.Handle("/channels", channelHandler)
-	mux.Handle("/channels/", channelHandler)
-	mux.Handle("/streams", streamHandler)
-	mux.Handle("/streams/", streamHandler)
-	mux.Handle("/playlist.m3u", playlistHandler)
-	mux.Handle("/ace/", aceStreamHandler)
-	mux.Handle("/health", healthHandler)
+	// Register API routes
+	apiMux := http.NewServeMux()
+	apiMux.Handle("/channels", channelHandler)
+	apiMux.Handle("/channels/", channelHandler)
+	apiMux.Handle("/streams", streamHandler)
+	apiMux.Handle("/streams/", streamHandler)
+	apiMux.Handle("/health", healthHandler)
+
+	// Root router: API under /api/, streaming routes at root, SPA for everything else
+	rootMux := http.NewServeMux()
+	rootMux.Handle("/api/", http.StripPrefix("/api", apiMux))
+	rootMux.Handle("/playlist.m3u", playlistHandler)
+	rootMux.Handle("/ace/", aceStreamHandler)
+	rootMux.Handle("/", newSPAHandler())
 
 	// Create HTTP server
 	server := &http.Server{
 		Addr:         ":" + cfg.Port,
-		Handler:      mux,
+		Handler:      rootMux,
 		ReadTimeout:  15 * time.Second,
 		WriteTimeout: 15 * time.Second,
 		IdleTimeout:  60 * time.Second,

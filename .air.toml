@@ -1,0 +1,13 @@
+root = "."
+tmp_dir = "tmp"
+
+[build]
+  cmd = "go build -tags dev -o ./tmp/main ./cmd/iptv-manager"
+  bin = "./tmp/main"
+  include_ext = ["go"]
+  exclude_dir = ["ui", "tmp", ".direnv", ".git"]
+  exclude_regex = ["_test\\.go$"]
+  delay = 1000
+
+[log]
+  time = true
