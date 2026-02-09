@@ -1,6 +1,7 @@
 import { Routes, Route, Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import Channels from "./pages/Channels";
+import Streams from "./pages/Streams";
 
 function Home() {
   return (
@@ -31,11 +32,13 @@ export default function App() {
       <nav className="mb-8 flex gap-4">
         <Link to="/" className="text-blue-600 hover:underline">Home</Link>
         <Link to="/channels" className="text-blue-600 hover:underline">Channels</Link>
+        <Link to="/streams" className="text-blue-600 hover:underline">Streams</Link>
         <Link to="/about" className="text-blue-600 hover:underline">About</Link>
       </nav>
       <Routes>
         <Route path="/" element={<Home />} />
         <Route path="/channels" element={<Channels />} />
+        <Route path="/streams" element={<Streams />} />
         <Route path="/about" element={<About />} />
       </Routes>
     </div>
