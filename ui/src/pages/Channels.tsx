@@ -11,6 +11,8 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { toast } from "sonner";
+import { Trash2 } from "lucide-react";
 
 interface Channel {
   name: string;
@@ -119,6 +121,33 @@ export default function Channels() {
     }
   };
 
+  const handleDeleteChannel = async (name: string) => {
+    if (!confirm(`Are you sure you want to delete channel "${name}"? This will also delete all associated streams.`)) {
+      return;
+    }
+
+    try {
+      const response = await fetch(`/api/channels/${encodeURIComponent(name)}`, {
+        method: "DELETE",
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ error: "Failed to delete channel" }));
+        if (response.status === 404) {
+          toast.error(errorData.error || "Channel not found");
+        } else {
+          toast.error(errorData.error || "Failed to delete channel");
+        }
+        return;
+      }
+
+      toast.success(`Channel "${name}" deleted successfully`);
+      await fetchData();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "An error occurred");
+    }
+  };
+
   if (loading) {
     return (
       <div>
@@ -155,6 +184,9 @@ export default function Channels() {
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                 Stream Count
               </th>
+              <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                Actions
+              </th>
             </tr>
           </thead>
           <tbody className="bg-white divide-y divide-gray-200">
@@ -165,6 +197,16 @@ export default function Channels() {
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                   {getStreamCount(channel.name)}
+                </td>
+                <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => handleDeleteChannel(channel.name)}
+                    className="text-red-600 hover:text-red-900 hover:bg-red-50"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
                 </td>
               </tr>
             ))}
