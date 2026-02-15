@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"time"
 
 	"go.etcd.io/bbolt"
 
@@ -40,7 +41,53 @@ func NewChannelBoltDBRepository(db *bbolt.DB) (*ChannelBoltDBRepository, error) 
 
 // channelDTO is used for JSON serialization.
 type channelDTO struct {
-	Name string `json:"name"`
+	Name       string         `json:"name"`
+	Status     string         `json:"status"`
+	EPGMapping *epgMappingDTO `json:"epg_mapping,omitempty"`
+}
+
+// epgMappingDTO is used for JSON serialization of EPG mapping data.
+type epgMappingDTO struct {
+	EPGID      string `json:"epg_id"`
+	Source     string `json:"source"`
+	LastSynced string `json:"last_synced"`
+}
+
+func channelToDTO(ch channel.Channel) channelDTO {
+	dto := channelDTO{
+		Name:   ch.Name(),
+		Status: string(ch.Status()),
+	}
+	if m := ch.EPGMapping(); m != nil {
+		dto.EPGMapping = &epgMappingDTO{
+			EPGID:      m.EPGID(),
+			Source:     string(m.Source()),
+			LastSynced: m.LastSynced().Format(time.RFC3339),
+		}
+	}
+	return dto
+}
+
+func dtoToChannel(dto channelDTO) (channel.Channel, error) {
+	status := channel.Status(dto.Status)
+	if status == "" {
+		status = channel.StatusActive
+	}
+
+	var mapping *channel.EPGMapping
+	if dto.EPGMapping != nil {
+		lastSynced, err := time.Parse(time.RFC3339, dto.EPGMapping.LastSynced)
+		if err != nil {
+			return channel.Channel{}, err
+		}
+		m, err := channel.NewEPGMapping(dto.EPGMapping.EPGID, channel.MappingSource(dto.EPGMapping.Source), lastSynced)
+		if err != nil {
+			return channel.Channel{}, err
+		}
+		mapping = &m
+	}
+
+	return channel.ReconstructChannel(dto.Name, status, mapping), nil
 }
 
 // Save persists a channel to BoltDB.
@@ -63,9 +110,34 @@ func (r *ChannelBoltDBRepository) Save(ctx context.Context, ch channel.Channel) 
 			return channel.ErrChannelAlreadyExists
 		}
 
-		// Serialize channel
-		dto := channelDTO{Name: ch.Name()}
-		data, err := json.Marshal(dto)
+		data, err := json.Marshal(channelToDTO(ch))
+		if err != nil {
+			return err
+		}
+
+		return bucket.Put(key, data)
+	})
+}
+
+// Update persists changes to an existing channel in BoltDB.
+func (r *ChannelBoltDBRepository) Update(ctx context.Context, ch channel.Channel) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+
+	return r.db.Update(func(tx *bbolt.Tx) error {
+		bucket := tx.Bucket([]byte(channelsBucket))
+		if bucket == nil {
+			return errors.New("channels bucket not found")
+		}
+
+		key := []byte(ch.Name())
+
+		if bucket.Get(key) == nil {
+			return channel.ErrChannelNotFound
+		}
+
+		data, err := json.Marshal(channelToDTO(ch))
 		if err != nil {
 			return err
 		}
@@ -76,7 +148,6 @@ func (r *ChannelBoltDBRepository) Save(ctx context.Context, ch channel.Channel) 
 
 // FindByName retrieves a channel by its name from BoltDB.
 func (r *ChannelBoltDBRepository) FindByName(ctx context.Context, name string) (channel.Channel, error) {
-	// Check context cancellation
 	if err := ctx.Err(); err != nil {
 		return channel.Channel{}, err
 	}
@@ -99,8 +170,7 @@ func (r *ChannelBoltDBRepository) FindByName(ctx context.Context, name string) (
 			return err
 		}
 
-		// Reconstruct domain entity
-		reconstructed, err := channel.NewChannel(dto.Name)
+		reconstructed, err := dtoToChannel(dto)
 		if err != nil {
 			return err
 		}
@@ -133,7 +203,7 @@ func (r *ChannelBoltDBRepository) FindAll(ctx context.Context) ([]channel.Channe
 				return err
 			}
 
-			ch, err := channel.NewChannel(dto.Name)
+			ch, err := dtoToChannel(dto)
 			if err != nil {
 				return err
 			}

@@ -34,7 +34,7 @@ type subscriptionResponse struct {
 
 // ServeHTTP routes the request to the appropriate handler based on method and path.
 func (h *SubscriptionHTTPHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	path := strings.TrimPrefix(r.URL.Path, "/api/subscriptions")
+	path := strings.TrimPrefix(r.URL.Path, "/subscriptions")
 
 	// POST /api/subscriptions - subscribe to EPG channel
 	if r.Method == http.MethodPost && path == "" {

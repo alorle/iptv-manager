@@ -89,6 +89,17 @@ func NewChannel(name string) (Channel, error) {
 	}, nil
 }
 
+// ReconstructChannel rebuilds a Channel from persisted state.
+// This is intended for repository adapters only — it bypasses the validation
+// and defaults applied by NewChannel.
+func ReconstructChannel(name string, status Status, epgMapping *EPGMapping) Channel {
+	return Channel{
+		name:       name,
+		status:     status,
+		epgMapping: epgMapping,
+	}
+}
+
 // Name returns the channel's name.
 func (c Channel) Name() string {
 	return c.name

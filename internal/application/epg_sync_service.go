@@ -147,7 +147,7 @@ func (s *EPGSyncService) SyncChannels(ctx context.Context) error {
 	for _, existingChannel := range existingChannels {
 		if existingChannel.Status() == channel.StatusActive && !processedChannelNames[existingChannel.Name()] {
 			existingChannel.Archive()
-			if err := s.channelRepo.Save(ctx, existingChannel); err != nil {
+			if err := s.channelRepo.Update(ctx, existingChannel); err != nil {
 				log.Printf("Error archiving channel %s: %v", existingChannel.Name(), err)
 			} else {
 				log.Printf("Archived channel %s (no longer in EPG)", existingChannel.Name())
@@ -224,13 +224,18 @@ func (s *EPGSyncService) processChannel(
 		ch.SetEPGMapping(mapping)
 	}
 
-	// Save channel (creates if new, updates if existing)
-	if err := s.channelRepo.Save(ctx, ch); err != nil {
-		// If channel already exists on create, treat as existing
-		if errors.Is(err, channel.ErrChannelAlreadyExists) && isNew {
-			log.Printf("Channel %s already exists, treating as update", channelName)
-		} else {
-			return fmt.Errorf("failed to save channel: %w", err)
+	// Save or update channel
+	if isNew {
+		if err := s.channelRepo.Save(ctx, ch); err != nil {
+			if errors.Is(err, channel.ErrChannelAlreadyExists) {
+				log.Printf("Channel %s already exists, treating as update", channelName)
+			} else {
+				return fmt.Errorf("failed to save channel: %w", err)
+			}
+		}
+	} else {
+		if err := s.channelRepo.Update(ctx, ch); err != nil {
+			return fmt.Errorf("failed to update channel: %w", err)
 		}
 	}
 

@@ -90,5 +90,5 @@ func (s *ChannelService) UpdateEPGMapping(ctx context.Context, channelName strin
 		ch.SetEPGMapping(mapping)
 	}
 
-	return s.channelRepo.Save(ctx, ch)
+	return s.channelRepo.Update(ctx, ch)
 }

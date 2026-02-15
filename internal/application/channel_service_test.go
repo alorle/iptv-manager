@@ -12,6 +12,7 @@ import (
 // mockChannelRepository is a mock implementation of driven.ChannelRepository for testing.
 type mockChannelRepository struct {
 	saveFunc       func(ctx context.Context, ch channel.Channel) error
+	updateFunc     func(ctx context.Context, ch channel.Channel) error
 	findByNameFunc func(ctx context.Context, name string) (channel.Channel, error)
 	findAllFunc    func(ctx context.Context) ([]channel.Channel, error)
 	deleteFunc     func(ctx context.Context, name string) error
@@ -21,6 +22,13 @@ type mockChannelRepository struct {
 func (m *mockChannelRepository) Save(ctx context.Context, ch channel.Channel) error {
 	if m.saveFunc != nil {
 		return m.saveFunc(ctx, ch)
+	}
+	return nil
+}
+
+func (m *mockChannelRepository) Update(ctx context.Context, ch channel.Channel) error {
+	if m.updateFunc != nil {
+		return m.updateFunc(ctx, ch)
 	}
 	return nil
 }

@@ -39,6 +39,10 @@ func (m *mockChannelRepositoryForHealth) FindAll(ctx context.Context) ([]channel
 	return []channel.Channel{}, nil
 }
 
+func (m *mockChannelRepositoryForHealth) Update(ctx context.Context, ch channel.Channel) error {
+	return nil
+}
+
 func (m *mockChannelRepositoryForHealth) Delete(ctx context.Context, name string) error {
 	return nil
 }

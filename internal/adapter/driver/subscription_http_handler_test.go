@@ -62,7 +62,7 @@ func (m *mockEPGFetcher) FetchEPG(ctx context.Context) ([]epg.Channel, error) {
 }
 
 func TestSubscriptionHTTPHandler_Subscribe(t *testing.T) {
-	t.Run("POST /api/subscriptions creates subscription successfully", func(t *testing.T) {
+	t.Run("POST /subscriptions creates subscription successfully", func(t *testing.T) {
 		var savedSub subscription.Subscription
 		subRepo := &mockSubscriptionRepository{
 			saveFunc: func(ctx context.Context, sub subscription.Subscription) error {
@@ -81,7 +81,7 @@ func TestSubscriptionHTTPHandler_Subscribe(t *testing.T) {
 		handler := NewSubscriptionHTTPHandler(service)
 
 		reqBody := bytes.NewBufferString(`{"epg_channel_id":"epg123"}`)
-		req := httptest.NewRequest(http.MethodPost, "/api/subscriptions", reqBody)
+		req := httptest.NewRequest(http.MethodPost, "/subscriptions", reqBody)
 		rec := httptest.NewRecorder()
 
 		handler.ServeHTTP(rec, req)
@@ -105,14 +105,14 @@ func TestSubscriptionHTTPHandler_Subscribe(t *testing.T) {
 		}
 	})
 
-	t.Run("POST /api/subscriptions returns 400 for invalid JSON", func(t *testing.T) {
+	t.Run("POST /subscriptions returns 400 for invalid JSON", func(t *testing.T) {
 		subRepo := &mockSubscriptionRepository{}
 		epgFetcher := &mockEPGFetcher{}
 		service := application.NewSubscriptionService(subRepo, epgFetcher)
 		handler := NewSubscriptionHTTPHandler(service)
 
 		reqBody := bytes.NewBufferString(`invalid json`)
-		req := httptest.NewRequest(http.MethodPost, "/api/subscriptions", reqBody)
+		req := httptest.NewRequest(http.MethodPost, "/subscriptions", reqBody)
 		rec := httptest.NewRecorder()
 
 		handler.ServeHTTP(rec, req)
@@ -130,14 +130,14 @@ func TestSubscriptionHTTPHandler_Subscribe(t *testing.T) {
 		}
 	})
 
-	t.Run("POST /api/subscriptions returns 400 for empty epg_channel_id", func(t *testing.T) {
+	t.Run("POST /subscriptions returns 400 for empty epg_channel_id", func(t *testing.T) {
 		subRepo := &mockSubscriptionRepository{}
 		epgFetcher := &mockEPGFetcher{}
 		service := application.NewSubscriptionService(subRepo, epgFetcher)
 		handler := NewSubscriptionHTTPHandler(service)
 
 		reqBody := bytes.NewBufferString(`{"epg_channel_id":""}`)
-		req := httptest.NewRequest(http.MethodPost, "/api/subscriptions", reqBody)
+		req := httptest.NewRequest(http.MethodPost, "/subscriptions", reqBody)
 		rec := httptest.NewRecorder()
 
 		handler.ServeHTTP(rec, req)
@@ -155,7 +155,7 @@ func TestSubscriptionHTTPHandler_Subscribe(t *testing.T) {
 		}
 	})
 
-	t.Run("POST /api/subscriptions returns 409 for duplicate subscription", func(t *testing.T) {
+	t.Run("POST /subscriptions returns 409 for duplicate subscription", func(t *testing.T) {
 		subRepo := &mockSubscriptionRepository{
 			saveFunc: func(ctx context.Context, sub subscription.Subscription) error {
 				return subscription.ErrSubscriptionAlreadyExists
@@ -166,7 +166,7 @@ func TestSubscriptionHTTPHandler_Subscribe(t *testing.T) {
 		handler := NewSubscriptionHTTPHandler(service)
 
 		reqBody := bytes.NewBufferString(`{"epg_channel_id":"epg123"}`)
-		req := httptest.NewRequest(http.MethodPost, "/api/subscriptions", reqBody)
+		req := httptest.NewRequest(http.MethodPost, "/subscriptions", reqBody)
 		rec := httptest.NewRecorder()
 
 		handler.ServeHTTP(rec, req)
@@ -186,7 +186,7 @@ func TestSubscriptionHTTPHandler_Subscribe(t *testing.T) {
 }
 
 func TestSubscriptionHTTPHandler_List(t *testing.T) {
-	t.Run("GET /api/subscriptions returns all subscriptions", func(t *testing.T) {
+	t.Run("GET /subscriptions returns all subscriptions", func(t *testing.T) {
 		sub1, _ := subscription.NewSubscription("epg1")
 		sub2, _ := subscription.NewSubscription("epg2")
 		subRepo := &mockSubscriptionRepository{
@@ -198,7 +198,7 @@ func TestSubscriptionHTTPHandler_List(t *testing.T) {
 		service := application.NewSubscriptionService(subRepo, epgFetcher)
 		handler := NewSubscriptionHTTPHandler(service)
 
-		req := httptest.NewRequest(http.MethodGet, "/api/subscriptions", nil)
+		req := httptest.NewRequest(http.MethodGet, "/subscriptions", nil)
 		rec := httptest.NewRecorder()
 
 		handler.ServeHTTP(rec, req)
@@ -219,7 +219,7 @@ func TestSubscriptionHTTPHandler_List(t *testing.T) {
 		}
 	})
 
-	t.Run("GET /api/subscriptions returns empty array when no subscriptions exist", func(t *testing.T) {
+	t.Run("GET /subscriptions returns empty array when no subscriptions exist", func(t *testing.T) {
 		subRepo := &mockSubscriptionRepository{
 			findAllFunc: func(ctx context.Context) ([]subscription.Subscription, error) {
 				return []subscription.Subscription{}, nil
@@ -229,7 +229,7 @@ func TestSubscriptionHTTPHandler_List(t *testing.T) {
 		service := application.NewSubscriptionService(subRepo, epgFetcher)
 		handler := NewSubscriptionHTTPHandler(service)
 
-		req := httptest.NewRequest(http.MethodGet, "/api/subscriptions", nil)
+		req := httptest.NewRequest(http.MethodGet, "/subscriptions", nil)
 		rec := httptest.NewRecorder()
 
 		handler.ServeHTTP(rec, req)
@@ -249,7 +249,7 @@ func TestSubscriptionHTTPHandler_List(t *testing.T) {
 }
 
 func TestSubscriptionHTTPHandler_Unsubscribe(t *testing.T) {
-	t.Run("DELETE /api/subscriptions/{id} deletes subscription successfully", func(t *testing.T) {
+	t.Run("DELETE /subscriptions/{id} deletes subscription successfully", func(t *testing.T) {
 		subRepo := &mockSubscriptionRepository{
 			deleteFunc: func(ctx context.Context, epgChannelID string) error {
 				if epgChannelID == "epg123" {
@@ -262,7 +262,7 @@ func TestSubscriptionHTTPHandler_Unsubscribe(t *testing.T) {
 		service := application.NewSubscriptionService(subRepo, epgFetcher)
 		handler := NewSubscriptionHTTPHandler(service)
 
-		req := httptest.NewRequest(http.MethodDelete, "/api/subscriptions/epg123", nil)
+		req := httptest.NewRequest(http.MethodDelete, "/subscriptions/epg123", nil)
 		rec := httptest.NewRecorder()
 
 		handler.ServeHTTP(rec, req)
@@ -272,7 +272,7 @@ func TestSubscriptionHTTPHandler_Unsubscribe(t *testing.T) {
 		}
 	})
 
-	t.Run("DELETE /api/subscriptions/{id} returns 404 for non-existent subscription", func(t *testing.T) {
+	t.Run("DELETE /subscriptions/{id} returns 404 for non-existent subscription", func(t *testing.T) {
 		subRepo := &mockSubscriptionRepository{
 			deleteFunc: func(ctx context.Context, epgChannelID string) error {
 				return subscription.ErrSubscriptionNotFound
@@ -282,7 +282,7 @@ func TestSubscriptionHTTPHandler_Unsubscribe(t *testing.T) {
 		service := application.NewSubscriptionService(subRepo, epgFetcher)
 		handler := NewSubscriptionHTTPHandler(service)
 
-		req := httptest.NewRequest(http.MethodDelete, "/api/subscriptions/nonexistent", nil)
+		req := httptest.NewRequest(http.MethodDelete, "/subscriptions/nonexistent", nil)
 		rec := httptest.NewRecorder()
 
 		handler.ServeHTTP(rec, req)
@@ -310,7 +310,7 @@ func TestSubscriptionHTTPHandler_MethodNotAllowed(t *testing.T) {
 
 		methods := []string{http.MethodPut, http.MethodPatch, http.MethodHead, http.MethodOptions}
 		for _, method := range methods {
-			req := httptest.NewRequest(method, "/api/subscriptions", nil)
+			req := httptest.NewRequest(method, "/subscriptions", nil)
 			rec := httptest.NewRecorder()
 
 			handler.ServeHTTP(rec, req)

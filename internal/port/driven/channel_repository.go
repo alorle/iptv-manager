@@ -9,9 +9,13 @@ import (
 // ChannelRepository defines the interface for channel persistence operations.
 // This is a driven port that will be implemented by concrete adapters (e.g., BoltDB).
 type ChannelRepository interface {
-	// Save persists a channel. Returns channel.ErrChannelAlreadyExists if a channel
+	// Save persists a new channel. Returns channel.ErrChannelAlreadyExists if a channel
 	// with the same name already exists.
 	Save(ctx context.Context, ch channel.Channel) error
+
+	// Update persists changes to an existing channel. Returns channel.ErrChannelNotFound
+	// if the channel does not exist.
+	Update(ctx context.Context, ch channel.Channel) error
 
 	// FindByName retrieves a channel by its name. Returns channel.ErrChannelNotFound
 	// if the channel does not exist.

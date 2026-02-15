@@ -29,7 +29,7 @@ func (m *mockAcestreamSource) FetchHashes(ctx context.Context, source string) (m
 }
 
 func TestEPGHTTPHandler_Import(t *testing.T) {
-	t.Run("POST /api/epg/import triggers EPG sync successfully", func(t *testing.T) {
+	t.Run("POST /epg/import triggers EPG sync successfully", func(t *testing.T) {
 		syncCalled := false
 		epgFetcher := &mockEPGFetcher{
 			fetchEPGFunc: func(ctx context.Context) ([]epg.Channel, error) {
@@ -59,7 +59,7 @@ func TestEPGHTTPHandler_Import(t *testing.T) {
 		channelService := application.NewChannelService(channelRepo, streamRepo)
 		handler := NewEPGHTTPHandler(epgSyncService, subscriptionSvc, channelService)
 
-		req := httptest.NewRequest(http.MethodPost, "/api/epg/import", nil)
+		req := httptest.NewRequest(http.MethodPost, "/epg/import", nil)
 		rec := httptest.NewRecorder()
 
 		handler.ServeHTTP(rec, req)
@@ -81,7 +81,7 @@ func TestEPGHTTPHandler_Import(t *testing.T) {
 		}
 	})
 
-	t.Run("POST /api/epg/import returns 500 on sync error", func(t *testing.T) {
+	t.Run("POST /epg/import returns 500 on sync error", func(t *testing.T) {
 		epgFetcher := &mockEPGFetcher{
 			fetchEPGFunc: func(ctx context.Context) ([]epg.Channel, error) {
 				return nil, errors.New("fetch failed")
@@ -97,7 +97,7 @@ func TestEPGHTTPHandler_Import(t *testing.T) {
 		channelService := application.NewChannelService(channelRepo, streamRepo)
 		handler := NewEPGHTTPHandler(epgSyncService, subscriptionSvc, channelService)
 
-		req := httptest.NewRequest(http.MethodPost, "/api/epg/import", nil)
+		req := httptest.NewRequest(http.MethodPost, "/epg/import", nil)
 		rec := httptest.NewRecorder()
 
 		handler.ServeHTTP(rec, req)
@@ -117,7 +117,7 @@ func TestEPGHTTPHandler_Import(t *testing.T) {
 }
 
 func TestEPGHTTPHandler_ListChannels(t *testing.T) {
-	t.Run("GET /api/epg/channels returns all channels", func(t *testing.T) {
+	t.Run("GET /epg/channels returns all channels", func(t *testing.T) {
 		ch1, _ := epg.NewChannel("1", "Channel One", "logo1.png", "Sports", "en", "epg1")
 		ch2, _ := epg.NewChannel("2", "Channel Two", "logo2.png", "News", "en", "epg2")
 
@@ -136,7 +136,7 @@ func TestEPGHTTPHandler_ListChannels(t *testing.T) {
 		channelService := application.NewChannelService(channelRepo, streamRepo)
 		handler := NewEPGHTTPHandler(epgSyncService, subscriptionSvc, channelService)
 
-		req := httptest.NewRequest(http.MethodGet, "/api/epg/channels", nil)
+		req := httptest.NewRequest(http.MethodGet, "/epg/channels", nil)
 		rec := httptest.NewRecorder()
 
 		handler.ServeHTTP(rec, req)
@@ -157,7 +157,7 @@ func TestEPGHTTPHandler_ListChannels(t *testing.T) {
 		}
 	})
 
-	t.Run("GET /api/epg/channels filters by category", func(t *testing.T) {
+	t.Run("GET /epg/channels filters by category", func(t *testing.T) {
 		ch1, _ := epg.NewChannel("1", "Sports Channel", "logo1.png", "Sports", "en", "epg1")
 		ch2, _ := epg.NewChannel("2", "News Channel", "logo2.png", "News", "en", "epg2")
 
@@ -176,7 +176,7 @@ func TestEPGHTTPHandler_ListChannels(t *testing.T) {
 		channelService := application.NewChannelService(channelRepo, streamRepo)
 		handler := NewEPGHTTPHandler(epgSyncService, subscriptionSvc, channelService)
 
-		req := httptest.NewRequest(http.MethodGet, "/api/epg/channels?category=sports", nil)
+		req := httptest.NewRequest(http.MethodGet, "/epg/channels?category=sports", nil)
 		rec := httptest.NewRecorder()
 
 		handler.ServeHTTP(rec, req)
@@ -197,7 +197,7 @@ func TestEPGHTTPHandler_ListChannels(t *testing.T) {
 		}
 	})
 
-	t.Run("GET /api/epg/channels filters by search term", func(t *testing.T) {
+	t.Run("GET /epg/channels filters by search term", func(t *testing.T) {
 		ch1, _ := epg.NewChannel("1", "ESPN Sports", "logo1.png", "Sports", "en", "epg1")
 		ch2, _ := epg.NewChannel("2", "BBC News", "logo2.png", "News", "en", "epg2")
 
@@ -216,7 +216,7 @@ func TestEPGHTTPHandler_ListChannels(t *testing.T) {
 		channelService := application.NewChannelService(channelRepo, streamRepo)
 		handler := NewEPGHTTPHandler(epgSyncService, subscriptionSvc, channelService)
 
-		req := httptest.NewRequest(http.MethodGet, "/api/epg/channels?search=bbc", nil)
+		req := httptest.NewRequest(http.MethodGet, "/epg/channels?search=bbc", nil)
 		rec := httptest.NewRecorder()
 
 		handler.ServeHTTP(rec, req)
@@ -239,7 +239,7 @@ func TestEPGHTTPHandler_ListChannels(t *testing.T) {
 }
 
 func TestEPGHTTPHandler_ListMappings(t *testing.T) {
-	t.Run("GET /api/epg/mappings returns all mappings", func(t *testing.T) {
+	t.Run("GET /epg/mappings returns all mappings", func(t *testing.T) {
 		ch1, _ := channel.NewChannel("Channel1")
 		mapping1, _ := channel.NewEPGMapping("epg1", channel.MappingAuto, time.Now())
 		ch1.SetEPGMapping(mapping1)
@@ -263,7 +263,7 @@ func TestEPGHTTPHandler_ListMappings(t *testing.T) {
 		epgSyncService := application.NewEPGSyncService(epgFetcher, acestreamSrc, channelRepo, streamRepo, subRepo)
 		handler := NewEPGHTTPHandler(epgSyncService, subscriptionSvc, channelService)
 
-		req := httptest.NewRequest(http.MethodGet, "/api/epg/mappings", nil)
+		req := httptest.NewRequest(http.MethodGet, "/epg/mappings", nil)
 		rec := httptest.NewRecorder()
 
 		handler.ServeHTTP(rec, req)
@@ -287,7 +287,7 @@ func TestEPGHTTPHandler_ListMappings(t *testing.T) {
 		}
 	})
 
-	t.Run("GET /api/epg/mappings excludes channels without mappings", func(t *testing.T) {
+	t.Run("GET /epg/mappings excludes channels without mappings", func(t *testing.T) {
 		ch1, _ := channel.NewChannel("Channel1")
 		mapping1, _ := channel.NewEPGMapping("epg1", channel.MappingAuto, time.Now())
 		ch1.SetEPGMapping(mapping1)
@@ -310,7 +310,7 @@ func TestEPGHTTPHandler_ListMappings(t *testing.T) {
 		epgSyncService := application.NewEPGSyncService(epgFetcher, acestreamSrc, channelRepo, streamRepo, subRepo)
 		handler := NewEPGHTTPHandler(epgSyncService, subscriptionSvc, channelService)
 
-		req := httptest.NewRequest(http.MethodGet, "/api/epg/mappings", nil)
+		req := httptest.NewRequest(http.MethodGet, "/epg/mappings", nil)
 		rec := httptest.NewRecorder()
 
 		handler.ServeHTTP(rec, req)
@@ -333,7 +333,7 @@ func TestEPGHTTPHandler_ListMappings(t *testing.T) {
 }
 
 func TestEPGHTTPHandler_UpdateMapping(t *testing.T) {
-	t.Run("PUT /api/epg/mappings/{channelName} updates mapping successfully", func(t *testing.T) {
+	t.Run("PUT /epg/mappings/{channelName} updates mapping successfully", func(t *testing.T) {
 		ch, _ := channel.NewChannel("TestChannel")
 		channelRepo := &mockChannelRepository{
 			findByNameFunc: func(ctx context.Context, name string) (channel.Channel, error) {
@@ -342,7 +342,7 @@ func TestEPGHTTPHandler_UpdateMapping(t *testing.T) {
 				}
 				return channel.Channel{}, channel.ErrChannelNotFound
 			},
-			saveFunc: func(ctx context.Context, savedCh channel.Channel) error {
+			updateFunc: func(ctx context.Context, savedCh channel.Channel) error {
 				ch = savedCh
 				return nil
 			},
@@ -358,7 +358,7 @@ func TestEPGHTTPHandler_UpdateMapping(t *testing.T) {
 		handler := NewEPGHTTPHandler(epgSyncService, subscriptionSvc, channelService)
 
 		reqBody := bytes.NewBufferString(`{"epg_id":"new_epg_id"}`)
-		req := httptest.NewRequest(http.MethodPut, "/api/epg/mappings/TestChannel", reqBody)
+		req := httptest.NewRequest(http.MethodPut, "/epg/mappings/TestChannel", reqBody)
 		rec := httptest.NewRecorder()
 
 		handler.ServeHTTP(rec, req)
@@ -379,7 +379,7 @@ func TestEPGHTTPHandler_UpdateMapping(t *testing.T) {
 		}
 	})
 
-	t.Run("PUT /api/epg/mappings/{channelName} returns 404 for non-existent channel", func(t *testing.T) {
+	t.Run("PUT /epg/mappings/{channelName} returns 404 for non-existent channel", func(t *testing.T) {
 		channelRepo := &mockChannelRepository{
 			findByNameFunc: func(ctx context.Context, name string) (channel.Channel, error) {
 				return channel.Channel{}, channel.ErrChannelNotFound
@@ -396,7 +396,7 @@ func TestEPGHTTPHandler_UpdateMapping(t *testing.T) {
 		handler := NewEPGHTTPHandler(epgSyncService, subscriptionSvc, channelService)
 
 		reqBody := bytes.NewBufferString(`{"epg_id":"new_epg_id"}`)
-		req := httptest.NewRequest(http.MethodPut, "/api/epg/mappings/NonExistent", reqBody)
+		req := httptest.NewRequest(http.MethodPut, "/epg/mappings/NonExistent", reqBody)
 		rec := httptest.NewRecorder()
 
 		handler.ServeHTTP(rec, req)
@@ -414,7 +414,7 @@ func TestEPGHTTPHandler_UpdateMapping(t *testing.T) {
 		}
 	})
 
-	t.Run("PUT /api/epg/mappings/{channelName} returns 400 for invalid JSON", func(t *testing.T) {
+	t.Run("PUT /epg/mappings/{channelName} returns 400 for invalid JSON", func(t *testing.T) {
 		channelRepo := &mockChannelRepository{}
 		streamRepo := &mockStreamRepository{}
 		epgFetcher := &mockEPGFetcher{}
@@ -427,7 +427,7 @@ func TestEPGHTTPHandler_UpdateMapping(t *testing.T) {
 		handler := NewEPGHTTPHandler(epgSyncService, subscriptionSvc, channelService)
 
 		reqBody := bytes.NewBufferString(`invalid json`)
-		req := httptest.NewRequest(http.MethodPut, "/api/epg/mappings/TestChannel", reqBody)
+		req := httptest.NewRequest(http.MethodPut, "/epg/mappings/TestChannel", reqBody)
 		rec := httptest.NewRecorder()
 
 		handler.ServeHTTP(rec, req)
@@ -461,7 +461,7 @@ func TestEPGHTTPHandler_MethodNotAllowed(t *testing.T) {
 
 		methods := []string{http.MethodPatch, http.MethodHead, http.MethodOptions}
 		for _, method := range methods {
-			req := httptest.NewRequest(method, "/api/epg/channels", nil)
+			req := httptest.NewRequest(method, "/epg/channels", nil)
 			rec := httptest.NewRecorder()
 
 			handler.ServeHTTP(rec, req)

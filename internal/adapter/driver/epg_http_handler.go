@@ -53,7 +53,7 @@ type updateMappingRequest struct {
 
 // ServeHTTP routes the request to the appropriate handler based on method and path.
 func (h *EPGHTTPHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	path := strings.TrimPrefix(r.URL.Path, "/api/epg")
+	path := strings.TrimPrefix(r.URL.Path, "/epg")
 
 	// POST /api/epg/import - trigger initial import
 	if r.Method == http.MethodPost && path == "/import" {
