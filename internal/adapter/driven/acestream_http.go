@@ -11,11 +11,19 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"sync"
 	"time"
 
 	"github.com/alorle/iptv-manager/internal/port/driven"
 	"github.com/alorle/iptv-manager/internal/streaming"
 )
+
+// engineSession holds the session-specific URLs returned by the engine
+// when a stream is started via /ace/getstream.
+type engineSession struct {
+	statURL    string
+	commandURL string
+}
 
 // Operation timeouts for different AceStream Engine operations.
 const (
@@ -36,6 +44,8 @@ type AceStreamHTTPAdapter struct {
 	stopStreamTimeout  time.Duration
 	pingTimeout        time.Duration
 	logger             *slog.Logger
+	sessionsMu         sync.RWMutex
+	sessions           map[string]engineSession // PID → session URLs
 }
 
 // NewAceStreamHTTPAdapter creates a new HTTP adapter for AceStream Engine.
@@ -90,6 +100,7 @@ func NewAceStreamHTTPAdapter(baseURL string, logger *slog.Logger) *AceStreamHTTP
 		stopStreamTimeout:  defaultStopStreamTimeout,
 		pingTimeout:        defaultPingTimeout,
 		logger:             logger,
+		sessions:           make(map[string]engineSession),
 	}
 }
 
@@ -138,10 +149,12 @@ func (a *AceStreamHTTPAdapter) StartStream(ctx context.Context, infoHash, pid st
 		return "", fmt.Errorf("engine returned status %d: %s", resp.StatusCode, string(body))
 	}
 
-	// Parse response to extract stream URL
+	// Parse response to extract stream and session URLs
 	var result struct {
 		Response struct {
-			StreamURL string `json:"playback_url"`
+			PlaybackURL string `json:"playback_url"`
+			StatURL     string `json:"stat_url"`
+			CommandURL  string `json:"command_url"`
 		} `json:"response"`
 	}
 
@@ -149,24 +162,42 @@ func (a *AceStreamHTTPAdapter) StartStream(ctx context.Context, infoHash, pid st
 		return "", fmt.Errorf("failed to decode start stream response: %w", err)
 	}
 
-	if result.Response.StreamURL == "" {
+	if result.Response.PlaybackURL == "" {
 		return "", fmt.Errorf("engine did not return a stream URL")
 	}
 
-	return result.Response.StreamURL, nil
+	// Store session URLs for later use by GetStats and StopStream
+	a.sessionsMu.Lock()
+	a.sessions[pid] = engineSession{
+		statURL:    result.Response.StatURL,
+		commandURL: result.Response.CommandURL,
+	}
+	a.sessionsMu.Unlock()
+
+	return result.Response.PlaybackURL, nil
 }
 
 // GetStats retrieves statistics for an active stream identified by its PID.
+// The PID must have been previously registered via StartStream.
 func (a *AceStreamHTTPAdapter) GetStats(ctx context.Context, pid string) (driven.StreamStats, error) {
+	// Look up the session-specific stat URL
+	a.sessionsMu.RLock()
+	session, ok := a.sessions[pid]
+	a.sessionsMu.RUnlock()
+
+	if !ok {
+		return driven.StreamStats{}, fmt.Errorf("no active session for pid %s", pid)
+	}
+
+	if session.statURL == "" {
+		return driven.StreamStats{}, fmt.Errorf("no stat URL available for pid %s", pid)
+	}
+
 	// Apply operation-specific timeout
 	ctx, cancel := context.WithTimeout(ctx, a.getStatsTimeout)
 	defer cancel()
 
-	params := url.Values{}
-	params.Set("pid", pid)
-	params.Set("format", "json")
-
-	reqURL := fmt.Sprintf("%s/ace/stat?%s", a.baseURL, params.Encode())
+	reqURL := session.statURL
 
 	a.logger.Debug("engine request", "method", http.MethodGet, "url", reqURL, "pid", pid, "timeout", a.getStatsTimeout)
 
@@ -226,15 +257,31 @@ func (a *AceStreamHTTPAdapter) GetStats(ctx context.Context, pid string) (driven
 }
 
 // StopStream terminates the stream identified by its PID.
+// The PID must have been previously registered via StartStream.
 func (a *AceStreamHTTPAdapter) StopStream(ctx context.Context, pid string) error {
+	// Look up and remove the session
+	a.sessionsMu.Lock()
+	session, ok := a.sessions[pid]
+	if ok {
+		delete(a.sessions, pid)
+	}
+	a.sessionsMu.Unlock()
+
+	if !ok {
+		a.logger.Warn("no active session to stop", "pid", pid)
+		return nil
+	}
+
+	if session.commandURL == "" {
+		a.logger.Warn("no command URL available, cannot stop stream", "pid", pid)
+		return nil
+	}
+
 	// Apply operation-specific timeout
 	ctx, cancel := context.WithTimeout(ctx, a.stopStreamTimeout)
 	defer cancel()
 
-	params := url.Values{}
-	params.Set("pid", pid)
-
-	reqURL := fmt.Sprintf("%s/ace/stop?%s", a.baseURL, params.Encode())
+	reqURL := session.commandURL + "?method=stop"
 
 	a.logger.Debug("engine request", "method", http.MethodGet, "url", reqURL, "pid", pid, "timeout", a.stopStreamTimeout)
 
@@ -247,7 +294,6 @@ func (a *AceStreamHTTPAdapter) StopStream(ctx context.Context, pid string) error
 	if err != nil {
 		if isTimeoutError(err) {
 			a.logger.Warn("engine operation timeout", "operation", "StopStream", "url", reqURL, "timeout", a.stopStreamTimeout, "pid", pid, "error", err)
-			// StopStream timeout is not irrecoverable - the stream may stop anyway
 			return fmt.Errorf("stop stream timed out after %v: %w", a.stopStreamTimeout, err)
 		}
 		a.logger.Warn("engine network error", "operation", "StopStream", "error", err, "url", reqURL)

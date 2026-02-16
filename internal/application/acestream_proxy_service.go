@@ -129,6 +129,7 @@ func (s *AceStreamProxyService) startEngineStream(ctx context.Context, session *
 	}
 
 	s.logger.Info("stream ready", "infohash", session.InfoHash(), "stream_url", streamURL)
+	session.SetEnginePID(firstPID)
 	session.SetStreamURL(streamURL)
 	session.MarkReady()
 	return nil
@@ -236,6 +237,7 @@ func (s *AceStreamProxyService) restartStream(ctx context.Context, session *stre
 		return err
 	}
 
+	session.SetEnginePID(pid)
 	session.SetStreamURL(streamURL)
 	return nil
 }
@@ -266,9 +268,10 @@ func (s *AceStreamProxyService) cleanupClient(infoHash, pid string) {
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
 
-		// Use the PID that was just removed to stop the stream
-		if err := s.engine.StopStream(ctx, pid); err != nil {
-			s.logger.Error("failed to stop stream", "infohash", infoHash, "pid", pid, "error", err)
+		// Use the PID that started the engine stream (session URLs are keyed by this PID)
+		enginePID := session.GetEnginePID()
+		if err := s.engine.StopStream(ctx, enginePID); err != nil {
+			s.logger.Error("failed to stop stream", "infohash", infoHash, "pid", enginePID, "error", err)
 		}
 	}
 }
@@ -370,6 +373,7 @@ type streamSession struct {
 	infoHash     string
 	pids         map[string]struct{}
 	streamURL    string
+	enginePID    string // PID used to start the engine stream
 	ready        bool
 	err          error
 	broadcaster  *streamBroadcaster
@@ -425,6 +429,18 @@ func (s *streamSession) GetFirstPID() string {
 		return pid
 	}
 	return ""
+}
+
+func (s *streamSession) SetEnginePID(pid string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.enginePID = pid
+}
+
+func (s *streamSession) GetEnginePID() string {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.enginePID
 }
 
 func (s *streamSession) SetStreamURL(url string) {
