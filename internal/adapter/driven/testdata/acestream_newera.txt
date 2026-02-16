@@ -1,7 +1,19 @@
-HBO acestream://0123456789abcdef0123456789abcdef01234567
-ESPN acestream://fedcba9876543210fedcba9876543210fedcba98
-CNN acestream://1111111111111111111111111111111111111111
-Discovery acestream://2222222222222222222222222222222222222222
+#EXTM3U url-tvg="https://example.com/epg.xml" refresh="3600"
+#EXTVLCOPT:network-caching=1000
 
-InvalidLine
-AlsoInvalid noprefix
+#EXTGRP: group-title="TEST" group-logo="https://example.com/logo.png"
+
+#EXTINF:-1 tvg-logo="https://example.com/hbo.png" tvg-id="HBO HD" group-title="TEST", HBO FHD --> NEW ERA
+acestream://0123456789abcdef0123456789abcdef01234567
+#EXTINF:-1 tvg-logo="https://example.com/espn.png" tvg-id="ESPN HD" group-title="TEST", ESPN HD --> SPORT TV
+acestream://fedcba9876543210fedcba9876543210fedcba98
+#EXTINF:-1 tvg-logo="https://example.com/cnn.png" tvg-id="CNN HD" group-title="TEST", CNN FHD --> NEW ERA
+acestream://1111111111111111111111111111111111111111
+#EXTINF:-1 tvg-logo="https://example.com/disc.png" tvg-id="Discovery HD" group-title="TEST", Discovery HD --> ELCANO
+acestream://2222222222222222222222222222222222222222
+#EXTINF:-1 tvg-logo="https://example.com/dazn.png" tvg-id="DAZN 1 HD" group-title="DAZN", DAZN 1 FHD --> NEW ERA
+acestream://3333333333333333333333333333333333333333
+#EXTINF:-1 tvg-logo="https://example.com/dazn.png" tvg-id="DAZN 1 HD" group-title="DAZN", DAZN 1 FHD --> NEW ERA
+acestream://4444444444444444444444444444444444444444
+#EXTINF:-1 tvg-logo="" tvg-id="" group-title="OTHER", No TVG ID --> SOURCE
+acestream://5555555555555555555555555555555555555555

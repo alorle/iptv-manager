@@ -24,7 +24,7 @@ const (
 
 // Source URLs for Acestream hash lists
 var sourceURLs = map[string]string{
-	SourceNewEra: "https://ipfs.io/ipns/k2k4r8oqlcjxsritt5mczkcn4mmvcmymbqw7113fz2flkrerfwfps004/data/listas/listaplana.txt",
+	SourceNewEra: "https://ipfs.io/ipns/k2k4r8oqlcjxsritt5mczkcn4mmvcmymbqw7113fz2flkrerfwfps004/data/listas/lista_fuera_iptv.m3u",
 	SourceElcano: "https://ipfs.io/ipns/k51qzi5uqu5di462t7j4vu4akwfhvtjhy88qbupktvoacqfqe9uforjvhyi4wr/hashes.json",
 }
 
@@ -76,63 +76,99 @@ func (s *AcestreamHTTPSource) FetchHashes(ctx context.Context, source string) (m
 	}
 }
 
-// parseNewEra parses the NEW ERA plaintext format.
-// Format: each line is "channelName acestream://hash"
+// parseNewEra parses the NEW ERA M3U playlist format.
+// Format: #EXTINF lines with tvg-id attribute, followed by acestream:// URLs.
+// Groups hashes by tvg-id (which matches EPG channel IDs).
 func (s *AcestreamHTTPSource) parseNewEra(r io.Reader) (map[string][]string, error) {
 	result := make(map[string][]string)
 	scanner := bufio.NewScanner(r)
+	// Increase scanner buffer for long #EXTINF lines with logos
+	scanner.Buffer(make([]byte, 0, 64*1024), 256*1024)
+
+	var currentTVGID string
 
 	for scanner.Scan() {
 		line := strings.TrimSpace(scanner.Text())
-		if line == "" {
+
+		if strings.HasPrefix(line, "#EXTINF:") {
+			currentTVGID = extractTVGID(line)
 			continue
 		}
 
-		// Split by whitespace to get channel name and hash
-		parts := strings.Fields(line)
-		if len(parts) < 2 {
-			// Skip malformed lines
+		// acestream:// URL line following an #EXTINF
+		if currentTVGID != "" && strings.HasPrefix(line, "acestream://") {
+			hash := strings.TrimPrefix(line, "acestream://")
+			if hash != "" {
+				result[currentTVGID] = append(result[currentTVGID], hash)
+			}
+			currentTVGID = ""
 			continue
 		}
 
-		channelName := parts[0]
-		hashPart := parts[1]
-
-		// Extract hash from "acestream://hash" or use as-is
-		hash := strings.TrimPrefix(hashPart, "acestream://")
-		if hash == "" {
-			continue
+		// Any other line resets state (e.g. #EXTGRP, #EXTM3U, blank lines)
+		if !strings.HasPrefix(line, "#") {
+			currentTVGID = ""
 		}
-
-		result[channelName] = append(result[channelName], hash)
 	}
 
 	if err := scanner.Err(); err != nil {
-		return nil, fmt.Errorf("failed to parse NEW ERA format: %w", err)
+		return nil, fmt.Errorf("failed to parse NEW ERA M3U: %w", err)
 	}
 
 	return result, nil
 }
 
-// ElcanoChannel represents a channel entry in Elcano.top JSON format.
-type ElcanoChannel struct {
-	Name   string   `json:"name"`
-	Hashes []string `json:"hashes"`
+// extractTVGID extracts the tvg-id attribute value from an #EXTINF line.
+// Returns empty string if tvg-id is not found or empty.
+func extractTVGID(line string) string {
+	const marker = `tvg-id="`
+	idx := strings.Index(line, marker)
+	if idx < 0 {
+		return ""
+	}
+	start := idx + len(marker)
+	end := strings.Index(line[start:], `"`)
+	if end < 0 {
+		return ""
+	}
+	return strings.TrimSpace(line[start : start+end])
 }
 
-// parseElcano parses the Elcano.top JSON format.
-// Format: JSON array of objects with "name" and "hashes" fields
-func (s *AcestreamHTTPSource) parseElcano(r io.Reader) (map[string][]string, error) {
-	var channels []ElcanoChannel
+// elcanoResponse represents the root JSON object from the Elcano source.
+type elcanoResponse struct {
+	Hashes []elcanoEntry `json:"hashes"`
+}
 
-	if err := json.NewDecoder(r).Decode(&channels); err != nil {
+// elcanoEntry represents a single hash entry in the Elcano JSON format.
+type elcanoEntry struct {
+	Title string `json:"title"`
+	Hash  string `json:"hash"`
+	TVGID string `json:"tvg_id"`
+}
+
+// parseElcano parses the Elcano JSON format.
+// Format: {"generated": "...", "count": N, "hashes": [{"title": "...", "hash": "...", "tvg_id": "...", ...}]}
+// Groups hashes by tvg_id (which matches EPG channel IDs) for direct matching.
+func (s *AcestreamHTTPSource) parseElcano(r io.Reader) (map[string][]string, error) {
+	var resp elcanoResponse
+
+	if err := json.NewDecoder(r).Decode(&resp); err != nil {
 		return nil, fmt.Errorf("failed to parse Elcano JSON: %w", err)
 	}
 
 	result := make(map[string][]string)
-	for _, ch := range channels {
-		if ch.Name != "" && len(ch.Hashes) > 0 {
-			result[ch.Name] = ch.Hashes
+	for _, entry := range resp.Hashes {
+		if entry.Hash == "" {
+			continue
+		}
+		// Use tvg_id as the channel key since it directly matches EPG channel IDs.
+		// Fall back to title if tvg_id is empty.
+		key := entry.TVGID
+		if key == "" {
+			key = entry.Title
+		}
+		if key != "" {
+			result[key] = append(result[key], entry.Hash)
 		}
 	}
 

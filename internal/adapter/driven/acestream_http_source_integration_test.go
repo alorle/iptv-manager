@@ -15,7 +15,7 @@ func TestAcestreamHTTPSource_FetchHashes_Integration(t *testing.T) {
 		t.Skip("skipping integration test in short mode")
 	}
 
-	t.Run("parse NEW ERA fixture file", func(t *testing.T) {
+	t.Run("parse NEW ERA M3U fixture file", func(t *testing.T) {
 		// Load fixture file
 		fixturePath := filepath.Join("testdata", "acestream_newera.txt")
 		fixtureData, err := os.ReadFile(fixturePath)
@@ -25,7 +25,7 @@ func TestAcestreamHTTPSource_FetchHashes_Integration(t *testing.T) {
 
 		// Create test HTTP server serving the fixture
 		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			w.Header().Set("Content-Type", "text/plain")
+			w.Header().Set("Content-Type", "audio/x-mpegurl")
 			w.WriteHeader(http.StatusOK)
 			_, _ = w.Write(fixtureData)
 		}))
@@ -47,73 +47,49 @@ func TestAcestreamHTTPSource_FetchHashes_Integration(t *testing.T) {
 			t.Fatalf("failed to fetch NEW ERA hashes from fixture: %v", err)
 		}
 
-		// Verify expected channels from fixture
-		// HBO, ESPN, CNN, Discovery, and AlsoInvalid (valid format, just no acestream:// prefix)
+		// Fixture has: HBO HD (1), ESPN HD (1), CNN HD (1), Discovery HD (1), DAZN 1 HD (2)
+		// Entry with empty tvg-id is skipped
 		expectedChannels := 5
 		if len(hashes) != expectedChannels {
-			t.Errorf("expected %d channels, got %d", expectedChannels, len(hashes))
+			t.Errorf("expected %d channels, got %d: %v", expectedChannels, len(hashes), hashes)
 		}
 
-		// Verify HBO channel
-		hboHashes, ok := hashes["HBO"]
+		// Verify HBO HD channel (keyed by tvg-id, not display name)
+		hboHashes, ok := hashes["HBO HD"]
 		if !ok {
-			t.Fatal("expected HBO channel in results")
+			t.Fatal("expected 'HBO HD' channel in results")
 		}
 		if len(hboHashes) != 1 {
-			t.Errorf("expected 1 hash for HBO, got %d", len(hboHashes))
+			t.Errorf("expected 1 hash for HBO HD, got %d", len(hboHashes))
 		}
 		if hboHashes[0] != "0123456789abcdef0123456789abcdef01234567" {
 			t.Errorf("unexpected HBO hash: %q", hboHashes[0])
 		}
 
-		// Verify ESPN channel
-		espnHashes, ok := hashes["ESPN"]
+		// Verify ESPN HD channel
+		espnHashes, ok := hashes["ESPN HD"]
 		if !ok {
-			t.Fatal("expected ESPN channel in results")
+			t.Fatal("expected 'ESPN HD' channel in results")
 		}
 		if len(espnHashes) != 1 {
-			t.Errorf("expected 1 hash for ESPN, got %d", len(espnHashes))
-		}
-		if espnHashes[0] != "fedcba9876543210fedcba9876543210fedcba98" {
-			t.Errorf("unexpected ESPN hash: %q", espnHashes[0])
+			t.Errorf("expected 1 hash for ESPN HD, got %d", len(espnHashes))
 		}
 
-		// Verify CNN channel
-		cnnHashes, ok := hashes["CNN"]
+		// Verify DAZN 1 HD has 2 hashes (two entries with same tvg-id)
+		daznHashes, ok := hashes["DAZN 1 HD"]
 		if !ok {
-			t.Fatal("expected CNN channel in results")
+			t.Fatal("expected 'DAZN 1 HD' channel in results")
 		}
-		if len(cnnHashes) != 1 {
-			t.Errorf("expected 1 hash for CNN, got %d", len(cnnHashes))
-		}
-
-		// Verify Discovery channel
-		discoveryHashes, ok := hashes["Discovery"]
-		if !ok {
-			t.Fatal("expected Discovery channel in results")
-		}
-		if len(discoveryHashes) != 1 {
-			t.Errorf("expected 1 hash for Discovery, got %d", len(discoveryHashes))
+		if len(daznHashes) != 2 {
+			t.Errorf("expected 2 hashes for DAZN 1 HD, got %d", len(daznHashes))
 		}
 
-		// Verify invalid lines were skipped
-		if _, ok := hashes["InvalidLine"]; ok {
-			t.Error("invalid line (only one field) should have been skipped")
+		// Verify entry with empty tvg-id was skipped
+		if _, ok := hashes[""]; ok {
+			t.Error("entry with empty tvg-id should have been skipped")
 		}
 
-		// AlsoInvalid is actually valid - the parser accepts plain hashes without acestream:// prefix
-		alsoInvalidHashes, ok := hashes["AlsoInvalid"]
-		if !ok {
-			t.Fatal("expected AlsoInvalid channel in results (plain hash without prefix is valid)")
-		}
-		if len(alsoInvalidHashes) != 1 {
-			t.Errorf("expected 1 hash for AlsoInvalid, got %d", len(alsoInvalidHashes))
-		}
-		if alsoInvalidHashes[0] != "noprefix" {
-			t.Errorf("unexpected AlsoInvalid hash: %q", alsoInvalidHashes[0])
-		}
-
-		t.Logf("Successfully parsed %d channels from NEW ERA fixture", len(hashes))
+		t.Logf("Successfully parsed %d channels from NEW ERA M3U fixture", len(hashes))
 	})
 
 	t.Run("parse Elcano fixture file", func(t *testing.T) {
@@ -148,20 +124,20 @@ func TestAcestreamHTTPSource_FetchHashes_Integration(t *testing.T) {
 			t.Fatalf("failed to fetch Elcano hashes from fixture: %v", err)
 		}
 
-		// Verify expected channels from fixture
-		// HBO and ESPN should be present, CNN (empty hashes) and unnamed entry should be skipped
-		expectedChannels := 2
+		// Fixture has: HBO HD (2 hashes), ESPN HD (1 hash), CNN HD (empty hash → skipped),
+		// "No TVG ID Channel" (no tvg_id → falls back to title)
+		expectedChannels := 3
 		if len(hashes) != expectedChannels {
-			t.Errorf("expected %d channels, got %d", expectedChannels, len(hashes))
+			t.Errorf("expected %d channels, got %d: %v", expectedChannels, len(hashes), hashes)
 		}
 
-		// Verify HBO channel with multiple hashes
-		hboHashes, ok := hashes["HBO"]
+		// Verify HBO HD channel (grouped by tvg_id) with 2 hashes
+		hboHashes, ok := hashes["HBO HD"]
 		if !ok {
-			t.Fatal("expected HBO channel in results")
+			t.Fatal("expected 'HBO HD' channel in results")
 		}
 		if len(hboHashes) != 2 {
-			t.Errorf("expected 2 hashes for HBO, got %d", len(hboHashes))
+			t.Errorf("expected 2 hashes for HBO HD, got %d", len(hboHashes))
 		}
 		if hboHashes[0] != "0123456789abcdef0123456789abcdef01234567" {
 			t.Errorf("unexpected HBO hash[0]: %q", hboHashes[0])
@@ -170,26 +146,27 @@ func TestAcestreamHTTPSource_FetchHashes_Integration(t *testing.T) {
 			t.Errorf("unexpected HBO hash[1]: %q", hboHashes[1])
 		}
 
-		// Verify ESPN channel
-		espnHashes, ok := hashes["ESPN"]
+		// Verify ESPN HD channel
+		espnHashes, ok := hashes["ESPN HD"]
 		if !ok {
-			t.Fatal("expected ESPN channel in results")
+			t.Fatal("expected 'ESPN HD' channel in results")
 		}
 		if len(espnHashes) != 1 {
-			t.Errorf("expected 1 hash for ESPN, got %d", len(espnHashes))
-		}
-		if espnHashes[0] != "fedcba9876543210fedcba9876543210fedcba98" {
-			t.Errorf("unexpected ESPN hash: %q", espnHashes[0])
+			t.Errorf("expected 1 hash for ESPN HD, got %d", len(espnHashes))
 		}
 
-		// Verify CNN with empty hashes was skipped
-		if _, ok := hashes["CNN"]; ok {
-			t.Error("CNN channel with empty hashes should have been skipped")
+		// Verify CNN HD with empty hash was skipped
+		if _, ok := hashes["CNN HD"]; ok {
+			t.Error("CNN HD entry with empty hash should have been skipped")
 		}
 
-		// Verify unnamed entry was skipped
-		if _, ok := hashes[""]; ok {
-			t.Error("entry with empty name should have been skipped")
+		// Verify entry with no tvg_id fell back to title
+		noTvgHashes, ok := hashes["No TVG ID Channel"]
+		if !ok {
+			t.Fatal("expected 'No TVG ID Channel' in results (fallback to title)")
+		}
+		if len(noTvgHashes) != 1 {
+			t.Errorf("expected 1 hash for 'No TVG ID Channel', got %d", len(noTvgHashes))
 		}
 
 		t.Logf("Successfully parsed %d channels from Elcano fixture", len(hashes))
@@ -317,12 +294,12 @@ func TestAcestreamHTTPSource_FetchHashes_Integration(t *testing.T) {
 		t.Logf("Correctly rejected unknown source: %v", err)
 	})
 
-	t.Run("parse NEW ERA with empty lines", func(t *testing.T) {
-		// Create test HTTP server serving data with empty lines
+	t.Run("parse NEW ERA M3U with empty lines and comments", func(t *testing.T) {
+		// Create test HTTP server serving M3U data with extra lines
 		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			w.Header().Set("Content-Type", "text/plain")
+			w.Header().Set("Content-Type", "audio/x-mpegurl")
 			w.WriteHeader(http.StatusOK)
-			data := "HBO acestream://0123456789abcdef0123456789abcdef01234567\n\n\nESPN acestream://fedcba9876543210fedcba9876543210fedcba98\n"
+			data := "#EXTM3U\n\n#EXTGRP: group-title=\"TEST\"\n\n#EXTINF:-1 tvg-id=\"HBO HD\" group-title=\"TEST\", HBO\nacestream://0123456789abcdef0123456789abcdef01234567\n\n#EXTINF:-1 tvg-id=\"ESPN HD\" group-title=\"TEST\", ESPN\nacestream://fedcba9876543210fedcba9876543210fedcba98\n"
 			_, _ = w.Write([]byte(data))
 		}))
 		defer server.Close()
@@ -343,20 +320,19 @@ func TestAcestreamHTTPSource_FetchHashes_Integration(t *testing.T) {
 			t.Fatalf("failed to fetch NEW ERA hashes: %v", err)
 		}
 
-		// Empty lines should be ignored
 		if len(hashes) != 2 {
-			t.Errorf("expected 2 channels (empty lines ignored), got %d", len(hashes))
+			t.Errorf("expected 2 channels, got %d", len(hashes))
 		}
 
-		t.Logf("Successfully parsed %d channels, ignoring empty lines", len(hashes))
+		t.Logf("Successfully parsed %d channels from M3U with extra lines", len(hashes))
 	})
 
-	t.Run("parse Elcano with empty array", func(t *testing.T) {
-		// Create test HTTP server serving empty JSON array
+	t.Run("parse Elcano with empty hashes array", func(t *testing.T) {
+		// Create test HTTP server serving JSON with empty hashes array
 		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusOK)
-			_, _ = w.Write([]byte(`[]`))
+			_, _ = w.Write([]byte(`{"generated": "2026-01-01T00:00:00Z", "count": 0, "hashes": []}`))
 		}))
 		defer server.Close()
 
@@ -381,6 +357,6 @@ func TestAcestreamHTTPSource_FetchHashes_Integration(t *testing.T) {
 			t.Errorf("expected 0 channels from empty array, got %d", len(hashes))
 		}
 
-		t.Logf("Successfully handled empty JSON array")
+		t.Logf("Successfully handled empty hashes array")
 	})
 }

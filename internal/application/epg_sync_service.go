@@ -158,13 +158,20 @@ func (s *EPGSyncService) SyncChannels(ctx context.Context) error {
 	return nil
 }
 
-// matchChannelWithHashes finds the best matching Acestream channel for an EPG channel
-// using fuzzy name matching. Returns the matched hashes and the match score.
+// matchChannelWithHashes finds the best matching Acestream channel for an EPG channel.
+// It first tries a direct lookup by EPGID (both sources key by tvg-id which matches
+// EPG channel IDs). If no direct match, it falls back to fuzzy name matching.
+// Returns the matched hashes and the match score.
 func (s *EPGSyncService) matchChannelWithHashes(epgChannel epg.Channel, allHashes map[string][]string) ([]string, float64) {
+	// Direct match by EPG ID (most reliable — both sources key by tvg-id)
+	if hashes, ok := allHashes[epgChannel.EPGID()]; ok {
+		return hashes, 1.0
+	}
+
+	// Fallback: fuzzy match by channel name
 	var bestMatch string
 	var bestScore float64
 
-	// Find the best matching channel name in the hash map
 	for acestreamName := range allHashes {
 		score := channel.FuzzyMatch(epgChannel.Name(), acestreamName)
 		if score > bestScore {

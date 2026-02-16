@@ -1,18 +1,41 @@
-[
-  {
-    "name": "HBO",
-    "hashes": ["0123456789abcdef0123456789abcdef01234567", "9999999999999999999999999999999999999999"]
-  },
-  {
-    "name": "ESPN",
-    "hashes": ["fedcba9876543210fedcba9876543210fedcba98"]
-  },
-  {
-    "name": "CNN",
-    "hashes": []
-  },
-  {
-    "name": "",
-    "hashes": ["shouldbeignored"]
-  }
-]
+{
+  "generated": "2026-02-16T09:00:02Z",
+  "count": 5,
+  "hashes": [
+    {
+      "title": "HBO 720p *",
+      "hash": "0123456789abcdef0123456789abcdef01234567",
+      "group": "HBO",
+      "logo": "https://example.com/hbo.png",
+      "tvg_id": "HBO HD"
+    },
+    {
+      "title": "HBO 1080p *",
+      "hash": "9999999999999999999999999999999999999999",
+      "group": "HBO",
+      "logo": "https://example.com/hbo.png",
+      "tvg_id": "HBO HD"
+    },
+    {
+      "title": "ESPN 720p *",
+      "hash": "fedcba9876543210fedcba9876543210fedcba98",
+      "group": "ESPN",
+      "logo": "https://example.com/espn.png",
+      "tvg_id": "ESPN HD"
+    },
+    {
+      "title": "CNN 720p *",
+      "hash": "",
+      "group": "CNN",
+      "logo": "https://example.com/cnn.png",
+      "tvg_id": "CNN HD"
+    },
+    {
+      "title": "No TVG ID Channel",
+      "hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "group": "OTHER",
+      "logo": "",
+      "tvg_id": ""
+    }
+  ]
+}

@@ -131,8 +131,16 @@ func (c *Channel) ClearEPGMapping() {
 	c.epgMapping = nil
 }
 
+// qualitySuffixes are broadcast quality/resolution tokens stripped during
+// name normalization so that "DAZN 1 FHD" and "DAZN 1 HD" compare equal.
+var qualitySuffixes = map[string]bool{
+	"hd": true, "fhd": true, "sd": true, "uhd": true,
+	"4k": true, "720p": true, "1080p": true, "1080i": true,
+}
+
 // NormalizeName returns a normalized version of the channel name for comparison.
-// It converts to lowercase, removes extra whitespace, and strips common punctuation.
+// It converts to lowercase, removes extra whitespace, strips common punctuation,
+// and removes broadcast quality suffixes (HD, FHD, SD, etc.).
 func NormalizeName(name string) string {
 	// Convert to lowercase
 	normalized := strings.ToLower(name)
@@ -145,9 +153,15 @@ func NormalizeName(name string) string {
 		return ' '
 	}, normalized)
 
-	// Collapse multiple spaces to single space
+	// Collapse multiple spaces and strip quality tokens
 	fields := strings.Fields(normalized)
-	return strings.Join(fields, " ")
+	filtered := fields[:0]
+	for _, f := range fields {
+		if !qualitySuffixes[f] {
+			filtered = append(filtered, f)
+		}
+	}
+	return strings.Join(filtered, " ")
 }
 
 // FuzzyMatch calculates a simple similarity score between two channel names.

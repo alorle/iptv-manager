@@ -265,9 +265,19 @@ func TestNormalizeName(t *testing.T) {
 			want:  "hbo max",
 		},
 		{
-			name:  "numbers preserved",
+			name:  "numbers preserved and quality suffix stripped",
 			input: "Channel 5 HD",
-			want:  "channel 5 hd",
+			want:  "channel 5",
+		},
+		{
+			name:  "fhd suffix stripped",
+			input: "DAZN 1 FHD",
+			want:  "dazn 1",
+		},
+		{
+			name:  "hd suffix stripped",
+			input: "DAZN LaLiga HD",
+			want:  "dazn laliga",
 		},
 		{
 			name:  "complex punctuation",

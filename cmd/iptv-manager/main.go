@@ -39,7 +39,7 @@ func loadConfig() config {
 
 	epgURL := os.Getenv("EPG_URL")
 	if epgURL == "" {
-		epgURL = "https://www.tdtchannels.com/epg/TV.xml"
+		epgURL = "https://raw.githubusercontent.com/davidmuma/EPG_dobleM/master/guiatv.xml"
 	}
 
 	dbPath := os.Getenv("DB_PATH")
