@@ -164,7 +164,7 @@ func main() {
 	// Create application services
 	channelService := application.NewChannelService(channelRepo, streamRepo)
 	streamService := application.NewStreamService(streamRepo, channelRepo)
-	playlistService := application.NewPlaylistService(streamRepo)
+	playlistService := application.NewPlaylistService(streamRepo, probeRepo, cfg.ProbeWindow)
 	healthService := application.NewHealthService(channelRepo, aceStreamEngine)
 	aceStreamProxyService := application.NewAceStreamProxyService(aceStreamEngine, logger, cfg.StreamWriteTimeout)
 	subscriptionService := application.NewSubscriptionService(subscriptionRepo, epgFetcher)

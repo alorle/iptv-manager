@@ -5,7 +5,9 @@ import (
 	"errors"
 	"strings"
 	"testing"
+	"time"
 
+	"github.com/alorle/iptv-manager/internal/probe"
 	"github.com/alorle/iptv-manager/internal/stream"
 )
 
@@ -20,7 +22,7 @@ func TestPlaylistService_GenerateM3U(t *testing.T) {
 				return expectedStreams, nil
 			},
 		}
-		service := NewPlaylistService(streamRepo)
+		service := NewPlaylistService(streamRepo, &mockProbeRepository{}, 24*time.Hour)
 
 		m3u, err := service.GenerateM3U(context.Background(), "localhost:8080")
 		if err != nil {
@@ -55,7 +57,7 @@ func TestPlaylistService_GenerateM3U(t *testing.T) {
 				return []stream.Stream{}, nil
 			},
 		}
-		service := NewPlaylistService(streamRepo)
+		service := NewPlaylistService(streamRepo, &mockProbeRepository{}, 24*time.Hour)
 
 		m3u, err := service.GenerateM3U(context.Background(), "localhost:8080")
 		if err != nil {
@@ -75,7 +77,7 @@ func TestPlaylistService_GenerateM3U(t *testing.T) {
 				return nil, expectedError
 			},
 		}
-		service := NewPlaylistService(streamRepo)
+		service := NewPlaylistService(streamRepo, &mockProbeRepository{}, 24*time.Hour)
 
 		_, err := service.GenerateM3U(context.Background(), "localhost:8080")
 		if !errors.Is(err, expectedError) {
@@ -92,7 +94,7 @@ func TestPlaylistService_GenerateM3U(t *testing.T) {
 				return expectedStreams, nil
 			},
 		}
-		service := NewPlaylistService(streamRepo)
+		service := NewPlaylistService(streamRepo, &mockProbeRepository{}, 24*time.Hour)
 
 		m3u, err := service.GenerateM3U(context.Background(), "example.com:9000")
 		if err != nil {
@@ -102,6 +104,128 @@ func TestPlaylistService_GenerateM3U(t *testing.T) {
 		// Check that the custom host is used
 		if !strings.Contains(m3u, "http://example.com:9000/ace/getstream?id=xyz789") {
 			t.Error("M3U playlist should use the provided host in stream URLs")
+		}
+	})
+
+	t.Run("sorts streams by quality score within channel group", func(t *testing.T) {
+		now := time.Now()
+		good, _ := stream.NewStream("hash_good", "SameChannel")
+		poor, _ := stream.NewStream("hash_poor", "SameChannel")
+		streamRepo := &mockStreamRepository{
+			findAllFunc: func(ctx context.Context) ([]stream.Stream, error) {
+				return []stream.Stream{poor, good}, nil
+			},
+		}
+		probeRepo := &mockProbeRepository{
+			findByInfoHashSinceFunc: func(ctx context.Context, infoHash string, since time.Time) ([]probe.Result, error) {
+				if infoHash == "hash_good" {
+					return []probe.Result{
+						probe.ReconstructResult(infoHash, now, true, time.Second, 20, 200000, "dl", ""),
+						probe.ReconstructResult(infoHash, now.Add(-30*time.Minute), true, time.Second, 20, 200000, "dl", ""),
+					}, nil
+				}
+				return []probe.Result{
+					probe.ReconstructResult(infoHash, now, true, 5*time.Second, 3, 30000, "dl", ""),
+					probe.ReconstructResult(infoHash, now.Add(-30*time.Minute), false, 0, 0, 0, "", "timeout"),
+				}, nil
+			},
+		}
+		service := NewPlaylistService(streamRepo, probeRepo, 24*time.Hour)
+
+		m3u, err := service.GenerateM3U(context.Background(), "localhost:8080")
+		if err != nil {
+			t.Fatalf("expected no error, got %v", err)
+		}
+
+		goodIdx := strings.Index(m3u, "hash_good")
+		poorIdx := strings.Index(m3u, "hash_poor")
+		if goodIdx < 0 || poorIdx < 0 {
+			t.Fatal("both streams should appear in the playlist")
+		}
+		if goodIdx >= poorIdx {
+			t.Error("higher quality stream (hash_good) should appear before lower quality (hash_poor)")
+		}
+	})
+
+	t.Run("streams without probe data sort after scored streams", func(t *testing.T) {
+		now := time.Now()
+		scored, _ := stream.NewStream("hash_scored", "Chan")
+		unscored, _ := stream.NewStream("hash_unscored", "Chan")
+		streamRepo := &mockStreamRepository{
+			findAllFunc: func(ctx context.Context) ([]stream.Stream, error) {
+				return []stream.Stream{unscored, scored}, nil
+			},
+		}
+		probeRepo := &mockProbeRepository{
+			findByInfoHashSinceFunc: func(ctx context.Context, infoHash string, since time.Time) ([]probe.Result, error) {
+				if infoHash == "hash_scored" {
+					return []probe.Result{
+						probe.ReconstructResult(infoHash, now, true, time.Second, 10, 100000, "dl", ""),
+					}, nil
+				}
+				return []probe.Result{}, nil
+			},
+		}
+		service := NewPlaylistService(streamRepo, probeRepo, 24*time.Hour)
+
+		m3u, err := service.GenerateM3U(context.Background(), "localhost:8080")
+		if err != nil {
+			t.Fatalf("expected no error, got %v", err)
+		}
+
+		scoredIdx := strings.Index(m3u, "hash_scored")
+		unscoredIdx := strings.Index(m3u, "hash_unscored")
+		if scoredIdx < 0 || unscoredIdx < 0 {
+			t.Fatal("both streams should appear in the playlist")
+		}
+		if scoredIdx >= unscoredIdx {
+			t.Error("scored stream should appear before unscored stream")
+		}
+	})
+
+	t.Run("degrades to infohash sort when no probe data exists", func(t *testing.T) {
+		s1, _ := stream.NewStream("zzz999", "Chan")
+		s2, _ := stream.NewStream("aaa111", "Chan")
+		streamRepo := &mockStreamRepository{
+			findAllFunc: func(ctx context.Context) ([]stream.Stream, error) {
+				return []stream.Stream{s1, s2}, nil
+			},
+		}
+		service := NewPlaylistService(streamRepo, &mockProbeRepository{}, 24*time.Hour)
+
+		m3u, err := service.GenerateM3U(context.Background(), "localhost:8080")
+		if err != nil {
+			t.Fatalf("expected no error, got %v", err)
+		}
+
+		idx1 := strings.Index(m3u, "aaa111")
+		idx2 := strings.Index(m3u, "zzz999")
+		if idx1 >= idx2 {
+			t.Error("when no probe data exists, streams should sort by infohash ascending")
+		}
+	})
+
+	t.Run("probeRepo error degrades gracefully", func(t *testing.T) {
+		s1, _ := stream.NewStream("abc123", "Channel1")
+		streamRepo := &mockStreamRepository{
+			findAllFunc: func(ctx context.Context) ([]stream.Stream, error) {
+				return []stream.Stream{s1}, nil
+			},
+		}
+		probeRepo := &mockProbeRepository{
+			findByInfoHashSinceFunc: func(ctx context.Context, infoHash string, since time.Time) ([]probe.Result, error) {
+				return nil, errors.New("db error")
+			},
+		}
+		service := NewPlaylistService(streamRepo, probeRepo, 24*time.Hour)
+
+		m3u, err := service.GenerateM3U(context.Background(), "localhost:8080")
+		if err != nil {
+			t.Fatalf("expected no error despite probeRepo failure, got %v", err)
+		}
+
+		if !strings.Contains(m3u, "abc123") {
+			t.Error("stream should still appear in playlist despite probe error")
 		}
 	})
 }

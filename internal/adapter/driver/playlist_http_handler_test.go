@@ -7,6 +7,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/alorle/iptv-manager/internal/application"
 	"github.com/alorle/iptv-manager/internal/stream"
@@ -21,7 +22,7 @@ func TestPlaylistHTTPHandler_ServeHTTP(t *testing.T) {
 				return []stream.Stream{st1, st2}, nil
 			},
 		}
-		service := application.NewPlaylistService(streamRepo)
+		service := application.NewPlaylistService(streamRepo, &mockProbeRepository{}, 24*time.Hour)
 		handler := NewPlaylistHTTPHandler(service)
 
 		req := httptest.NewRequest(http.MethodGet, "/playlist.m3u", nil)
@@ -69,7 +70,7 @@ func TestPlaylistHTTPHandler_ServeHTTP(t *testing.T) {
 				return []stream.Stream{}, nil
 			},
 		}
-		service := application.NewPlaylistService(streamRepo)
+		service := application.NewPlaylistService(streamRepo, &mockProbeRepository{}, 24*time.Hour)
 		handler := NewPlaylistHTTPHandler(service)
 
 		req := httptest.NewRequest(http.MethodGet, "/playlist.m3u", nil)
@@ -94,7 +95,7 @@ func TestPlaylistHTTPHandler_ServeHTTP(t *testing.T) {
 				return nil, errors.New("repository error")
 			},
 		}
-		service := application.NewPlaylistService(streamRepo)
+		service := application.NewPlaylistService(streamRepo, &mockProbeRepository{}, 24*time.Hour)
 		handler := NewPlaylistHTTPHandler(service)
 
 		req := httptest.NewRequest(http.MethodGet, "/playlist.m3u", nil)
@@ -115,7 +116,7 @@ func TestPlaylistHTTPHandler_ServeHTTP(t *testing.T) {
 				return []stream.Stream{st1}, nil
 			},
 		}
-		service := application.NewPlaylistService(streamRepo)
+		service := application.NewPlaylistService(streamRepo, &mockProbeRepository{}, 24*time.Hour)
 		handler := NewPlaylistHTTPHandler(service)
 
 		req := httptest.NewRequest(http.MethodGet, "/playlist.m3u", nil)
@@ -136,7 +137,7 @@ func TestPlaylistHTTPHandler_ServeHTTP(t *testing.T) {
 
 	t.Run("POST /playlist.m3u returns 405 method not allowed", func(t *testing.T) {
 		streamRepo := &mockStreamRepository{}
-		service := application.NewPlaylistService(streamRepo)
+		service := application.NewPlaylistService(streamRepo, &mockProbeRepository{}, 24*time.Hour)
 		handler := NewPlaylistHTTPHandler(service)
 
 		req := httptest.NewRequest(http.MethodPost, "/playlist.m3u", nil)
@@ -151,7 +152,7 @@ func TestPlaylistHTTPHandler_ServeHTTP(t *testing.T) {
 
 	t.Run("PUT /playlist.m3u returns 405 method not allowed", func(t *testing.T) {
 		streamRepo := &mockStreamRepository{}
-		service := application.NewPlaylistService(streamRepo)
+		service := application.NewPlaylistService(streamRepo, &mockProbeRepository{}, 24*time.Hour)
 		handler := NewPlaylistHTTPHandler(service)
 
 		req := httptest.NewRequest(http.MethodPut, "/playlist.m3u", nil)
@@ -166,7 +167,7 @@ func TestPlaylistHTTPHandler_ServeHTTP(t *testing.T) {
 
 	t.Run("DELETE /playlist.m3u returns 405 method not allowed", func(t *testing.T) {
 		streamRepo := &mockStreamRepository{}
-		service := application.NewPlaylistService(streamRepo)
+		service := application.NewPlaylistService(streamRepo, &mockProbeRepository{}, 24*time.Hour)
 		handler := NewPlaylistHTTPHandler(service)
 
 		req := httptest.NewRequest(http.MethodDelete, "/playlist.m3u", nil)
