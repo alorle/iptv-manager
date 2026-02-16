@@ -9,3 +9,6 @@ var _ port.EPGFetcher = (*EPGXMLFetcher)(nil)
 
 // Compile-time check that SubscriptionBoltDBRepository implements SubscriptionRepository interface
 var _ port.SubscriptionRepository = (*SubscriptionBoltDBRepository)(nil)
+
+// Compile-time check that ProbeBoltDBRepository implements ProbeRepository interface
+var _ port.ProbeRepository = (*ProbeBoltDBRepository)(nil)

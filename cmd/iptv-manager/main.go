@@ -24,6 +24,9 @@ type config struct {
 	DBPath             string
 	LogLevel           slog.Level
 	StreamWriteTimeout time.Duration
+	ProbeInterval      time.Duration
+	ProbeTimeout       time.Duration
+	ProbeWindow        time.Duration
 }
 
 func loadConfig() config {
@@ -68,6 +71,27 @@ func loadConfig() config {
 		}
 	}
 
+	probeInterval := 30 * time.Minute
+	if intervalStr := os.Getenv("PROBE_INTERVAL"); intervalStr != "" {
+		if parsed, err := time.ParseDuration(intervalStr); err == nil {
+			probeInterval = parsed
+		}
+	}
+
+	probeTimeout := 45 * time.Second
+	if timeoutStr := os.Getenv("PROBE_TIMEOUT"); timeoutStr != "" {
+		if parsed, err := time.ParseDuration(timeoutStr); err == nil {
+			probeTimeout = parsed
+		}
+	}
+
+	probeWindow := 24 * time.Hour
+	if windowStr := os.Getenv("PROBE_WINDOW"); windowStr != "" {
+		if parsed, err := time.ParseDuration(windowStr); err == nil {
+			probeWindow = parsed
+		}
+	}
+
 	return config{
 		Port:               port,
 		AceStreamEngineURL: aceStreamURL,
@@ -75,6 +99,9 @@ func loadConfig() config {
 		DBPath:             dbPath,
 		LogLevel:           logLevel,
 		StreamWriteTimeout: streamWriteTimeout,
+		ProbeInterval:      probeInterval,
+		ProbeTimeout:       probeTimeout,
+		ProbeWindow:        probeWindow,
 	}
 }
 
@@ -125,6 +152,11 @@ func main() {
 		log.Fatalf("failed to create subscription repository: %v", err)
 	}
 
+	probeRepo, err := driven.NewProbeBoltDBRepository(db)
+	if err != nil {
+		log.Fatalf("failed to create probe repository: %v", err)
+	}
+
 	epgFetcher := driven.NewEPGXMLFetcher(cfg.EPGURL, &http.Client{Timeout: 30 * time.Second})
 
 	acestreamSource := driven.NewAcestreamHTTPSource()
@@ -137,6 +169,7 @@ func main() {
 	aceStreamProxyService := application.NewAceStreamProxyService(aceStreamEngine, logger, cfg.StreamWriteTimeout)
 	subscriptionService := application.NewSubscriptionService(subscriptionRepo, epgFetcher)
 	epgSyncService := application.NewEPGSyncService(epgFetcher, acestreamSource, channelRepo, streamRepo, subscriptionRepo)
+	probeService := application.NewProbeService(probeRepo, streamRepo, aceStreamEngine, logger, cfg.ProbeTimeout, cfg.ProbeWindow)
 
 	// Create HTTP handlers
 	channelHandler := driver.NewChannelHTTPHandler(channelService)
@@ -146,6 +179,7 @@ func main() {
 	aceStreamHandler := driver.NewAceStreamHTTPHandler(aceStreamProxyService, logger)
 	epgHandler := driver.NewEPGHTTPHandler(epgSyncService, subscriptionService, channelService)
 	subscriptionHandler := driver.NewSubscriptionHTTPHandler(subscriptionService)
+	probeHandler := driver.NewProbeHTTPHandler(probeService)
 
 	// Register API routes
 	apiMux := http.NewServeMux()
@@ -157,6 +191,8 @@ func main() {
 	apiMux.Handle("/epg/", epgHandler)
 	apiMux.Handle("/subscriptions", subscriptionHandler)
 	apiMux.Handle("/subscriptions/", subscriptionHandler)
+	apiMux.Handle("/probes/", probeHandler)
+	apiMux.Handle("/quality/", probeHandler)
 
 	// Root router: API under /api/, streaming routes at root, SPA for everything else
 	rootMux := http.NewServeMux()
@@ -208,6 +244,29 @@ func main() {
 		}
 	}()
 
+	// Background stream prober
+	go func() {
+		ticker := time.NewTicker(cfg.ProbeInterval)
+		defer ticker.Stop()
+
+		logger.Info("stream prober scheduler started", "interval", cfg.ProbeInterval)
+
+		for {
+			select {
+			case <-ticker.C:
+				logger.Info("starting scheduled stream probe")
+				if err := probeService.ProbeAllStreams(syncCtx); err != nil {
+					logger.Error("stream probe failed", "error", err)
+				} else {
+					logger.Info("stream probe completed successfully")
+				}
+			case <-syncCtx.Done():
+				logger.Info("stream prober scheduler stopped")
+				return
+			}
+		}
+	}()
+
 	// Graceful shutdown
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
@@ -215,7 +274,7 @@ func main() {
 
 	logger.Info("shutdown signal received, shutting down gracefully")
 
-	// Cancel background sync
+	// Cancel background schedulers (EPG sync + stream prober)
 	syncCancel()
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
