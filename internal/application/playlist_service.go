@@ -1,11 +1,14 @@
 package application
 
 import (
+	"cmp"
 	"context"
 	"fmt"
+	"slices"
 	"strings"
 
 	"github.com/alorle/iptv-manager/internal/port/driven"
+	"github.com/alorle/iptv-manager/internal/stream"
 )
 
 // PlaylistService provides use cases for playlist generation.
@@ -29,6 +32,13 @@ func (p *PlaylistService) GenerateM3U(ctx context.Context, host string) (string,
 	if err != nil {
 		return "", err
 	}
+
+	slices.SortFunc(streams, func(a, b stream.Stream) int {
+		if c := cmp.Compare(a.ChannelName(), b.ChannelName()); c != 0 {
+			return c
+		}
+		return cmp.Compare(a.InfoHash(), b.InfoHash())
+	})
 
 	var builder strings.Builder
 	builder.WriteString("#EXTM3U\n")
