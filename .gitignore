@@ -270,7 +270,7 @@ $RECYCLE.BIN/
 !.envrc
 
 # Go compiled binary
-iptv-manager
+/iptv-manager
 
 # Air hot-reload temp directory
 tmp/
