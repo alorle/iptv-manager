@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/alorle/iptv-manager/internal/channel"
 	"github.com/alorle/iptv-manager/internal/probe"
 	"github.com/alorle/iptv-manager/internal/stream"
 )
@@ -22,7 +23,7 @@ func TestPlaylistService_GenerateM3U(t *testing.T) {
 				return expectedStreams, nil
 			},
 		}
-		service := NewPlaylistService(streamRepo, &mockProbeRepository{}, 24*time.Hour)
+		service := NewPlaylistService(streamRepo, &mockChannelRepository{}, &mockProbeRepository{}, 24*time.Hour)
 
 		m3u, err := service.GenerateM3U(context.Background(), "localhost:8080")
 		if err != nil {
@@ -57,7 +58,7 @@ func TestPlaylistService_GenerateM3U(t *testing.T) {
 				return []stream.Stream{}, nil
 			},
 		}
-		service := NewPlaylistService(streamRepo, &mockProbeRepository{}, 24*time.Hour)
+		service := NewPlaylistService(streamRepo, &mockChannelRepository{}, &mockProbeRepository{}, 24*time.Hour)
 
 		m3u, err := service.GenerateM3U(context.Background(), "localhost:8080")
 		if err != nil {
@@ -77,7 +78,7 @@ func TestPlaylistService_GenerateM3U(t *testing.T) {
 				return nil, expectedError
 			},
 		}
-		service := NewPlaylistService(streamRepo, &mockProbeRepository{}, 24*time.Hour)
+		service := NewPlaylistService(streamRepo, &mockChannelRepository{}, &mockProbeRepository{}, 24*time.Hour)
 
 		_, err := service.GenerateM3U(context.Background(), "localhost:8080")
 		if !errors.Is(err, expectedError) {
@@ -94,7 +95,7 @@ func TestPlaylistService_GenerateM3U(t *testing.T) {
 				return expectedStreams, nil
 			},
 		}
-		service := NewPlaylistService(streamRepo, &mockProbeRepository{}, 24*time.Hour)
+		service := NewPlaylistService(streamRepo, &mockChannelRepository{}, &mockProbeRepository{}, 24*time.Hour)
 
 		m3u, err := service.GenerateM3U(context.Background(), "example.com:9000")
 		if err != nil {
@@ -130,7 +131,7 @@ func TestPlaylistService_GenerateM3U(t *testing.T) {
 				}, nil
 			},
 		}
-		service := NewPlaylistService(streamRepo, probeRepo, 24*time.Hour)
+		service := NewPlaylistService(streamRepo, &mockChannelRepository{}, probeRepo, 24*time.Hour)
 
 		m3u, err := service.GenerateM3U(context.Background(), "localhost:8080")
 		if err != nil {
@@ -166,7 +167,7 @@ func TestPlaylistService_GenerateM3U(t *testing.T) {
 				return []probe.Result{}, nil
 			},
 		}
-		service := NewPlaylistService(streamRepo, probeRepo, 24*time.Hour)
+		service := NewPlaylistService(streamRepo, &mockChannelRepository{}, probeRepo, 24*time.Hour)
 
 		m3u, err := service.GenerateM3U(context.Background(), "localhost:8080")
 		if err != nil {
@@ -191,7 +192,7 @@ func TestPlaylistService_GenerateM3U(t *testing.T) {
 				return []stream.Stream{s1, s2}, nil
 			},
 		}
-		service := NewPlaylistService(streamRepo, &mockProbeRepository{}, 24*time.Hour)
+		service := NewPlaylistService(streamRepo, &mockChannelRepository{}, &mockProbeRepository{}, 24*time.Hour)
 
 		m3u, err := service.GenerateM3U(context.Background(), "localhost:8080")
 		if err != nil {
@@ -217,7 +218,7 @@ func TestPlaylistService_GenerateM3U(t *testing.T) {
 				return nil, errors.New("db error")
 			},
 		}
-		service := NewPlaylistService(streamRepo, probeRepo, 24*time.Hour)
+		service := NewPlaylistService(streamRepo, &mockChannelRepository{}, probeRepo, 24*time.Hour)
 
 		m3u, err := service.GenerateM3U(context.Background(), "localhost:8080")
 		if err != nil {
@@ -226,6 +227,93 @@ func TestPlaylistService_GenerateM3U(t *testing.T) {
 
 		if !strings.Contains(m3u, "abc123") {
 			t.Error("stream should still appear in playlist despite probe error")
+		}
+	})
+
+	t.Run("uses EPG ID from channel mapping as tvg-id", func(t *testing.T) {
+		st1, _ := stream.NewStream("abc123", "La 1")
+		st2, _ := stream.NewStream("def456", "Antena 3")
+		streamRepo := &mockStreamRepository{
+			findAllFunc: func(ctx context.Context) ([]stream.Stream, error) {
+				return []stream.Stream{st1, st2}, nil
+			},
+		}
+
+		epgMapping, _ := channel.NewEPGMapping("La1.es", channel.MappingAuto, time.Now())
+		ch1 := channel.ReconstructChannel("La 1", channel.StatusActive, &epgMapping)
+		epgMapping2, _ := channel.NewEPGMapping("Antena3.es", channel.MappingManual, time.Now())
+		ch2 := channel.ReconstructChannel("Antena 3", channel.StatusActive, &epgMapping2)
+
+		channelRepo := &mockChannelRepository{
+			findAllFunc: func(ctx context.Context) ([]channel.Channel, error) {
+				return []channel.Channel{ch1, ch2}, nil
+			},
+		}
+		service := NewPlaylistService(streamRepo, channelRepo, &mockProbeRepository{}, 24*time.Hour)
+
+		m3u, err := service.GenerateM3U(context.Background(), "localhost:8080")
+		if err != nil {
+			t.Fatalf("expected no error, got %v", err)
+		}
+
+		if !strings.Contains(m3u, `tvg-id="La1.es"`) {
+			t.Errorf("expected tvg-id La1.es, got:\n%s", m3u)
+		}
+		if !strings.Contains(m3u, `tvg-id="Antena3.es"`) {
+			t.Errorf("expected tvg-id Antena3.es, got:\n%s", m3u)
+		}
+		if !strings.Contains(m3u, ",La 1 - abc123") {
+			t.Error("channel display name should still be the channel name")
+		}
+	})
+
+	t.Run("falls back to channel name when no EPG mapping exists", func(t *testing.T) {
+		st1, _ := stream.NewStream("abc123", "NoEPG Channel")
+		streamRepo := &mockStreamRepository{
+			findAllFunc: func(ctx context.Context) ([]stream.Stream, error) {
+				return []stream.Stream{st1}, nil
+			},
+		}
+
+		ch := channel.ReconstructChannel("NoEPG Channel", channel.StatusActive, nil)
+		channelRepo := &mockChannelRepository{
+			findAllFunc: func(ctx context.Context) ([]channel.Channel, error) {
+				return []channel.Channel{ch}, nil
+			},
+		}
+		service := NewPlaylistService(streamRepo, channelRepo, &mockProbeRepository{}, 24*time.Hour)
+
+		m3u, err := service.GenerateM3U(context.Background(), "localhost:8080")
+		if err != nil {
+			t.Fatalf("expected no error, got %v", err)
+		}
+
+		if !strings.Contains(m3u, `tvg-id="NoEPG Channel"`) {
+			t.Errorf("expected tvg-id to fall back to channel name, got:\n%s", m3u)
+		}
+	})
+
+	t.Run("channelRepo error degrades gracefully using channel names", func(t *testing.T) {
+		st1, _ := stream.NewStream("abc123", "Channel1")
+		streamRepo := &mockStreamRepository{
+			findAllFunc: func(ctx context.Context) ([]stream.Stream, error) {
+				return []stream.Stream{st1}, nil
+			},
+		}
+		channelRepo := &mockChannelRepository{
+			findAllFunc: func(ctx context.Context) ([]channel.Channel, error) {
+				return nil, errors.New("db error")
+			},
+		}
+		service := NewPlaylistService(streamRepo, channelRepo, &mockProbeRepository{}, 24*time.Hour)
+
+		m3u, err := service.GenerateM3U(context.Background(), "localhost:8080")
+		if err != nil {
+			t.Fatalf("expected no error despite channelRepo failure, got %v", err)
+		}
+
+		if !strings.Contains(m3u, `tvg-id="Channel1"`) {
+			t.Errorf("expected tvg-id to fall back to channel name, got:\n%s", m3u)
 		}
 	})
 }

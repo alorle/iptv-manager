@@ -4,6 +4,7 @@ import (
 	"cmp"
 	"context"
 	"fmt"
+	"log/slog"
 	"slices"
 	"strings"
 	"time"
@@ -16,21 +17,24 @@ import (
 // PlaylistService provides use cases for playlist generation.
 // It depends only on port interfaces.
 type PlaylistService struct {
-	streamRepo driven.StreamRepository
-	probeRepo  driven.ProbeRepository
-	window     time.Duration
+	streamRepo  driven.StreamRepository
+	channelRepo driven.ChannelRepository
+	probeRepo   driven.ProbeRepository
+	window      time.Duration
 }
 
 // NewPlaylistService creates a new PlaylistService with the given dependencies.
 func NewPlaylistService(
 	streamRepo driven.StreamRepository,
+	channelRepo driven.ChannelRepository,
 	probeRepo driven.ProbeRepository,
 	window time.Duration,
 ) *PlaylistService {
 	return &PlaylistService{
-		streamRepo: streamRepo,
-		probeRepo:  probeRepo,
-		window:     window,
+		streamRepo:  streamRepo,
+		channelRepo: channelRepo,
+		probeRepo:   probeRepo,
+		window:      window,
 	}
 }
 
@@ -43,25 +47,48 @@ func (p *PlaylistService) GenerateM3U(ctx context.Context, host string) (string,
 		return "", err
 	}
 
+	epgIDs := p.buildEPGIDMap(ctx)
+
 	sorted := p.sortByQuality(ctx, streams)
 
 	var builder strings.Builder
 	builder.WriteString("#EXTM3U\n")
 
 	for _, s := range sorted {
-		// Format: #EXTINF:-1 tvg-id="NombreCanal",NombreCanal - infohash
+		tvgID := s.ChannelName()
+		if id, ok := epgIDs[s.ChannelName()]; ok {
+			tvgID = id
+		}
+
 		fmt.Fprintf(&builder, "#EXTINF:-1 tvg-id=\"%s\",%s - %s\n",
-			s.ChannelName(),
+			tvgID,
 			s.ChannelName(),
 			s.InfoHash())
 
-		// Format: http://{host}/ace/getstream?id=infohash
 		fmt.Fprintf(&builder, "http://%s/ace/getstream?id=%s\n",
 			host,
 			s.InfoHash())
 	}
 
 	return builder.String(), nil
+}
+
+// buildEPGIDMap fetches all channels and returns a map from channel name to EPG ID.
+// Channels without an EPG mapping are omitted. Errors are logged and result in an empty map.
+func (p *PlaylistService) buildEPGIDMap(ctx context.Context) map[string]string {
+	channels, err := p.channelRepo.FindAll(ctx)
+	if err != nil {
+		slog.Warn("failed to fetch channels for EPG ID mapping", "error", err)
+		return nil
+	}
+
+	epgIDs := make(map[string]string, len(channels))
+	for _, ch := range channels {
+		if m := ch.EPGMapping(); m != nil && m.EPGID() != "" {
+			epgIDs[ch.Name()] = m.EPGID()
+		}
+	}
+	return epgIDs
 }
 
 // sortByQuality groups streams by channel name, sorts channel groups
