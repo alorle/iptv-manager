@@ -200,39 +200,19 @@ func (s *EPGSyncService) processChannel(
 	// Check if channel already exists
 	existingChannel, exists := existingChannels[channelName]
 
-	var ch channel.Channel
-	var isNew bool
+	// Create EPG mapping (same for new and existing channels)
+	mapping, err := channel.NewEPGMapping(epgChannel.EPGID(), channel.MappingAuto, time.Now())
+	if err != nil {
+		return fmt.Errorf("failed to create EPG mapping: %w", err)
+	}
 
 	if !exists {
-		// Create new channel
-		newChannel, err := channel.NewChannel(channelName)
+		ch, err := channel.NewChannel(channelName)
 		if err != nil {
 			return fmt.Errorf("failed to create channel: %w", err)
 		}
-
-		// Set EPG mapping
-		mapping, err := channel.NewEPGMapping(epgChannel.EPGID(), channel.MappingAuto, time.Now())
-		if err != nil {
-			return fmt.Errorf("failed to create EPG mapping: %w", err)
-		}
-		newChannel.SetEPGMapping(mapping)
-
-		ch = newChannel
-		isNew = true
-	} else {
-		// Use existing channel, update EPG mapping
-		ch = existingChannel
-
-		// Update EPG mapping with current timestamp
-		mapping, err := channel.NewEPGMapping(epgChannel.EPGID(), channel.MappingAuto, time.Now())
-		if err != nil {
-			return fmt.Errorf("failed to create EPG mapping: %w", err)
-		}
 		ch.SetEPGMapping(mapping)
-	}
 
-	// Save or update channel
-	if isNew {
 		if err := s.channelRepo.Save(ctx, ch); err != nil {
 			if errors.Is(err, channel.ErrChannelAlreadyExists) {
 				log.Printf("Channel %s already exists, treating as update", channelName)
@@ -241,7 +221,8 @@ func (s *EPGSyncService) processChannel(
 			}
 		}
 	} else {
-		if err := s.channelRepo.Update(ctx, ch); err != nil {
+		existingChannel.SetEPGMapping(mapping)
+		if err := s.channelRepo.Update(ctx, existingChannel); err != nil {
 			return fmt.Errorf("failed to update channel: %w", err)
 		}
 	}

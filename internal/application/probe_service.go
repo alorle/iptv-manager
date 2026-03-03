@@ -95,7 +95,7 @@ func (s *ProbeService) probeStream(ctx context.Context, infoHash string) (probe.
 	defer cancel()
 
 	startTime := time.Now()
-	streamURL, err := s.engine.StartStream(probeCtx, infoHash, pid)
+	_, err := s.engine.StartStream(probeCtx, infoHash, pid)
 	if err != nil {
 		// Stream is unavailable — record a failed probe
 		result, resultErr := probe.NewResult(
@@ -109,7 +109,6 @@ func (s *ProbeService) probeStream(ctx context.Context, infoHash string) (probe.
 		}
 		return result, nil
 	}
-	_ = streamURL
 
 	startupLatency := time.Since(startTime)
 
