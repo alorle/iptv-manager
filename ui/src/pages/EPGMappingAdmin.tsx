@@ -74,7 +74,6 @@ export default function EPGMappingAdmin() {
 
   const loadChannels = async () => {
     try {
-      // Load channels and streams in parallel
       const [channelsRes, streamsRes] = await Promise.all([
         fetch("/api/channels"),
         fetch("/api/streams"),
@@ -87,7 +86,6 @@ export default function EPGMappingAdmin() {
       const channelsData: Channel[] = await channelsRes.json();
       const streamsData: StreamHash[] = await streamsRes.json();
 
-      // Build mapping of channel name to streams
       const streamsByChannel = new Map<string, StreamHash[]>();
       for (const stream of streamsData) {
         const existing = streamsByChannel.get(stream.channel_name) || [];
@@ -95,7 +93,6 @@ export default function EPGMappingAdmin() {
         streamsByChannel.set(stream.channel_name, existing);
       }
 
-      // Enhance channels with mapping status and streams
       const enhanced: ChannelWithMapping[] = channelsData.map((ch) => {
         let mappingStatus: "auto-matched" | "manually-mapped" | "unmapped";
         if (!ch.epg_mapping) {
@@ -177,20 +174,15 @@ export default function EPGMappingAdmin() {
   };
 
   const filteredChannels = channels.filter((channel) => {
-    const matchesSearch = searchTerm
-      ? channel.name.toLowerCase().includes(searchTerm.toLowerCase())
-      : true;
-    const matchesStatus = filterStatus
-      ? channel.mappingStatus === filterStatus
-      : true;
+    const matchesSearch = !searchTerm || channel.name.toLowerCase().includes(searchTerm.toLowerCase());
+    const matchesStatus = !filterStatus || channel.mappingStatus === filterStatus;
     return matchesSearch && matchesStatus;
   });
 
   const filteredEPGChannels = epgChannels.filter((ch) =>
-    epgSearchTerm
-      ? ch.name.toLowerCase().includes(epgSearchTerm.toLowerCase()) ||
-        ch.epg_id.toLowerCase().includes(epgSearchTerm.toLowerCase())
-      : true
+    !epgSearchTerm ||
+    ch.name.toLowerCase().includes(epgSearchTerm.toLowerCase()) ||
+    ch.epg_id.toLowerCase().includes(epgSearchTerm.toLowerCase())
   );
 
   const getMappingBadge = (status: "auto-matched" | "manually-mapped" | "unmapped") => {

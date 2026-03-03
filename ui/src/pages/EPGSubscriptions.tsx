@@ -76,7 +76,6 @@ export default function EPGSubscriptions() {
       const response = await fetch("/api/epg/import", { method: "POST" });
       if (!response.ok) throw new Error("Failed to import EPG data");
       toast.success("EPG import started successfully");
-      // Reload channels after import
       await loadChannels();
     } catch (error) {
       toast.error("Failed to import EPG data");
@@ -133,12 +132,8 @@ export default function EPGSubscriptions() {
   };
 
   const filteredChannels = channels.filter((channel) => {
-    const matchesSearch = searchTerm
-      ? channel.name.toLowerCase().includes(searchTerm.toLowerCase())
-      : true;
-    const matchesCategory = selectedCategory
-      ? channel.category.toLowerCase() === selectedCategory.toLowerCase()
-      : true;
+    const matchesSearch = !searchTerm || channel.name.toLowerCase().includes(searchTerm.toLowerCase());
+    const matchesCategory = !selectedCategory || channel.category.toLowerCase() === selectedCategory.toLowerCase();
     return matchesSearch && matchesCategory;
   });
 
@@ -157,7 +152,6 @@ export default function EPGSubscriptions() {
     []
   );
 
-  // Sort groups by category name
   groupedChannels.sort((a, b) => a.category.localeCompare(b.category));
 
   const categories = Array.from(new Set(channels.map((ch) => ch.category))).sort();
