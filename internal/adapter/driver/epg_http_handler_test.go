@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -54,7 +55,7 @@ func TestEPGHTTPHandler_Import(t *testing.T) {
 			},
 		}
 
-		epgSyncService := application.NewEPGSyncService(epgFetcher, acestreamSrc, channelRepo, streamRepo, subRepo)
+		epgSyncService := application.NewEPGSyncService(epgFetcher, acestreamSrc, channelRepo, streamRepo, subRepo, slog.Default())
 		subscriptionSvc := application.NewSubscriptionService(subRepo, epgFetcher)
 		channelService := application.NewChannelService(channelRepo, streamRepo)
 		handler := NewEPGHTTPHandler(epgSyncService, subscriptionSvc, channelService)
@@ -92,7 +93,7 @@ func TestEPGHTTPHandler_Import(t *testing.T) {
 		streamRepo := &mockStreamRepository{}
 		subRepo := &mockSubscriptionRepository{}
 
-		epgSyncService := application.NewEPGSyncService(epgFetcher, acestreamSrc, channelRepo, streamRepo, subRepo)
+		epgSyncService := application.NewEPGSyncService(epgFetcher, acestreamSrc, channelRepo, streamRepo, subRepo, slog.Default())
 		subscriptionSvc := application.NewSubscriptionService(subRepo, epgFetcher)
 		channelService := application.NewChannelService(channelRepo, streamRepo)
 		handler := NewEPGHTTPHandler(epgSyncService, subscriptionSvc, channelService)
@@ -132,7 +133,7 @@ func TestEPGHTTPHandler_ListChannels(t *testing.T) {
 		streamRepo := &mockStreamRepository{}
 
 		subscriptionSvc := application.NewSubscriptionService(subRepo, epgFetcher)
-		epgSyncService := application.NewEPGSyncService(epgFetcher, acestreamSrc, channelRepo, streamRepo, subRepo)
+		epgSyncService := application.NewEPGSyncService(epgFetcher, acestreamSrc, channelRepo, streamRepo, subRepo, slog.Default())
 		channelService := application.NewChannelService(channelRepo, streamRepo)
 		handler := NewEPGHTTPHandler(epgSyncService, subscriptionSvc, channelService)
 
@@ -172,7 +173,7 @@ func TestEPGHTTPHandler_ListChannels(t *testing.T) {
 		streamRepo := &mockStreamRepository{}
 
 		subscriptionSvc := application.NewSubscriptionService(subRepo, epgFetcher)
-		epgSyncService := application.NewEPGSyncService(epgFetcher, acestreamSrc, channelRepo, streamRepo, subRepo)
+		epgSyncService := application.NewEPGSyncService(epgFetcher, acestreamSrc, channelRepo, streamRepo, subRepo, slog.Default())
 		channelService := application.NewChannelService(channelRepo, streamRepo)
 		handler := NewEPGHTTPHandler(epgSyncService, subscriptionSvc, channelService)
 
@@ -212,7 +213,7 @@ func TestEPGHTTPHandler_ListChannels(t *testing.T) {
 		streamRepo := &mockStreamRepository{}
 
 		subscriptionSvc := application.NewSubscriptionService(subRepo, epgFetcher)
-		epgSyncService := application.NewEPGSyncService(epgFetcher, acestreamSrc, channelRepo, streamRepo, subRepo)
+		epgSyncService := application.NewEPGSyncService(epgFetcher, acestreamSrc, channelRepo, streamRepo, subRepo, slog.Default())
 		channelService := application.NewChannelService(channelRepo, streamRepo)
 		handler := NewEPGHTTPHandler(epgSyncService, subscriptionSvc, channelService)
 
@@ -260,7 +261,7 @@ func TestEPGHTTPHandler_ListMappings(t *testing.T) {
 
 		channelService := application.NewChannelService(channelRepo, streamRepo)
 		subscriptionSvc := application.NewSubscriptionService(subRepo, epgFetcher)
-		epgSyncService := application.NewEPGSyncService(epgFetcher, acestreamSrc, channelRepo, streamRepo, subRepo)
+		epgSyncService := application.NewEPGSyncService(epgFetcher, acestreamSrc, channelRepo, streamRepo, subRepo, slog.Default())
 		handler := NewEPGHTTPHandler(epgSyncService, subscriptionSvc, channelService)
 
 		req := httptest.NewRequest(http.MethodGet, "/epg/mappings", nil)
@@ -307,7 +308,7 @@ func TestEPGHTTPHandler_ListMappings(t *testing.T) {
 
 		channelService := application.NewChannelService(channelRepo, streamRepo)
 		subscriptionSvc := application.NewSubscriptionService(subRepo, epgFetcher)
-		epgSyncService := application.NewEPGSyncService(epgFetcher, acestreamSrc, channelRepo, streamRepo, subRepo)
+		epgSyncService := application.NewEPGSyncService(epgFetcher, acestreamSrc, channelRepo, streamRepo, subRepo, slog.Default())
 		handler := NewEPGHTTPHandler(epgSyncService, subscriptionSvc, channelService)
 
 		req := httptest.NewRequest(http.MethodGet, "/epg/mappings", nil)
@@ -354,7 +355,7 @@ func TestEPGHTTPHandler_UpdateMapping(t *testing.T) {
 
 		channelService := application.NewChannelService(channelRepo, streamRepo)
 		subscriptionSvc := application.NewSubscriptionService(subRepo, epgFetcher)
-		epgSyncService := application.NewEPGSyncService(epgFetcher, acestreamSrc, channelRepo, streamRepo, subRepo)
+		epgSyncService := application.NewEPGSyncService(epgFetcher, acestreamSrc, channelRepo, streamRepo, subRepo, slog.Default())
 		handler := NewEPGHTTPHandler(epgSyncService, subscriptionSvc, channelService)
 
 		reqBody := bytes.NewBufferString(`{"epg_id":"new_epg_id"}`)
@@ -392,7 +393,7 @@ func TestEPGHTTPHandler_UpdateMapping(t *testing.T) {
 
 		channelService := application.NewChannelService(channelRepo, streamRepo)
 		subscriptionSvc := application.NewSubscriptionService(subRepo, epgFetcher)
-		epgSyncService := application.NewEPGSyncService(epgFetcher, acestreamSrc, channelRepo, streamRepo, subRepo)
+		epgSyncService := application.NewEPGSyncService(epgFetcher, acestreamSrc, channelRepo, streamRepo, subRepo, slog.Default())
 		handler := NewEPGHTTPHandler(epgSyncService, subscriptionSvc, channelService)
 
 		reqBody := bytes.NewBufferString(`{"epg_id":"new_epg_id"}`)
@@ -423,7 +424,7 @@ func TestEPGHTTPHandler_UpdateMapping(t *testing.T) {
 
 		channelService := application.NewChannelService(channelRepo, streamRepo)
 		subscriptionSvc := application.NewSubscriptionService(subRepo, epgFetcher)
-		epgSyncService := application.NewEPGSyncService(epgFetcher, acestreamSrc, channelRepo, streamRepo, subRepo)
+		epgSyncService := application.NewEPGSyncService(epgFetcher, acestreamSrc, channelRepo, streamRepo, subRepo, slog.Default())
 		handler := NewEPGHTTPHandler(epgSyncService, subscriptionSvc, channelService)
 
 		reqBody := bytes.NewBufferString(`invalid json`)
@@ -456,7 +457,7 @@ func TestEPGHTTPHandler_MethodNotAllowed(t *testing.T) {
 
 		channelService := application.NewChannelService(channelRepo, streamRepo)
 		subscriptionSvc := application.NewSubscriptionService(subRepo, epgFetcher)
-		epgSyncService := application.NewEPGSyncService(epgFetcher, acestreamSrc, channelRepo, streamRepo, subRepo)
+		epgSyncService := application.NewEPGSyncService(epgFetcher, acestreamSrc, channelRepo, streamRepo, subRepo, slog.Default())
 		handler := NewEPGHTTPHandler(epgSyncService, subscriptionSvc, channelService)
 
 		methods := []string{http.MethodPatch, http.MethodHead, http.MethodOptions}

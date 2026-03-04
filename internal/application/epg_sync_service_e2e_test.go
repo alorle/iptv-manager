@@ -2,6 +2,7 @@ package application
 
 import (
 	"context"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"testing"
@@ -126,6 +127,7 @@ func TestEPGSyncService_SyncChannels_E2E(t *testing.T) {
 			channelRepo,
 			streamRepo,
 			subscriptionRepo,
+			slog.Default(),
 		)
 
 		ctx := context.Background()
@@ -240,7 +242,7 @@ func TestEPGSyncService_SyncChannels_E2E(t *testing.T) {
 			},
 		}
 
-		syncService := NewEPGSyncService(epgFetcher, acestreamSource, channelRepo, streamRepo, subscriptionRepo)
+		syncService := NewEPGSyncService(epgFetcher, acestreamSource, channelRepo, streamRepo, subscriptionRepo, slog.Default())
 
 		sub, _ := subscription.NewSubscription("hbo.epg")
 		if err := subscriptionRepo.Save(ctx, sub); err != nil {
@@ -327,7 +329,7 @@ func TestEPGSyncService_SyncChannels_E2E(t *testing.T) {
 			},
 		}
 
-		syncService := NewEPGSyncService(epgFetcher, acestreamSource, channelRepo, streamRepo, subscriptionRepo)
+		syncService := NewEPGSyncService(epgFetcher, acestreamSource, channelRepo, streamRepo, subscriptionRepo, slog.Default())
 
 		sub, _ := subscription.NewSubscription("hbo.epg")
 		if err := subscriptionRepo.Save(ctx, sub); err != nil {
@@ -396,7 +398,7 @@ func TestEPGSyncService_SyncChannels_E2E(t *testing.T) {
 			},
 		}
 
-		syncService := NewEPGSyncService(epgFetcher, acestreamSource, channelRepo, streamRepo, subscriptionRepo)
+		syncService := NewEPGSyncService(epgFetcher, acestreamSource, channelRepo, streamRepo, subscriptionRepo, slog.Default())
 
 		// Create one enabled subscription and one disabled subscription
 		enabledSub, _ := subscription.NewSubscription("hbo.epg")

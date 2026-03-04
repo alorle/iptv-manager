@@ -4,7 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"log"
+	"log/slog"
 	"time"
 
 	"github.com/alorle/iptv-manager/internal/channel"
@@ -30,6 +30,7 @@ type EPGSyncService struct {
 	channelRepo      driven.ChannelRepository
 	streamRepo       driven.StreamRepository
 	subscriptionRepo driven.SubscriptionRepository
+	logger           *slog.Logger
 }
 
 // NewEPGSyncService creates a new EPG sync service with the required dependencies.
@@ -39,6 +40,7 @@ func NewEPGSyncService(
 	channelRepo driven.ChannelRepository,
 	streamRepo driven.StreamRepository,
 	subscriptionRepo driven.SubscriptionRepository,
+	logger *slog.Logger,
 ) *EPGSyncService {
 	return &EPGSyncService{
 		epgFetcher:       epgFetcher,
@@ -46,6 +48,7 @@ func NewEPGSyncService(
 		channelRepo:      channelRepo,
 		streamRepo:       streamRepo,
 		subscriptionRepo: subscriptionRepo,
+		logger:           logger,
 	}
 }
 
@@ -120,22 +123,20 @@ func (s *EPGSyncService) SyncChannels(ctx context.Context) error {
 
 		// Skip channels that fail automatic matching
 		if matchScore < fuzzyMatchThreshold {
-			log.Printf("Skipping EPG channel %s (EPGID: %s) - no automatic match found (score: %.2f)",
-				epgChannel.Name(), epgChannel.EPGID(), matchScore)
+			s.logger.Debug("skipping epg channel, no automatic match", "channel", epgChannel.Name(), "epg_id", epgChannel.EPGID(), "score", matchScore)
 			continue
 		}
 
 		// Skip channels with no matched hashes
 		if len(matchedHashes) == 0 {
-			log.Printf("Skipping EPG channel %s (EPGID: %s) - matched but no hashes found",
-				epgChannel.Name(), epgChannel.EPGID())
+			s.logger.Debug("skipping epg channel, matched but no hashes", "channel", epgChannel.Name(), "epg_id", epgChannel.EPGID())
 			continue
 		}
 
 		// Process this channel (create or update)
 		if err := s.processChannel(ctx, epgChannel, matchedHashes, existingChannelMap); err != nil {
 			// Log error but continue processing other channels
-			log.Printf("Error processing channel %s: %v", epgChannel.Name(), err)
+			s.logger.Error("failed to process channel", "channel", epgChannel.Name(), "error", err)
 			continue
 		}
 
@@ -148,9 +149,9 @@ func (s *EPGSyncService) SyncChannels(ctx context.Context) error {
 		if existingChannel.Status() == channel.StatusActive && !processedChannelNames[existingChannel.Name()] {
 			existingChannel.Archive()
 			if err := s.channelRepo.Update(ctx, existingChannel); err != nil {
-				log.Printf("Error archiving channel %s: %v", existingChannel.Name(), err)
+				s.logger.Error("failed to archive channel", "channel", existingChannel.Name(), "error", err)
 			} else {
-				log.Printf("Archived channel %s (no longer in EPG)", existingChannel.Name())
+				s.logger.Info("archived channel, no longer in epg", "channel", existingChannel.Name())
 			}
 		}
 	}
@@ -215,7 +216,7 @@ func (s *EPGSyncService) processChannel(
 
 		if err := s.channelRepo.Save(ctx, ch); err != nil {
 			if errors.Is(err, channel.ErrChannelAlreadyExists) {
-				log.Printf("Channel %s already exists, treating as update", channelName)
+				s.logger.Warn("channel already exists, treating as update", "channel", channelName)
 			} else {
 				return fmt.Errorf("failed to save channel: %w", err)
 			}
@@ -257,14 +258,14 @@ func (s *EPGSyncService) updateChannelStreams(ctx context.Context, channelName s
 		// Create new stream
 		newStream, err := stream.NewStream(hash, channelName)
 		if err != nil {
-			log.Printf("Error creating stream for channel %s, hash %s: %v", channelName, hash, err)
+			s.logger.Error("failed to create stream", "channel", channelName, "hash", hash, "error", err)
 			continue
 		}
 
 		if err := s.streamRepo.Save(ctx, newStream); err != nil {
 			// If stream already exists, it's fine (may have been created by another process)
 			if !errors.Is(err, stream.ErrStreamAlreadyExists) {
-				log.Printf("Error saving stream for channel %s, hash %s: %v", channelName, hash, err)
+				s.logger.Error("failed to save stream", "channel", channelName, "hash", hash, "error", err)
 			}
 			continue
 		}
@@ -279,8 +280,7 @@ func (s *EPGSyncService) updateChannelStreams(ctx context.Context, channelName s
 	for _, existingStream := range existingStreams {
 		if !hashSet[existingStream.InfoHash()] {
 			if err := s.streamRepo.Delete(ctx, existingStream.InfoHash()); err != nil {
-				log.Printf("Error deleting obsolete stream %s for channel %s: %v",
-					existingStream.InfoHash(), channelName, err)
+				s.logger.Error("failed to delete obsolete stream", "hash", existingStream.InfoHash(), "channel", channelName, "error", err)
 			}
 		}
 	}

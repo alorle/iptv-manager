@@ -168,7 +168,7 @@ func main() {
 	healthService := application.NewHealthService(channelRepo, aceStreamEngine)
 	aceStreamProxyService := application.NewAceStreamProxyService(aceStreamEngine, logger, cfg.StreamWriteTimeout)
 	subscriptionService := application.NewSubscriptionService(subscriptionRepo, epgFetcher)
-	epgSyncService := application.NewEPGSyncService(epgFetcher, acestreamSource, channelRepo, streamRepo, subscriptionRepo)
+	epgSyncService := application.NewEPGSyncService(epgFetcher, acestreamSource, channelRepo, streamRepo, subscriptionRepo, logger)
 	probeService := application.NewProbeService(probeRepo, streamRepo, aceStreamEngine, logger, cfg.ProbeTimeout, cfg.ProbeWindow)
 
 	// Create HTTP handlers
