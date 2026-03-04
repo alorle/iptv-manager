@@ -5,11 +5,15 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"sync"
+	"time"
 
 	"github.com/alorle/iptv-manager/internal/epg"
 	"github.com/alorle/iptv-manager/internal/port/driven"
 	"github.com/alorle/iptv-manager/internal/subscription"
 )
+
+const epgCacheTTL = 1 * time.Hour
 
 // SubscriptionService manages user channel subscriptions.
 // It orchestrates operations between the subscription repository and EPG fetcher
@@ -17,6 +21,10 @@ import (
 type SubscriptionService struct {
 	subscriptionRepo driven.SubscriptionRepository
 	epgFetcher       driven.EPGFetcher
+
+	epgCacheMu  sync.RWMutex
+	epgCache    []epg.Channel
+	epgCachedAt time.Time
 }
 
 // NewSubscriptionService creates a new subscription service with the required dependencies.
@@ -80,8 +88,7 @@ type ChannelFilter struct {
 // ListAvailableEPGChannels retrieves available EPG channels from the external source,
 // filtered by the provided criteria. Returns all channels if filter is empty.
 func (s *SubscriptionService) ListAvailableEPGChannels(ctx context.Context, filter ChannelFilter) ([]epg.Channel, error) {
-	// Fetch all EPG channels from external source
-	channels, err := s.epgFetcher.FetchEPG(ctx)
+	channels, err := s.getCachedEPGChannels(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch EPG channels: %w", err)
 	}
@@ -100,6 +107,35 @@ func (s *SubscriptionService) ListAvailableEPGChannels(ctx context.Context, filt
 	}
 
 	return filtered, nil
+}
+
+// getCachedEPGChannels returns cached EPG channels or fetches fresh data if the cache
+// has expired. Uses double-checked locking to minimize lock contention.
+func (s *SubscriptionService) getCachedEPGChannels(ctx context.Context) ([]epg.Channel, error) {
+	s.epgCacheMu.RLock()
+	if s.epgCache != nil && time.Since(s.epgCachedAt) < epgCacheTTL {
+		cached := s.epgCache
+		s.epgCacheMu.RUnlock()
+		return cached, nil
+	}
+	s.epgCacheMu.RUnlock()
+
+	s.epgCacheMu.Lock()
+	defer s.epgCacheMu.Unlock()
+
+	// Double-check after acquiring write lock
+	if s.epgCache != nil && time.Since(s.epgCachedAt) < epgCacheTTL {
+		return s.epgCache, nil
+	}
+
+	channels, err := s.epgFetcher.FetchEPG(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	s.epgCache = channels
+	s.epgCachedAt = time.Now()
+	return channels, nil
 }
 
 // matchesFilter checks if a channel matches the provided filter criteria.
