@@ -1,7 +1,9 @@
 package driver
 
 import (
+	"context"
 	"errors"
+	"io"
 	"log/slog"
 	"net/http"
 	"time"
@@ -9,14 +11,20 @@ import (
 	"github.com/alorle/iptv-manager/internal/application"
 )
 
+// StreamProxy defines the streaming operations needed by the handler.
+type StreamProxy interface {
+	StreamToClient(ctx context.Context, infoHash string, dst io.Writer) error
+	GetActiveStreams() []application.StreamInfo
+}
+
 // AceStreamHTTPHandler handles HTTP requests for AceStream proxy.
 type AceStreamHTTPHandler struct {
-	proxyService *application.AceStreamProxyService
+	proxyService StreamProxy
 	logger       *slog.Logger
 }
 
 // NewAceStreamHTTPHandler creates a new HTTP handler for AceStream proxy.
-func NewAceStreamHTTPHandler(proxyService *application.AceStreamProxyService, logger *slog.Logger) *AceStreamHTTPHandler {
+func NewAceStreamHTTPHandler(proxyService StreamProxy, logger *slog.Logger) *AceStreamHTTPHandler {
 	return &AceStreamHTTPHandler{
 		proxyService: proxyService,
 		logger:       logger,
