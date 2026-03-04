@@ -136,8 +136,8 @@ func (s *AceStreamProxyService) startEngineStream(ctx context.Context, session *
 }
 
 // waitForStreamReady waits for the stream to become ready.
+// It relies on the caller's context for timeout instead of a hardcoded duration.
 func (s *AceStreamProxyService) waitForStreamReady(ctx context.Context, session *streamSession) error {
-	// Check immediately before polling
 	if session.IsReady() {
 		return nil
 	}
@@ -148,19 +148,10 @@ func (s *AceStreamProxyService) waitForStreamReady(ctx context.Context, session 
 	ticker := time.NewTicker(100 * time.Millisecond)
 	defer ticker.Stop()
 
-	const timeoutDuration = 30 * time.Second
-	startTime := time.Now()
-	timeout := time.After(timeoutDuration)
-
 	for {
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
-		case <-timeout:
-			s.logger.Error("timeout waiting for stream ready",
-				"infohash", session.InfoHash(),
-				"duration", timeoutDuration)
-			return fmt.Errorf("timeout waiting for stream to be ready")
 		case <-ticker.C:
 			if session.IsReady() {
 				return nil
@@ -168,10 +159,6 @@ func (s *AceStreamProxyService) waitForStreamReady(ctx context.Context, session 
 			if err := session.GetError(); err != nil {
 				return err
 			}
-			s.logger.Debug("polling stream ready state",
-				"infohash", session.InfoHash(),
-				"state", "waiting",
-				"elapsed", time.Since(startTime))
 		}
 	}
 }
