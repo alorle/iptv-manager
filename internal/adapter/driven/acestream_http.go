@@ -3,7 +3,6 @@ package driven
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io"
 	"log/slog"
@@ -127,7 +126,7 @@ func (a *AceStreamHTTPAdapter) StartStream(ctx context.Context, infoHash, pid st
 
 	resp, err := a.httpClient.Do(req)
 	if err != nil {
-		if isTimeoutError(err) {
+		if streaming.IsTimeoutError(err) {
 			a.logger.Warn("engine operation timeout", "operation", "StartStream", "url", reqURL, "timeout", a.startStreamTimeout, "error", err)
 			a.logger.Error("stream start failed due to timeout", "infohash", infoHash, "pid", pid, "timeout", a.startStreamTimeout)
 			return "", fmt.Errorf("start stream timed out after %v: %w", a.startStreamTimeout, err)
@@ -208,7 +207,7 @@ func (a *AceStreamHTTPAdapter) GetStats(ctx context.Context, pid string) (driven
 
 	resp, err := a.httpClient.Do(req)
 	if err != nil {
-		if isTimeoutError(err) {
+		if streaming.IsTimeoutError(err) {
 			a.logger.Warn("engine operation timeout", "operation", "GetStats", "url", reqURL, "timeout", a.getStatsTimeout, "pid", pid, "error", err)
 			return driven.StreamStats{}, fmt.Errorf("get stats timed out after %v: %w", a.getStatsTimeout, err)
 		}
@@ -292,7 +291,7 @@ func (a *AceStreamHTTPAdapter) StopStream(ctx context.Context, pid string) error
 
 	resp, err := a.httpClient.Do(req)
 	if err != nil {
-		if isTimeoutError(err) {
+		if streaming.IsTimeoutError(err) {
 			a.logger.Warn("engine operation timeout", "operation", "StopStream", "url", reqURL, "timeout", a.stopStreamTimeout, "pid", pid, "error", err)
 			return fmt.Errorf("stop stream timed out after %v: %w", a.stopStreamTimeout, err)
 		}
@@ -388,19 +387,6 @@ func (a *AceStreamHTTPAdapter) SetHTTPClient(client *http.Client) {
 	a.httpClient = client
 }
 
-// isTimeoutError checks if an error is a timeout error (either context deadline exceeded or network timeout).
-func isTimeoutError(err error) bool {
-	if errors.Is(err, context.DeadlineExceeded) {
-		return true
-	}
-	// Check for network timeout errors
-	var netErr net.Error
-	if errors.As(err, &netErr) && netErr.Timeout() {
-		return true
-	}
-	return false
-}
-
 // Ping checks if the AceStream engine is accessible and operational.
 func (a *AceStreamHTTPAdapter) Ping(ctx context.Context) error {
 	// Apply operation-specific timeout
@@ -418,7 +404,7 @@ func (a *AceStreamHTTPAdapter) Ping(ctx context.Context) error {
 
 	resp, err := a.httpClient.Do(req)
 	if err != nil {
-		if isTimeoutError(err) {
+		if streaming.IsTimeoutError(err) {
 			a.logger.Warn("engine operation timeout", "operation", "Ping", "url", reqURL, "timeout", a.pingTimeout, "error", err)
 			return fmt.Errorf("ping timed out after %v: %w", a.pingTimeout, err)
 		}

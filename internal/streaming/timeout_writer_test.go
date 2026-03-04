@@ -99,21 +99,21 @@ func TestTimeoutWriter_Write(t *testing.T) {
 
 func TestIsTimeoutError(t *testing.T) {
 	t.Run("recognizes nil as not timeout", func(t *testing.T) {
-		if isTimeoutError(nil) {
+		if IsTimeoutError(nil) {
 			t.Error("expected nil to not be recognized as timeout error")
 		}
 	})
 
 	t.Run("recognizes timeout error interface", func(t *testing.T) {
 		err := &mockTimeoutError{timeout: true}
-		if !isTimeoutError(err) {
+		if !IsTimeoutError(err) {
 			t.Error("expected timeout error to be recognized")
 		}
 	})
 
 	t.Run("recognizes non-timeout error interface", func(t *testing.T) {
 		err := &mockTimeoutError{timeout: false}
-		if isTimeoutError(err) {
+		if IsTimeoutError(err) {
 			t.Error("expected non-timeout error to not be recognized")
 		}
 	})
@@ -132,7 +132,7 @@ func TestIsTimeoutError(t *testing.T) {
 
 		for _, tc := range testCases {
 			t.Run(tc.name, func(t *testing.T) {
-				result := isTimeoutError(tc.err)
+				result := IsTimeoutError(tc.err)
 				if result != tc.expected {
 					t.Errorf("expected %v for error %q, got %v", tc.expected, tc.err, result)
 				}

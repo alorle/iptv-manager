@@ -12,6 +12,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/alorle/iptv-manager/internal/streaming"
 )
 
 func TestAceStreamHTTPAdapter_StartStream_Timeout(t *testing.T) {
@@ -33,7 +35,7 @@ func TestAceStreamHTTPAdapter_StartStream_Timeout(t *testing.T) {
 		t.Fatal("expected timeout error, got nil")
 	}
 
-	if !strings.Contains(err.Error(), "timed out") && !isTimeoutError(err) {
+	if !strings.Contains(err.Error(), "timed out") && !streaming.IsTimeoutError(err) {
 		t.Errorf("expected timeout error, got: %v", err)
 	}
 }
@@ -150,7 +152,7 @@ func TestAceStreamHTTPAdapter_GetStats_Timeout(t *testing.T) {
 		t.Fatal("expected timeout error, got nil")
 	}
 
-	if !strings.Contains(err.Error(), "timed out") && !isTimeoutError(err) {
+	if !strings.Contains(err.Error(), "timed out") && !streaming.IsTimeoutError(err) {
 		t.Errorf("expected timeout error, got: %v", err)
 	}
 }
@@ -244,7 +246,7 @@ func TestAceStreamHTTPAdapter_StopStream_Timeout(t *testing.T) {
 		t.Fatal("expected timeout error, got nil")
 	}
 
-	if !strings.Contains(err.Error(), "timed out") && !isTimeoutError(err) {
+	if !strings.Contains(err.Error(), "timed out") && !streaming.IsTimeoutError(err) {
 		t.Errorf("expected timeout error, got: %v", err)
 	}
 }
@@ -281,7 +283,7 @@ func TestAceStreamHTTPAdapter_Ping_Timeout(t *testing.T) {
 		t.Fatal("expected timeout error, got nil")
 	}
 
-	if !strings.Contains(err.Error(), "timed out") && !isTimeoutError(err) {
+	if !strings.Contains(err.Error(), "timed out") && !streaming.IsTimeoutError(err) {
 		t.Errorf("expected timeout error, got: %v", err)
 	}
 }
@@ -372,7 +374,7 @@ func TestIsTimeoutError(t *testing.T) {
 		{
 			name:     "wrapped context deadline exceeded",
 			err:      errors.New("wrapped: " + context.DeadlineExceeded.Error()),
-			expected: false,
+			expected: true, // string contains "deadline", detected by IsTimeoutError
 		},
 		{
 			name:     "non-timeout error",
@@ -388,7 +390,7 @@ func TestIsTimeoutError(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := isTimeoutError(tt.err)
+			result := streaming.IsTimeoutError(tt.err)
 			if result != tt.expected {
 				t.Errorf("expected %v, got %v for error: %v", tt.expected, result, tt.err)
 			}

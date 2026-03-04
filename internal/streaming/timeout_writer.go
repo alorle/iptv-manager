@@ -1,6 +1,7 @@
 package streaming
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"io"
@@ -67,7 +68,7 @@ func (tw *TimeoutWriter) Write(p []byte) (n int, err error) {
 	// Check for timeout-related errors
 	if err != nil {
 		// Check if this is a timeout error
-		if isTimeoutError(err) {
+		if IsTimeoutError(err) {
 			tw.logger.Warn("slow client detected - write timeout",
 				"infohash", tw.infoHash,
 				"pid", tw.pid,
@@ -86,22 +87,24 @@ func (tw *TimeoutWriter) BytesWritten() int64 {
 	return tw.bytesWritten
 }
 
-// isTimeoutError checks if an error is a timeout error.
-func isTimeoutError(err error) bool {
+// IsTimeoutError checks if an error is a timeout error (context deadline,
+// network timeout, or timeout-related error strings).
+func IsTimeoutError(err error) bool {
 	if err == nil {
 		return false
 	}
 
-	// Check for timeout interfaces
+	if errors.Is(err, context.DeadlineExceeded) {
+		return true
+	}
+
 	type timeoutError interface {
 		Timeout() bool
 	}
-
 	if te, ok := err.(timeoutError); ok && te.Timeout() {
 		return true
 	}
 
-	// Check error string for common timeout patterns
 	errStr := err.Error()
 	return strings.Contains(errStr, "timeout") ||
 		strings.Contains(errStr, "deadline")
