@@ -14,7 +14,6 @@ import (
 // StreamProxy defines the streaming operations needed by the handler.
 type StreamProxy interface {
 	StreamToClient(ctx context.Context, infoHash string, dst io.Writer) error
-	GetActiveStreams() []application.StreamInfo
 }
 
 // AceStreamHTTPHandler handles HTTP requests for AceStream proxy.
@@ -85,41 +84,4 @@ func (h *AceStreamHTTPHandler) ServeHTTP(w http.ResponseWriter, r *http.Request)
 	}
 
 	h.logger.Info("request completed", "remote_addr", r.RemoteAddr, "infohash", infoHash, "duration", duration, "reason", "success")
-}
-
-// activeStreamsResponse represents active stream information.
-type activeStreamsResponse struct {
-	Streams []streamInfo `json:"streams"`
-}
-
-type streamInfo struct {
-	InfoHash    string   `json:"info_hash"`
-	ClientCount int      `json:"client_count"`
-	PIDs        []string `json:"pids"`
-}
-
-// HandleActiveStreams handles GET /ace/streams - returns active stream information.
-func (h *AceStreamHTTPHandler) HandleActiveStreams(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
-		writeError(w, http.StatusMethodNotAllowed, "method not allowed")
-		return
-	}
-
-	activeStreams := h.proxyService.GetActiveStreams()
-
-	h.logger.Debug("listing active streams", "stream_count", len(activeStreams))
-
-	response := activeStreamsResponse{
-		Streams: make([]streamInfo, len(activeStreams)),
-	}
-
-	for i, info := range activeStreams {
-		response.Streams[i] = streamInfo{
-			InfoHash:    info.InfoHash,
-			ClientCount: info.ClientCount,
-			PIDs:        info.PIDs,
-		}
-	}
-
-	writeJSON(w, http.StatusOK, response)
 }

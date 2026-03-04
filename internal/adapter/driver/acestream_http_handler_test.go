@@ -8,8 +8,6 @@ import (
 	"net/http/httptest"
 	"testing"
 	"time"
-
-	"github.com/alorle/iptv-manager/internal/application"
 )
 
 // mockProxyService is a minimal stand-in for AceStreamProxyService.
@@ -38,10 +36,6 @@ func (m *mockProxyService) StreamToClient(ctx context.Context, infoHash string, 
 			}
 		}
 	}
-}
-
-func (m *mockProxyService) GetActiveStreams() []application.StreamInfo {
-	return nil
 }
 
 func TestAceStreamHTTPHandler_LongStream(t *testing.T) {

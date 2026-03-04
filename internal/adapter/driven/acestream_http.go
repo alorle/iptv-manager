@@ -382,58 +382,6 @@ func (a *AceStreamHTTPAdapter) StreamContent(ctx context.Context, streamURL stri
 	return nil
 }
 
-// EngineStats contains overall engine statistics.
-type EngineStats struct {
-	ActiveStreams int
-	TotalPeers    int
-	UploadSpeed   int64
-	DownloadSpeed int64
-}
-
-// GetEngineStats retrieves overall engine statistics.
-// This is useful for monitoring and debugging.
-func (a *AceStreamHTTPAdapter) GetEngineStats(ctx context.Context) (EngineStats, error) {
-	reqURL := fmt.Sprintf("%s/webui/api/service?method=get_version", a.baseURL)
-
-	a.logger.Debug("engine request", "method", http.MethodGet, "url", reqURL, "pid", "")
-
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, reqURL, nil)
-	if err != nil {
-		return EngineStats{}, fmt.Errorf("failed to create engine stats request: %w", err)
-	}
-
-	resp, err := a.httpClient.Do(req)
-	if err != nil {
-		a.logger.Warn("engine network error", "error", err, "url", reqURL, "timeout", a.httpClient.Timeout)
-		return EngineStats{}, fmt.Errorf("failed to get engine stats: %w", err)
-	}
-	defer resp.Body.Close()
-
-	a.logger.Debug("engine response", "status_code", resp.StatusCode, "content_type", resp.Header.Get("Content-Type"), "content_length", resp.Header.Get("Content-Length"))
-
-	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(resp.Body)
-		bodyStr := string(body)
-		if len(bodyStr) > 500 {
-			bodyStr = bodyStr[:500]
-		}
-		a.logger.Error("engine http error", "status_code", resp.StatusCode, "body", bodyStr, "url", reqURL)
-		return EngineStats{}, fmt.Errorf("engine returned status %d: %s", resp.StatusCode, string(body))
-	}
-
-	var result struct {
-		Version string `json:"version"`
-	}
-
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		return EngineStats{}, fmt.Errorf("failed to decode engine stats: %w", err)
-	}
-
-	// For now, return basic stats. More detailed stats would require
-	// querying individual streams.
-	return EngineStats{}, nil
-}
-
 // SetHTTPClient allows replacing the default HTTP client.
 // Useful for testing with custom transports or timeouts.
 func (a *AceStreamHTTPAdapter) SetHTTPClient(client *http.Client) {
