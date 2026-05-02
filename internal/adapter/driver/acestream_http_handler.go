@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/alorle/iptv-manager/internal/application"
+	"github.com/alorle/iptv-manager/internal/streaming"
 )
 
 // StreamProxy defines the streaming operations needed by the handler.
@@ -76,8 +77,10 @@ func (h *AceStreamHTTPHandler) ServeHTTP(w http.ResponseWriter, r *http.Request)
 			h.logger.Info("request completed", "remote_addr", r.RemoteAddr, "infohash", infoHash, "duration", duration, "reason", "engine_unavailable")
 			return
 		}
-		// For other errors during streaming, the connection will be closed
-		// which is appropriate for streaming failures
+		if streaming.IsClientDisconnectError(err) {
+			h.logger.Info("request completed", "remote_addr", r.RemoteAddr, "infohash", infoHash, "duration", duration, "reason", "client_disconnected")
+			return
+		}
 		h.logger.Error("service error", "error", "stream failed", "remote_addr", r.RemoteAddr, "infohash", infoHash, "details", err)
 		h.logger.Info("request completed", "remote_addr", r.RemoteAddr, "infohash", infoHash, "duration", duration, "reason", "stream_error")
 		return
