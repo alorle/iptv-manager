@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1
 
-ARG GO_VERSION=1.25.7
+ARG GO_VERSION=1.25.9
 ARG NODE_VERSION=22
 
 # BUILD STAGE (frontend)
