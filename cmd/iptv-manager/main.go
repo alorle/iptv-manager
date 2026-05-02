@@ -181,6 +181,7 @@ func main() {
 	subscriptionHandler := driver.NewSubscriptionHTTPHandler(subscriptionService)
 	probeHandler := driver.NewProbeHTTPHandler(probeService)
 	dashboardHandler := driver.NewDashboardHTTPHandler(channelService, probeService, aceStreamProxyService, healthService)
+	debugHandler := driver.NewDebugHTTPHandler(aceStreamProxyService)
 
 	// Register API routes
 	apiMux := http.NewServeMux()
@@ -195,6 +196,7 @@ func main() {
 	apiMux.Handle("/probes/", probeHandler)
 	apiMux.Handle("/quality/", probeHandler)
 	apiMux.Handle("/dashboard", dashboardHandler)
+	apiMux.Handle("/debug/streams", debugHandler)
 
 	// Root router: API under /api/, streaming routes at root, SPA for everything else
 	rootMux := http.NewServeMux()

@@ -31,6 +31,8 @@ type AceStreamProxyService struct {
 	pidGen       *pidGenerator
 	logger       *slog.Logger
 	writeTimeout time.Duration
+	counters     streamCounters
+	startedAt    time.Time
 }
 
 // NewAceStreamProxyService creates a new proxy service with the given engine.
@@ -41,6 +43,7 @@ func NewAceStreamProxyService(engine driven.AceStreamEngine, logger *slog.Logger
 		pidGen:       newPIDGenerator(),
 		logger:       logger,
 		writeTimeout: writeTimeout,
+		startedAt:    time.Now(),
 	}
 }
 
@@ -57,6 +60,8 @@ func (s *AceStreamProxyService) StreamToClient(ctx context.Context, infoHash str
 
 	// Generate unique PID for this client
 	pid := s.pidGen.Generate()
+
+	s.counters.clientsServed.Add(1)
 
 	// Register the client session
 	session, isNew, err := s.sessions.AddClient(infoHash, pid, s.logger)
@@ -124,11 +129,22 @@ func (s *AceStreamProxyService) startEngineStream(ctx context.Context, session *
 
 	streamURL, err := s.engine.StartStream(ctx, session.InfoHash(), firstPID)
 	if err != nil {
+		s.counters.streamStartFailures.Add(1)
+		s.logger.Error("engine start failed",
+			"infohash", session.InfoHash(),
+			"pid", firstPID,
+			"error", err,
+			"total_start_failures", s.counters.streamStartFailures.Load(),
+			"active_sessions", s.sessions.Count())
 		session.SetError(err)
 		return err
 	}
 
-	s.logger.Info("stream ready", "infohash", session.InfoHash(), "stream_url", streamURL)
+	s.counters.streamsStarted.Add(1)
+	s.logger.Info("stream ready",
+		"infohash", session.InfoHash(),
+		"stream_url", streamURL,
+		"total_started", s.counters.streamsStarted.Load())
 	session.SetEnginePID(firstPID)
 	session.SetStreamURL(streamURL)
 	session.MarkReady()
@@ -182,48 +198,71 @@ func (s *AceStreamProxyService) streamWithReconnection(ctx context.Context, sess
 
 		lastErr = err
 
-		// Check if we should retry
 		if attempt < maxRetries-1 {
+			s.counters.reconnectionAttempts.Add(1)
 			s.logger.Warn("reconnection attempt",
 				"infohash", session.InfoHash(),
 				"attempt", attempt+1,
 				"max_attempts", maxRetries,
 				"delay", retryDelay,
-				"previous_error", err)
+				"previous_error", err,
+				"active_sessions", s.sessions.Count())
 
-			// Try to restart the stream
 			select {
 			case <-ctx.Done():
 				return ctx.Err()
 			case <-time.After(retryDelay):
-				// Attempt to restart the stream
 				if restartErr := s.restartStream(ctx, session, pid); restartErr != nil {
-					s.logger.Error("stream restart failed", "infohash", session.InfoHash(), "pid", pid, "error", restartErr)
-					return fmt.Errorf("stream failed and could not restart: %w", err)
+					s.logger.Error("stream restart failed",
+						"infohash", session.InfoHash(),
+						"pid", pid,
+						"restart_error", restartErr,
+						"original_error", err,
+						"active_sessions", s.sessions.Count())
+					return fmt.Errorf("stream failed and could not restart: %w (original: %v)", restartErr, err)
 				}
-				retryDelay *= 2 // Exponential backoff
+				s.counters.reconnectionSuccesses.Add(1)
+				retryDelay *= 2
 			}
 		}
 	}
 
 	s.logger.Error("reconnection retries exhausted",
 		"infohash", session.InfoHash(),
-		"final_error", lastErr)
+		"final_error", lastErr,
+		"total_start_failures", s.counters.streamStartFailures.Load(),
+		"total_reconnection_attempts", s.counters.reconnectionAttempts.Load(),
+		"active_sessions", s.sessions.Count())
 
 	return fmt.Errorf("stream failed after %d attempts: %w", maxRetries, lastErr)
 }
 
-// restartStream attempts to restart a failed stream.
+// restartStream attempts to restart a failed stream by first stopping the old
+// one to avoid leaking engine sessions.
 func (s *AceStreamProxyService) restartStream(ctx context.Context, session *streamSession, pid string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	// Try to start a new stream with the current PID
+	// Stop old stream to release engine resources before starting a new one
+	stopCtx, stopCancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer stopCancel()
+	if err := s.engine.StopStream(stopCtx, pid); err != nil {
+		s.counters.streamStopFailures.Add(1)
+		s.logger.Warn("failed to stop old stream during restart",
+			"infohash", session.InfoHash(),
+			"pid", pid,
+			"error", err)
+	} else {
+		s.counters.streamsStopped.Add(1)
+	}
+
 	streamURL, err := s.engine.StartStream(ctx, session.InfoHash(), pid)
 	if err != nil {
+		s.counters.streamStartFailures.Add(1)
 		return err
 	}
 
+	s.counters.streamsStarted.Add(1)
 	session.SetEnginePID(pid)
 	session.SetStreamURL(streamURL)
 	return nil
@@ -258,7 +297,10 @@ func (s *AceStreamProxyService) cleanupClient(infoHash, pid string) {
 		// Use the PID that started the engine stream (session URLs are keyed by this PID)
 		enginePID := session.GetEnginePID()
 		if err := s.engine.StopStream(ctx, enginePID); err != nil {
+			s.counters.streamStopFailures.Add(1)
 			s.logger.Error("failed to stop stream", "infohash", infoHash, "pid", enginePID, "error", err)
+		} else {
+			s.counters.streamsStopped.Add(1)
 		}
 	}
 }
@@ -266,6 +308,28 @@ func (s *AceStreamProxyService) cleanupClient(infoHash, pid string) {
 // GetActiveStreams returns information about all active stream sessions.
 func (s *AceStreamProxyService) GetActiveStreams() []StreamInfo {
 	return s.sessions.GetAllSessions()
+}
+
+// Diagnostics returns a full diagnostic snapshot of the streaming subsystem,
+// including lifecycle counters, active session details, and engine health.
+func (s *AceStreamProxyService) Diagnostics(ctx context.Context) StreamDiagnostics {
+	counters := s.counters.snapshot()
+
+	sessions := s.sessions.diagnosticSnapshot()
+
+	engineOK := true
+	pingCtx, cancel := context.WithTimeout(ctx, 2*time.Second)
+	defer cancel()
+	if err := s.engine.Ping(pingCtx); err != nil {
+		engineOK = false
+	}
+
+	return StreamDiagnostics{
+		Uptime:   time.Since(s.startedAt),
+		Counters: counters,
+		Sessions: sessions,
+		EngineOK: engineOK,
+	}
 }
 
 // StreamInfo contains information about an active stream session.
@@ -338,6 +402,47 @@ func (r *sessionRegistry) GetSession(infoHash string) *streamSession {
 	return r.sessions[infoHash]
 }
 
+// Count returns the number of active sessions.
+func (r *sessionRegistry) Count() int {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	return len(r.sessions)
+}
+
+// diagnosticSnapshot returns detailed state of every active session.
+func (r *sessionRegistry) diagnosticSnapshot() []SessionDiagnostic {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
+	result := make([]SessionDiagnostic, 0, len(r.sessions))
+	for _, session := range r.sessions {
+		state := "starting"
+		if session.IsReady() {
+			state = "streaming"
+		}
+		if err := session.GetError(); err != nil {
+			state = "error"
+		}
+
+		errStr := ""
+		if err := session.GetError(); err != nil {
+			errStr = err.Error()
+		}
+
+		result = append(result, SessionDiagnostic{
+			InfoHash:    session.InfoHash(),
+			State:       state,
+			StreamURL:   session.GetStreamURL(),
+			EnginePID:   session.GetEnginePID(),
+			Clients:     session.GetPIDs(),
+			ClientCount: session.ClientCount(),
+			Error:       errStr,
+			CreatedAt:   session.createdAt,
+		})
+	}
+	return result
+}
+
 // GetAllSessions returns information about all active sessions.
 func (r *sessionRegistry) GetAllSessions() []StreamInfo {
 	r.mu.RLock()
@@ -365,6 +470,7 @@ type streamSession struct {
 	err          error
 	broadcaster  *streamBroadcaster
 	engineCancel context.CancelFunc
+	createdAt    time.Time
 }
 
 func newStreamSession(infoHash string, logger *slog.Logger) *streamSession {
@@ -372,6 +478,7 @@ func newStreamSession(infoHash string, logger *slog.Logger) *streamSession {
 		infoHash:    infoHash,
 		pids:        make(map[string]struct{}),
 		broadcaster: newStreamBroadcaster(infoHash, logger),
+		createdAt:   time.Now(),
 	}
 }
 
