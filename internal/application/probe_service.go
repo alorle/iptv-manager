@@ -240,6 +240,64 @@ func (s *ProbeService) GetProbeHistory(ctx context.Context, infoHash string) ([]
 	return s.probeRepo.FindByInfoHashSince(ctx, infoHash, since)
 }
 
+// ProbeStream runs an immediate health-check probe for a single stream and returns the result.
+func (s *ProbeService) ProbeStream(ctx context.Context, infoHash string) (probe.Result, error) {
+	return s.probeStream(ctx, infoHash)
+}
+
+// ChannelHealth holds the health summary for a single channel.
+type ChannelHealth struct {
+	ChannelName string
+	BestScore   float64
+	StreamCount int
+	InfoHashes  []string
+	LastProbe   *probe.Result
+}
+
+// GetChannelHealth computes the health summary for a single channel.
+func (s *ProbeService) GetChannelHealth(ctx context.Context, channelName string) (ChannelHealth, error) {
+	streams, err := s.streamRepo.FindByChannelName(ctx, channelName)
+	if err != nil {
+		return ChannelHealth{}, fmt.Errorf("failed to fetch streams: %w", err)
+	}
+
+	health := ChannelHealth{
+		ChannelName: channelName,
+		StreamCount: len(streams),
+		InfoHashes:  make([]string, len(streams)),
+	}
+	for i, st := range streams {
+		health.InfoHashes[i] = st.InfoHash()
+	}
+
+	if len(streams) == 0 {
+		return health, nil
+	}
+
+	scores, err := s.GetQualityScores(ctx, channelName)
+	if err != nil {
+		return ChannelHealth{}, fmt.Errorf("failed to get quality scores: %w", err)
+	}
+	if len(scores) > 0 {
+		health.BestScore = scores[0].Score
+	}
+
+	since := time.Now().Add(-s.window)
+	for _, st := range streams {
+		results, err := s.probeRepo.FindByInfoHashSince(ctx, st.InfoHash(), since)
+		if err != nil || len(results) == 0 {
+			continue
+		}
+		latest := results[0]
+		if health.LastProbe == nil || latest.Timestamp().After(health.LastProbe.Timestamp()) {
+			r := latest
+			health.LastProbe = &r
+		}
+	}
+
+	return health, nil
+}
+
 // Cleanup removes probe data older than twice the rolling window.
 func (s *ProbeService) Cleanup(ctx context.Context) error {
 	cutoff := time.Now().Add(-s.window * 2)

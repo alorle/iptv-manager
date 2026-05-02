@@ -61,6 +61,15 @@ func (h *ProbeHTTPHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// POST /probes/{infoHash} - trigger immediate probe for a single stream
+	if r.Method == http.MethodPost && strings.HasPrefix(path, "/probes/") {
+		infoHash := strings.TrimPrefix(path, "/probes/")
+		if infoHash != "" {
+			h.handleProbeOne(w, r, infoHash)
+			return
+		}
+	}
+
 	// Routes under /probes/{infoHash}
 	if strings.HasPrefix(path, "/probes/") {
 		remaining := strings.TrimPrefix(path, "/probes/")
@@ -150,6 +159,16 @@ func (h *ProbeHTTPHandler) handleRun(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writeJSON(w, http.StatusOK, map[string]string{"status": "completed"})
+}
+
+// handleProbeOne handles POST /probes/{infoHash}
+func (h *ProbeHTTPHandler) handleProbeOne(w http.ResponseWriter, r *http.Request, infoHash string) {
+	result, err := h.service.ProbeStream(r.Context(), infoHash)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "probe failed: "+err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, toProbeResultResponse(result))
 }
 
 func toProbeResultResponse(r probe.Result) probeResultResponse {
