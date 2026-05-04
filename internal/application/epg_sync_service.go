@@ -13,14 +13,7 @@ import (
 	"github.com/alorle/iptv-manager/internal/stream"
 )
 
-const (
-	// Minimum fuzzy match score to consider automatic matching successful
-	fuzzyMatchThreshold = 0.7
-
-	// Acestream sources to fetch from
-	sourceNewEra = "new-era"
-	sourceElcano = "elcano"
-)
+const fuzzyMatchThreshold = 0.7
 
 // EPGSyncService orchestrates the EPG sync workflow:
 // fetch EPG data, match with Acestream sources, merge channels, and update streams.
@@ -68,19 +61,20 @@ func (s *EPGSyncService) SyncChannels(ctx context.Context) error {
 		return fmt.Errorf("failed to fetch EPG data: %w", err)
 	}
 
-	// Fetch Acestream hashes from both sources
-	newEraHashes, err := s.acestreamSrc.FetchHashes(ctx, sourceNewEra)
+	newEraHashes, err := s.acestreamSrc.FetchHashes(ctx, stream.SourceNewEra)
 	if err != nil {
 		return fmt.Errorf("failed to fetch new-era hashes: %w", err)
 	}
 
-	elcanoHashes, err := s.acestreamSrc.FetchHashes(ctx, sourceElcano)
+	elcanoHashes, err := s.acestreamSrc.FetchHashes(ctx, stream.SourceElcano)
 	if err != nil {
 		return fmt.Errorf("failed to fetch elcano hashes: %w", err)
 	}
 
-	// Merge hash maps from both sources
-	allHashes := mergeHashMaps(newEraHashes, elcanoHashes)
+	allHashes := mergeTaggedHashMaps(
+		tagHashMap(newEraHashes, stream.SourceNewEra),
+		tagHashMap(elcanoHashes, stream.SourceElcano),
+	)
 
 	// Load all subscriptions
 	subscriptions, err := s.subscriptionRepo.FindAll(ctx)
@@ -118,22 +112,18 @@ func (s *EPGSyncService) SyncChannels(ctx context.Context) error {
 			continue
 		}
 
-		// Match this EPG channel with Acestream hashes
 		matchedHashes, matchScore := s.matchChannelWithHashes(epgChannel, allHashes)
 
-		// Skip channels that fail automatic matching
 		if matchScore < fuzzyMatchThreshold {
 			s.logger.Debug("skipping epg channel, no automatic match", "channel", epgChannel.Name(), "epg_id", epgChannel.EPGID(), "score", matchScore)
 			continue
 		}
 
-		// Skip channels with no matched hashes
 		if len(matchedHashes) == 0 {
 			s.logger.Debug("skipping epg channel, matched but no hashes", "channel", epgChannel.Name(), "epg_id", epgChannel.EPGID())
 			continue
 		}
 
-		// Process this channel (create or update)
 		if err := s.processChannel(ctx, epgChannel, matchedHashes, existingChannelMap); err != nil {
 			// Log error but continue processing other channels
 			s.logger.Error("failed to process channel", "channel", epgChannel.Name(), "error", err)
@@ -159,17 +149,11 @@ func (s *EPGSyncService) SyncChannels(ctx context.Context) error {
 	return nil
 }
 
-// matchChannelWithHashes finds the best matching Acestream channel for an EPG channel.
-// It first tries a direct lookup by EPGID (both sources key by tvg-id which matches
-// EPG channel IDs). If no direct match, it falls back to fuzzy name matching.
-// Returns the matched hashes and the match score.
-func (s *EPGSyncService) matchChannelWithHashes(epgChannel epg.Channel, allHashes map[string][]string) ([]string, float64) {
-	// Direct match by EPG ID (most reliable — both sources key by tvg-id)
+func (s *EPGSyncService) matchChannelWithHashes(epgChannel epg.Channel, allHashes map[string][]taggedHash) ([]taggedHash, float64) {
 	if hashes, ok := allHashes[epgChannel.EPGID()]; ok {
 		return hashes, 1.0
 	}
 
-	// Fallback: fuzzy match by channel name
 	var bestMatch string
 	var bestScore float64
 
@@ -188,12 +172,10 @@ func (s *EPGSyncService) matchChannelWithHashes(epgChannel epg.Channel, allHashe
 	return allHashes[bestMatch], bestScore
 }
 
-// processChannel creates or updates a channel and its streams.
-// It merges new channels (doesn't overwrite existing) and updates streams if hashes changed.
 func (s *EPGSyncService) processChannel(
 	ctx context.Context,
 	epgChannel epg.Channel,
-	hashes []string,
+	hashes []taggedHash,
 	existingChannels map[string]channel.Channel,
 ) error {
 	channelName := epgChannel.Name()
@@ -232,49 +214,39 @@ func (s *EPGSyncService) processChannel(
 	return s.updateChannelStreams(ctx, channelName, hashes)
 }
 
-// updateChannelStreams creates or updates streams for a channel.
-// Creates multiple stream entries when multiple hashes exist for a channel.
-// Updates existing streams if hashes changed.
-func (s *EPGSyncService) updateChannelStreams(ctx context.Context, channelName string, hashes []string) error {
-	// Get existing streams for this channel
+func (s *EPGSyncService) updateChannelStreams(ctx context.Context, channelName string, hashes []taggedHash) error {
 	existingStreams, err := s.streamRepo.FindByChannelName(ctx, channelName)
 	if err != nil && !errors.Is(err, stream.ErrStreamNotFound) {
 		return fmt.Errorf("failed to load existing streams: %w", err)
 	}
 
-	// Build a set of existing stream hashes
 	existingHashSet := make(map[string]bool)
 	for _, s := range existingStreams {
 		existingHashSet[s.InfoHash()] = true
 	}
 
-	// Create new streams for hashes that don't exist
-	for _, hash := range hashes {
-		if existingHashSet[hash] {
-			// Stream already exists, no update needed
+	for _, th := range hashes {
+		if existingHashSet[th.hash] {
 			continue
 		}
 
-		// Create new stream
-		newStream, err := stream.NewStream(hash, channelName)
+		newStream, err := stream.NewStream(th.hash, channelName, th.source)
 		if err != nil {
-			s.logger.Error("failed to create stream", "channel", channelName, "hash", hash, "error", err)
+			s.logger.Error("failed to create stream", "channel", channelName, "hash", th.hash, "error", err)
 			continue
 		}
 
 		if err := s.streamRepo.Save(ctx, newStream); err != nil {
-			// If stream already exists, it's fine (may have been created by another process)
 			if !errors.Is(err, stream.ErrStreamAlreadyExists) {
-				s.logger.Error("failed to save stream", "channel", channelName, "hash", hash, "error", err)
+				s.logger.Error("failed to save stream", "channel", channelName, "hash", th.hash, "error", err)
 			}
 			continue
 		}
 	}
 
-	// Remove streams that are no longer in the hash list
 	hashSet := make(map[string]bool)
-	for _, hash := range hashes {
-		hashSet[hash] = true
+	for _, th := range hashes {
+		hashSet[th.hash] = true
 	}
 
 	for _, existingStream := range existingStreams {
@@ -288,24 +260,36 @@ func (s *EPGSyncService) updateChannelStreams(ctx context.Context, channelName s
 	return nil
 }
 
-// mergeHashMaps merges multiple hash maps into a single map.
-// If a channel appears in multiple sources, all hashes are combined.
-func mergeHashMaps(maps ...map[string][]string) map[string][]string {
-	result := make(map[string][]string)
+type taggedHash struct {
+	hash   string
+	source string
+}
+
+func tagHashMap(m map[string][]string, source string) map[string][]taggedHash {
+	result := make(map[string][]taggedHash, len(m))
+	for key, hashes := range m {
+		tagged := make([]taggedHash, len(hashes))
+		for i, h := range hashes {
+			tagged[i] = taggedHash{hash: h, source: source}
+		}
+		result[key] = tagged
+	}
+	return result
+}
+
+func mergeTaggedHashMaps(maps ...map[string][]taggedHash) map[string][]taggedHash {
+	result := make(map[string][]taggedHash)
 
 	for _, m := range maps {
 		for channelName, hashes := range m {
-			// Append hashes, avoiding duplicates
-			existingHashes := result[channelName]
-			hashSet := make(map[string]bool)
-			for _, h := range existingHashes {
-				hashSet[h] = true
+			existing := make(map[string]bool)
+			for _, th := range result[channelName] {
+				existing[th.hash] = true
 			}
-
-			for _, h := range hashes {
-				if !hashSet[h] {
-					result[channelName] = append(result[channelName], h)
-					hashSet[h] = true
+			for _, th := range hashes {
+				if !existing[th.hash] {
+					result[channelName] = append(result[channelName], th)
+					existing[th.hash] = true
 				}
 			}
 		}

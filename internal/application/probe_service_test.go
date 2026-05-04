@@ -70,8 +70,8 @@ func newTestProbeService(probeRepo driven.ProbeRepository, streamRepo driven.Str
 
 func TestProbeService_ProbeAllStreams(t *testing.T) {
 	t.Run("probes all streams sequentially", func(t *testing.T) {
-		s1, _ := stream.NewStream("hash1", "Channel1")
-		s2, _ := stream.NewStream("hash2", "Channel2")
+		s1, _ := stream.NewStream("hash1", "Channel1", "")
+		s2, _ := stream.NewStream("hash2", "Channel2", "")
 
 		var probeOrder []string
 		var savedResults []probe.Result
@@ -123,8 +123,8 @@ func TestProbeService_ProbeAllStreams(t *testing.T) {
 	})
 
 	t.Run("continues on engine failure", func(t *testing.T) {
-		s1, _ := stream.NewStream("hash1", "Channel1")
-		s2, _ := stream.NewStream("hash2", "Channel2")
+		s1, _ := stream.NewStream("hash1", "Channel1", "")
+		s2, _ := stream.NewStream("hash2", "Channel2", "")
 
 		var savedResults []probe.Result
 
@@ -172,8 +172,8 @@ func TestProbeService_ProbeAllStreams(t *testing.T) {
 	})
 
 	t.Run("stops on context cancellation", func(t *testing.T) {
-		s1, _ := stream.NewStream("hash1", "Channel1")
-		s2, _ := stream.NewStream("hash2", "Channel2")
+		s1, _ := stream.NewStream("hash1", "Channel1", "")
+		s2, _ := stream.NewStream("hash2", "Channel2", "")
 
 		streamRepo := &mockStreamRepository{
 			findAllFunc: func(ctx context.Context) ([]stream.Stream, error) {
@@ -286,8 +286,8 @@ func TestProbeService_ZombieDetection(t *testing.T) {
 }
 
 func TestProbeService_SkipsActiveStreams(t *testing.T) {
-	s1, _ := stream.NewStream("active-hash", "Channel1")
-	s2, _ := stream.NewStream("inactive-hash", "Channel2")
+	s1, _ := stream.NewStream("active-hash", "Channel1", "")
+	s2, _ := stream.NewStream("inactive-hash", "Channel2", "")
 
 	var probedHashes []string
 
@@ -332,7 +332,7 @@ func TestProbeService_CircuitBreaker(t *testing.T) {
 	t.Run("trips after consecutive engine failures", func(t *testing.T) {
 		streams := make([]stream.Stream, 10)
 		for i := range streams {
-			s, _ := stream.NewStream("hash"+string(rune('a'+i)), "Channel")
+			s, _ := stream.NewStream("hash"+string(rune('a'+i)), "Channel", "")
 			streams[i] = s
 		}
 
@@ -362,7 +362,7 @@ func TestProbeService_CircuitBreaker(t *testing.T) {
 	t.Run("resets counter on successful probe", func(t *testing.T) {
 		streams := make([]stream.Stream, 7)
 		for i := range streams {
-			s, _ := stream.NewStream("hash"+string(rune('a'+i)), "Channel")
+			s, _ := stream.NewStream("hash"+string(rune('a'+i)), "Channel", "")
 			streams[i] = s
 		}
 
@@ -399,9 +399,9 @@ func TestProbeService_CircuitBreaker(t *testing.T) {
 }
 
 func TestProbeService_Throttle(t *testing.T) {
-	s1, _ := stream.NewStream("hash1", "Channel1")
-	s2, _ := stream.NewStream("hash2", "Channel2")
-	s3, _ := stream.NewStream("hash3", "Channel3")
+	s1, _ := stream.NewStream("hash1", "Channel1", "")
+	s2, _ := stream.NewStream("hash2", "Channel2", "")
+	s3, _ := stream.NewStream("hash3", "Channel3", "")
 
 	var timestamps []time.Time
 
@@ -488,8 +488,8 @@ func TestProbeService_GetMetrics_NoData(t *testing.T) {
 func TestProbeService_GetQualityScores(t *testing.T) {
 	now := time.Now()
 
-	s1, _ := stream.NewStream("hash1", "Channel1")
-	s2, _ := stream.NewStream("hash2", "Channel1")
+	s1, _ := stream.NewStream("hash1", "Channel1", "")
+	s2, _ := stream.NewStream("hash2", "Channel1", "")
 
 	streamRepo := &mockStreamRepository{
 		findByChannelNameFunc: func(ctx context.Context, channelName string) ([]stream.Stream, error) {

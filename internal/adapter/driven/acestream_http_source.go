@@ -11,16 +11,10 @@ import (
 	"time"
 
 	"github.com/alorle/iptv-manager/internal/port/driven"
+	"github.com/alorle/iptv-manager/internal/stream"
 )
 
-const (
-	// Source identifiers
-	SourceNewEra = "new-era"
-	SourceElcano = "elcano"
-
-	// HTTP client timeout for fetching hash lists
-	defaultFetchTimeout = 30 * time.Second
-)
+const defaultFetchTimeout = 30 * time.Second
 
 // AcestreamHTTPSource implements the AcestreamSource port by fetching hash lists
 // from HTTP endpoints (NEW ERA and Elcano.top).
@@ -36,8 +30,8 @@ func NewAcestreamHTTPSource(newEraURL, elcanoURL string) *AcestreamHTTPSource {
 			Timeout: defaultFetchTimeout,
 		},
 		sourceURLs: map[string]string{
-			SourceNewEra: newEraURL,
-			SourceElcano: elcanoURL,
+			stream.SourceNewEra: newEraURL,
+			stream.SourceElcano: elcanoURL,
 		},
 	}
 }
@@ -66,9 +60,9 @@ func (s *AcestreamHTTPSource) FetchHashes(ctx context.Context, source string) (m
 	}
 
 	switch source {
-	case SourceNewEra:
+	case stream.SourceNewEra:
 		return s.parseNewEra(resp.Body)
-	case SourceElcano:
+	case stream.SourceElcano:
 		return s.parseElcano(resp.Body)
 	default:
 		return nil, fmt.Errorf("no parser for source: %s", source)

@@ -115,7 +115,7 @@ func TestStreamService_CreateStream(t *testing.T) {
 
 func TestStreamService_GetStream(t *testing.T) {
 	t.Run("gets stream successfully", func(t *testing.T) {
-		expectedStream, _ := stream.NewStream("abc123", "TestChannel")
+		expectedStream, _ := stream.NewStream("abc123", "TestChannel", "")
 		streamRepo := &mockStreamRepository{
 			findByInfoHashFunc: func(ctx context.Context, infoHash string) (stream.Stream, error) {
 				if infoHash != "abc123" {
@@ -157,8 +157,8 @@ func TestStreamService_GetStream(t *testing.T) {
 
 func TestStreamService_ListStreams(t *testing.T) {
 	t.Run("lists all streams successfully", func(t *testing.T) {
-		st1, _ := stream.NewStream("abc123", "Channel1")
-		st2, _ := stream.NewStream("def456", "Channel2")
+		st1, _ := stream.NewStream("abc123", "Channel1", "")
+		st2, _ := stream.NewStream("def456", "Channel2", "")
 		expectedStreams := []stream.Stream{st1, st2}
 
 		streamRepo := &mockStreamRepository{

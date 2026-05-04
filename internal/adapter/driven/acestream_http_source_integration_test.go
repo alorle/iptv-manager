@@ -8,6 +8,8 @@ import (
 	"path/filepath"
 	"testing"
 	"time"
+
+	"github.com/alorle/iptv-manager/internal/stream"
 )
 
 const dummyURL = "http://localhost:0/unused"
@@ -36,7 +38,7 @@ func TestAcestreamHTTPSource_FetchHashes_Integration(t *testing.T) {
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
 
-		hashes, err := source.FetchHashes(ctx, SourceNewEra)
+		hashes, err := source.FetchHashes(ctx, stream.SourceNewEra)
 		if err != nil {
 			t.Fatalf("failed to fetch NEW ERA hashes from fixture: %v", err)
 		}
@@ -101,7 +103,7 @@ func TestAcestreamHTTPSource_FetchHashes_Integration(t *testing.T) {
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
 
-		hashes, err := source.FetchHashes(ctx, SourceElcano)
+		hashes, err := source.FetchHashes(ctx, stream.SourceElcano)
 		if err != nil {
 			t.Fatalf("failed to fetch Elcano hashes from fixture: %v", err)
 		}
@@ -161,7 +163,7 @@ func TestAcestreamHTTPSource_FetchHashes_Integration(t *testing.T) {
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
 
-		_, err := source.FetchHashes(ctx, SourceNewEra)
+		_, err := source.FetchHashes(ctx, stream.SourceNewEra)
 		if err == nil {
 			t.Fatal("expected error for HTTP 404, got nil")
 		}
@@ -182,7 +184,7 @@ func TestAcestreamHTTPSource_FetchHashes_Integration(t *testing.T) {
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
 
-		_, err := source.FetchHashes(ctx, SourceElcano)
+		_, err := source.FetchHashes(ctx, stream.SourceElcano)
 		if err == nil {
 			t.Fatal("expected error for malformed JSON, got nil")
 		}
@@ -202,7 +204,7 @@ func TestAcestreamHTTPSource_FetchHashes_Integration(t *testing.T) {
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Millisecond)
 		defer cancel()
 
-		_, err := source.FetchHashes(ctx, SourceNewEra)
+		_, err := source.FetchHashes(ctx, stream.SourceNewEra)
 		if err == nil {
 			t.Fatal("expected timeout error, got nil")
 		}
@@ -222,7 +224,7 @@ func TestAcestreamHTTPSource_FetchHashes_Integration(t *testing.T) {
 		ctx, cancel := context.WithCancel(context.Background())
 		cancel()
 
-		_, err := source.FetchHashes(ctx, SourceElcano)
+		_, err := source.FetchHashes(ctx, stream.SourceElcano)
 		if err == nil {
 			t.Fatal("expected cancellation error, got nil")
 		}
@@ -258,7 +260,7 @@ func TestAcestreamHTTPSource_FetchHashes_Integration(t *testing.T) {
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
 
-		hashes, err := source.FetchHashes(ctx, SourceNewEra)
+		hashes, err := source.FetchHashes(ctx, stream.SourceNewEra)
 		if err != nil {
 			t.Fatalf("failed to fetch NEW ERA hashes: %v", err)
 		}
@@ -283,7 +285,7 @@ func TestAcestreamHTTPSource_FetchHashes_Integration(t *testing.T) {
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
 
-		hashes, err := source.FetchHashes(ctx, SourceElcano)
+		hashes, err := source.FetchHashes(ctx, stream.SourceElcano)
 		if err != nil {
 			t.Fatalf("failed to fetch Elcano hashes: %v", err)
 		}

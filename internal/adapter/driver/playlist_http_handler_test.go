@@ -15,8 +15,8 @@ import (
 
 func TestPlaylistHTTPHandler_ServeHTTP(t *testing.T) {
 	t.Run("GET /playlist.m3u returns M3U playlist with streams", func(t *testing.T) {
-		st1, _ := stream.NewStream("abc123", "Channel1")
-		st2, _ := stream.NewStream("def456", "Channel2")
+		st1, _ := stream.NewStream("abc123", "Channel1", "")
+		st2, _ := stream.NewStream("def456", "Channel2", "")
 		streamRepo := &mockStreamRepository{
 			findAllFunc: func(ctx context.Context) ([]stream.Stream, error) {
 				return []stream.Stream{st1, st2}, nil
@@ -110,7 +110,7 @@ func TestPlaylistHTTPHandler_ServeHTTP(t *testing.T) {
 	})
 
 	t.Run("GET /playlist.m3u uses request Host header in URLs", func(t *testing.T) {
-		st1, _ := stream.NewStream("xyz789", "TestChannel")
+		st1, _ := stream.NewStream("xyz789", "TestChannel", "")
 		streamRepo := &mockStreamRepository{
 			findAllFunc: func(ctx context.Context) ([]stream.Stream, error) {
 				return []stream.Stream{st1}, nil

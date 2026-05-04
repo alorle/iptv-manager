@@ -36,7 +36,7 @@ func (s *StreamService) CreateStream(ctx context.Context, infoHash, channelName 
 	}
 
 	// Create the stream entity
-	st, err := stream.NewStream(infoHash, channelName)
+	st, err := stream.NewStream(infoHash, channelName, stream.SourceManual)
 	if err != nil {
 		return stream.Stream{}, err
 	}

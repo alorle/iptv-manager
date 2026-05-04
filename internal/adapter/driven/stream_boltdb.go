@@ -38,10 +38,10 @@ func NewStreamBoltDBRepository(db *bbolt.DB) (*StreamBoltDBRepository, error) {
 	return &StreamBoltDBRepository{db: db}, nil
 }
 
-// streamDTO is used for JSON serialization.
 type streamDTO struct {
 	InfoHash    string `json:"infohash"`
 	ChannelName string `json:"channel_name"`
+	Source      string `json:"source,omitempty"`
 }
 
 // Save persists a stream to BoltDB.
@@ -64,10 +64,10 @@ func (r *StreamBoltDBRepository) Save(ctx context.Context, s stream.Stream) erro
 			return stream.ErrStreamAlreadyExists
 		}
 
-		// Serialize stream
 		dto := streamDTO{
 			InfoHash:    s.InfoHash(),
 			ChannelName: s.ChannelName(),
+			Source:      s.Source(),
 		}
 		data, err := json.Marshal(dto)
 		if err != nil {
@@ -103,8 +103,7 @@ func (r *StreamBoltDBRepository) FindByInfoHash(ctx context.Context, infoHash st
 			return err
 		}
 
-		// Reconstruct domain entity
-		reconstructed, err := stream.NewStream(dto.InfoHash, dto.ChannelName)
+		reconstructed, err := stream.NewStream(dto.InfoHash, dto.ChannelName, dto.Source)
 		if err != nil {
 			return err
 		}
@@ -137,7 +136,7 @@ func (r *StreamBoltDBRepository) FindAll(ctx context.Context) ([]stream.Stream, 
 				return err
 			}
 
-			s, err := stream.NewStream(dto.InfoHash, dto.ChannelName)
+			s, err := stream.NewStream(dto.InfoHash, dto.ChannelName, dto.Source)
 			if err != nil {
 				return err
 			}
@@ -180,12 +179,11 @@ func (r *StreamBoltDBRepository) FindByChannelName(ctx context.Context, channelN
 				return err
 			}
 
-			// Filter by channel name
 			if dto.ChannelName != channelName {
 				return nil
 			}
 
-			s, err := stream.NewStream(dto.InfoHash, dto.ChannelName)
+			s, err := stream.NewStream(dto.InfoHash, dto.ChannelName, dto.Source)
 			if err != nil {
 				return err
 			}

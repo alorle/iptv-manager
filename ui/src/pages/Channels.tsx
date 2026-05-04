@@ -25,6 +25,7 @@ import { Trash2, Plus, Activity, Loader2, AlertTriangle } from "lucide-react";
 interface Stream {
   info_hash: string;
   channel_name: string;
+  source: string;
 }
 
 interface ProbeResult {
@@ -616,9 +617,29 @@ export default function Channels() {
                       className="flex items-center justify-between p-3 border rounded-lg hover:bg-gray-50"
                     >
                       <div className="flex-1 min-w-0">
-                        <p className="text-sm font-medium text-gray-900 truncate font-mono">
-                          {stream.info_hash}
-                        </p>
+                        <div className="flex items-center gap-2">
+                          <p className="text-sm font-medium text-gray-900 truncate font-mono">
+                            {stream.info_hash}
+                          </p>
+                          {stream.source && (
+                            <Badge
+                              variant="outline"
+                              className={`text-xs shrink-0 ${
+                                stream.source === "new-era"
+                                  ? "border-blue-300 text-blue-700 bg-blue-50"
+                                  : stream.source === "elcano"
+                                    ? "border-amber-300 text-amber-700 bg-amber-50"
+                                    : "border-gray-300 text-gray-600"
+                              }`}
+                            >
+                              {stream.source === "new-era"
+                                ? "NEW ERA"
+                                : stream.source === "elcano"
+                                  ? "ELCANO"
+                                  : stream.source}
+                            </Badge>
+                          )}
+                        </div>
                       </div>
                       <div className="flex items-center gap-1 ml-2">
                         <Button

@@ -11,12 +11,14 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import { Trash2 } from "lucide-react";
 
 interface Stream {
   info_hash: string;
   channel_name: string;
+  source: string;
 }
 
 interface Channel {
@@ -191,6 +193,9 @@ export default function Streams() {
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                 Channel Name
               </th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                Source
+              </th>
               <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
                 Actions
               </th>
@@ -204,6 +209,28 @@ export default function Streams() {
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                   {stream.channel_name}
+                </td>
+                <td className="px-6 py-4 whitespace-nowrap text-sm">
+                  {stream.source ? (
+                    <Badge
+                      variant="outline"
+                      className={`text-xs ${
+                        stream.source === "new-era"
+                          ? "border-blue-300 text-blue-700 bg-blue-50"
+                          : stream.source === "elcano"
+                            ? "border-amber-300 text-amber-700 bg-amber-50"
+                            : "border-gray-300 text-gray-600"
+                      }`}
+                    >
+                      {stream.source === "new-era"
+                        ? "NEW ERA"
+                        : stream.source === "elcano"
+                          ? "ELCANO"
+                          : stream.source}
+                    </Badge>
+                  ) : (
+                    <span className="text-gray-400">—</span>
+                  )}
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                   <Button

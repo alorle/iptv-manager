@@ -206,8 +206,8 @@ func TestStreamHTTPHandler_Create(t *testing.T) {
 
 func TestStreamHTTPHandler_List(t *testing.T) {
 	t.Run("GET /streams returns all streams", func(t *testing.T) {
-		st1, _ := stream.NewStream("abc123", "Channel1")
-		st2, _ := stream.NewStream("def456", "Channel2")
+		st1, _ := stream.NewStream("abc123", "Channel1", "")
+		st2, _ := stream.NewStream("def456", "Channel2", "")
 		channelRepo := &mockChannelRepository{}
 		streamRepo := &mockStreamRepository{
 			findAllFunc: func(ctx context.Context) ([]stream.Stream, error) {
@@ -269,7 +269,7 @@ func TestStreamHTTPHandler_List(t *testing.T) {
 
 func TestStreamHTTPHandler_Get(t *testing.T) {
 	t.Run("GET /streams/{infoHash} returns stream", func(t *testing.T) {
-		st, _ := stream.NewStream("abc123", "TestChannel")
+		st, _ := stream.NewStream("abc123", "TestChannel", "")
 		channelRepo := &mockChannelRepository{}
 		streamRepo := &mockStreamRepository{
 			findByInfoHashFunc: func(ctx context.Context, infoHash string) (stream.Stream, error) {

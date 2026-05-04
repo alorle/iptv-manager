@@ -14,8 +14,8 @@ import (
 
 func TestPlaylistService_GenerateM3U(t *testing.T) {
 	t.Run("generates M3U playlist with streams successfully", func(t *testing.T) {
-		st1, _ := stream.NewStream("abc123", "Channel1")
-		st2, _ := stream.NewStream("def456", "Channel2")
+		st1, _ := stream.NewStream("abc123", "Channel1", "")
+		st2, _ := stream.NewStream("def456", "Channel2", "")
 		expectedStreams := []stream.Stream{st1, st2}
 
 		streamRepo := &mockStreamRepository{
@@ -87,7 +87,7 @@ func TestPlaylistService_GenerateM3U(t *testing.T) {
 	})
 
 	t.Run("uses correct host in stream URLs", func(t *testing.T) {
-		st1, _ := stream.NewStream("xyz789", "TestChannel")
+		st1, _ := stream.NewStream("xyz789", "TestChannel", "")
 		expectedStreams := []stream.Stream{st1}
 
 		streamRepo := &mockStreamRepository{
@@ -110,8 +110,8 @@ func TestPlaylistService_GenerateM3U(t *testing.T) {
 
 	t.Run("sorts streams by quality score within channel group", func(t *testing.T) {
 		now := time.Now()
-		good, _ := stream.NewStream("hash_good", "SameChannel")
-		poor, _ := stream.NewStream("hash_poor", "SameChannel")
+		good, _ := stream.NewStream("hash_good", "SameChannel", "")
+		poor, _ := stream.NewStream("hash_poor", "SameChannel", "")
 		streamRepo := &mockStreamRepository{
 			findAllFunc: func(ctx context.Context) ([]stream.Stream, error) {
 				return []stream.Stream{poor, good}, nil
@@ -150,8 +150,8 @@ func TestPlaylistService_GenerateM3U(t *testing.T) {
 
 	t.Run("streams without probe data sort after scored streams", func(t *testing.T) {
 		now := time.Now()
-		scored, _ := stream.NewStream("hash_scored", "Chan")
-		unscored, _ := stream.NewStream("hash_unscored", "Chan")
+		scored, _ := stream.NewStream("hash_scored", "Chan", "")
+		unscored, _ := stream.NewStream("hash_unscored", "Chan", "")
 		streamRepo := &mockStreamRepository{
 			findAllFunc: func(ctx context.Context) ([]stream.Stream, error) {
 				return []stream.Stream{unscored, scored}, nil
@@ -185,8 +185,8 @@ func TestPlaylistService_GenerateM3U(t *testing.T) {
 	})
 
 	t.Run("degrades to infohash sort when no probe data exists", func(t *testing.T) {
-		s1, _ := stream.NewStream("zzz999", "Chan")
-		s2, _ := stream.NewStream("aaa111", "Chan")
+		s1, _ := stream.NewStream("zzz999", "Chan", "")
+		s2, _ := stream.NewStream("aaa111", "Chan", "")
 		streamRepo := &mockStreamRepository{
 			findAllFunc: func(ctx context.Context) ([]stream.Stream, error) {
 				return []stream.Stream{s1, s2}, nil
@@ -207,7 +207,7 @@ func TestPlaylistService_GenerateM3U(t *testing.T) {
 	})
 
 	t.Run("probeRepo error degrades gracefully", func(t *testing.T) {
-		s1, _ := stream.NewStream("abc123", "Channel1")
+		s1, _ := stream.NewStream("abc123", "Channel1", "")
 		streamRepo := &mockStreamRepository{
 			findAllFunc: func(ctx context.Context) ([]stream.Stream, error) {
 				return []stream.Stream{s1}, nil
@@ -231,8 +231,8 @@ func TestPlaylistService_GenerateM3U(t *testing.T) {
 	})
 
 	t.Run("uses EPG ID from channel mapping as tvg-id", func(t *testing.T) {
-		st1, _ := stream.NewStream("abc123", "La 1")
-		st2, _ := stream.NewStream("def456", "Antena 3")
+		st1, _ := stream.NewStream("abc123", "La 1", "")
+		st2, _ := stream.NewStream("def456", "Antena 3", "")
 		streamRepo := &mockStreamRepository{
 			findAllFunc: func(ctx context.Context) ([]stream.Stream, error) {
 				return []stream.Stream{st1, st2}, nil
@@ -268,7 +268,7 @@ func TestPlaylistService_GenerateM3U(t *testing.T) {
 	})
 
 	t.Run("falls back to channel name when no EPG mapping exists", func(t *testing.T) {
-		st1, _ := stream.NewStream("abc123", "NoEPG Channel")
+		st1, _ := stream.NewStream("abc123", "NoEPG Channel", "")
 		streamRepo := &mockStreamRepository{
 			findAllFunc: func(ctx context.Context) ([]stream.Stream, error) {
 				return []stream.Stream{st1}, nil
@@ -294,7 +294,7 @@ func TestPlaylistService_GenerateM3U(t *testing.T) {
 	})
 
 	t.Run("channelRepo error degrades gracefully using channel names", func(t *testing.T) {
-		st1, _ := stream.NewStream("abc123", "Channel1")
+		st1, _ := stream.NewStream("abc123", "Channel1", "")
 		streamRepo := &mockStreamRepository{
 			findAllFunc: func(ctx context.Context) ([]stream.Stream, error) {
 				return []stream.Stream{st1}, nil

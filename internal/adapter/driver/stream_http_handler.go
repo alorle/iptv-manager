@@ -21,16 +21,15 @@ func NewStreamHTTPHandler(service *application.StreamService) *StreamHTTPHandler
 	return &StreamHTTPHandler{service: service}
 }
 
-// streamRequest represents the JSON body for creating a stream.
 type streamRequest struct {
 	InfoHash    string `json:"info_hash"`
 	ChannelName string `json:"channel_name"`
 }
 
-// streamResponse represents a stream in JSON format.
 type streamResponse struct {
 	InfoHash    string `json:"info_hash"`
 	ChannelName string `json:"channel_name"`
+	Source      string `json:"source"`
 }
 
 // ServeHTTP routes the request to the appropriate handler based on method and path.
@@ -95,6 +94,7 @@ func (h *StreamHTTPHandler) handleCreate(w http.ResponseWriter, r *http.Request)
 	writeJSON(w, http.StatusCreated, streamResponse{
 		InfoHash:    st.InfoHash(),
 		ChannelName: st.ChannelName(),
+		Source:      st.Source(),
 	})
 }
 
@@ -111,6 +111,7 @@ func (h *StreamHTTPHandler) handleList(w http.ResponseWriter, r *http.Request) {
 		response[i] = streamResponse{
 			InfoHash:    st.InfoHash(),
 			ChannelName: st.ChannelName(),
+			Source:      st.Source(),
 		}
 	}
 
@@ -132,6 +133,7 @@ func (h *StreamHTTPHandler) handleGet(w http.ResponseWriter, r *http.Request, in
 	writeJSON(w, http.StatusOK, streamResponse{
 		InfoHash:    st.InfoHash(),
 		ChannelName: st.ChannelName(),
+		Source:      st.Source(),
 	})
 }
 

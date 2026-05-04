@@ -197,8 +197,8 @@ func TestProbeHTTPHandler_Metrics(t *testing.T) {
 func TestProbeHTTPHandler_Quality(t *testing.T) {
 	t.Run("GET /quality/{channelName} returns sorted scores", func(t *testing.T) {
 		now := time.Now()
-		s1, _ := stream.NewStream("hash1", "Channel1")
-		s2, _ := stream.NewStream("hash2", "Channel1")
+		s1, _ := stream.NewStream("hash1", "Channel1", "")
+		s2, _ := stream.NewStream("hash2", "Channel1", "")
 
 		streamRepo := &mockStreamRepository{
 			findByChannelNameFunc: func(ctx context.Context, channelName string) ([]stream.Stream, error) {

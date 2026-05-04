@@ -56,7 +56,7 @@ func TestStreamBoltDBRepository_Save(t *testing.T) {
 			t.Fatalf("failed to create repository: %v", err)
 		}
 
-		s, err := stream.NewStream("abc123", "HBO")
+		s, err := stream.NewStream("abc123", "HBO", "")
 		if err != nil {
 			t.Fatalf("failed to create stream: %v", err)
 		}
@@ -89,7 +89,7 @@ func TestStreamBoltDBRepository_Save(t *testing.T) {
 			t.Fatalf("failed to create repository: %v", err)
 		}
 
-		s, err := stream.NewStream("def456", "ESPN")
+		s, err := stream.NewStream("def456", "ESPN", "")
 		if err != nil {
 			t.Fatalf("failed to create stream: %v", err)
 		}
@@ -118,7 +118,7 @@ func TestStreamBoltDBRepository_Save(t *testing.T) {
 			t.Fatalf("failed to create repository: %v", err)
 		}
 
-		s, err := stream.NewStream("ghi789", "CNN")
+		s, err := stream.NewStream("ghi789", "CNN", "")
 		if err != nil {
 			t.Fatalf("failed to create stream: %v", err)
 		}
@@ -143,7 +143,7 @@ func TestStreamBoltDBRepository_FindByInfoHash(t *testing.T) {
 			t.Fatalf("failed to create repository: %v", err)
 		}
 
-		s, err := stream.NewStream("jkl012", "Discovery")
+		s, err := stream.NewStream("jkl012", "Discovery", "")
 		if err != nil {
 			t.Fatalf("failed to create stream: %v", err)
 		}
@@ -247,7 +247,7 @@ func TestStreamBoltDBRepository_FindAll(t *testing.T) {
 		}
 
 		for _, ts := range testStreams {
-			s, err := stream.NewStream(ts.infoHash, ts.channelName)
+			s, err := stream.NewStream(ts.infoHash, ts.channelName, "")
 			if err != nil {
 				t.Fatalf("failed to create stream %q: %v", ts.infoHash, err)
 			}
@@ -345,7 +345,7 @@ func TestStreamBoltDBRepository_FindByChannelName(t *testing.T) {
 		}
 
 		for _, ts := range testStreams {
-			s, err := stream.NewStream(ts.infoHash, ts.channelName)
+			s, err := stream.NewStream(ts.infoHash, ts.channelName, "")
 			if err != nil {
 				t.Fatalf("failed to create stream %q: %v", ts.infoHash, err)
 			}
@@ -411,7 +411,7 @@ func TestStreamBoltDBRepository_Delete(t *testing.T) {
 			t.Fatalf("failed to create repository: %v", err)
 		}
 
-		s, err := stream.NewStream("mno345", "NatGeo")
+		s, err := stream.NewStream("mno345", "NatGeo", "")
 		if err != nil {
 			t.Fatalf("failed to create stream: %v", err)
 		}
@@ -494,7 +494,7 @@ func TestStreamBoltDBRepository_DeleteByChannelName(t *testing.T) {
 		}
 
 		for _, ts := range testStreams {
-			s, err := stream.NewStream(ts.infoHash, ts.channelName)
+			s, err := stream.NewStream(ts.infoHash, ts.channelName, "")
 			if err != nil {
 				t.Fatalf("failed to create stream %q: %v", ts.infoHash, err)
 			}
@@ -585,7 +585,7 @@ func TestStreamBoltDBRepository_Integration(t *testing.T) {
 		ctx := context.Background()
 
 		// Create and save
-		s, err := stream.NewStream("integration123", "BBC One")
+		s, err := stream.NewStream("integration123", "BBC One", "")
 		if err != nil {
 			t.Fatalf("failed to create stream: %v", err)
 		}
@@ -655,7 +655,7 @@ func TestStreamBoltDBRepository_Integration(t *testing.T) {
 		// Create multiple streams for the same channel
 		channelName := "Sky Sports"
 		for i := 1; i <= 3; i++ {
-			s, err := stream.NewStream("skyhash"+string(rune('0'+i)), channelName)
+			s, err := stream.NewStream("skyhash"+string(rune('0'+i)), channelName, "")
 			if err != nil {
 				t.Fatalf("failed to create stream: %v", err)
 			}
@@ -666,7 +666,7 @@ func TestStreamBoltDBRepository_Integration(t *testing.T) {
 		}
 
 		// Create streams for another channel
-		s, err := stream.NewStream("otherhash", "Other Channel")
+		s, err := stream.NewStream("otherhash", "Other Channel", "")
 		if err != nil {
 			t.Fatalf("failed to create stream: %v", err)
 		}
