@@ -30,6 +30,8 @@ type config struct {
 	ProbeWindow                 time.Duration
 	ProbeDelay                  time.Duration
 	ProbeMaxConsecutiveFailures int
+	AcestreamSourceNewEraURL    string
+	AcestreamSourceElcanoURL    string
 }
 
 func loadConfig() config {
@@ -109,6 +111,16 @@ func loadConfig() config {
 		}
 	}
 
+	acestreamSourceNewEraURL := os.Getenv("ACESTREAM_SOURCE_NEW_ERA_URL")
+	if acestreamSourceNewEraURL == "" {
+		acestreamSourceNewEraURL = "https://ipfs.io/ipns/k2k4r8lm8tkmuxbc8lkmq1in3v0oya1p6pe9o5bu0hu30br5ko08k2gb/data/listas/lista_fuera_iptv.m3u"
+	}
+
+	acestreamSourceElcanoURL := os.Getenv("ACESTREAM_SOURCE_ELCANO_URL")
+	if acestreamSourceElcanoURL == "" {
+		acestreamSourceElcanoURL = "https://ipfs.io/ipns/k51qzi5uqu5di462t7j4vu4akwfhvtjhy88qbupktvoacqfqe9uforjvhyi4wr/hashes.json"
+	}
+
 	return config{
 		Port:                        port,
 		AceStreamEngineURL:          aceStreamURL,
@@ -121,6 +133,8 @@ func loadConfig() config {
 		ProbeWindow:                 probeWindow,
 		ProbeDelay:                  probeDelay,
 		ProbeMaxConsecutiveFailures: probeMaxConsecFailures,
+		AcestreamSourceNewEraURL:    acestreamSourceNewEraURL,
+		AcestreamSourceElcanoURL:    acestreamSourceElcanoURL,
 	}
 }
 
@@ -178,7 +192,7 @@ func main() {
 
 	epgFetcher := driven.NewEPGXMLFetcher(cfg.EPGURL, &http.Client{Timeout: 30 * time.Second})
 
-	acestreamSource := driven.NewAcestreamHTTPSource()
+	acestreamSource := driven.NewAcestreamHTTPSource(cfg.AcestreamSourceNewEraURL, cfg.AcestreamSourceElcanoURL)
 
 	// Create application services
 	channelService := application.NewChannelService(channelRepo, streamRepo)

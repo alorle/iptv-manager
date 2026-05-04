@@ -22,23 +22,22 @@ const (
 	defaultFetchTimeout = 30 * time.Second
 )
 
-// Source URLs for Acestream hash lists
-var sourceURLs = map[string]string{
-	SourceNewEra: "https://ipfs.io/ipns/k2k4r8oqlcjxsritt5mczkcn4mmvcmymbqw7113fz2flkrerfwfps004/data/listas/lista_fuera_iptv.m3u",
-	SourceElcano: "https://ipfs.io/ipns/k51qzi5uqu5di462t7j4vu4akwfhvtjhy88qbupktvoacqfqe9uforjvhyi4wr/hashes.json",
-}
-
 // AcestreamHTTPSource implements the AcestreamSource port by fetching hash lists
 // from HTTP endpoints (NEW ERA and Elcano.top).
 type AcestreamHTTPSource struct {
 	httpClient *http.Client
+	sourceURLs map[string]string
 }
 
 // NewAcestreamHTTPSource creates a new HTTP-based Acestream source adapter.
-func NewAcestreamHTTPSource() *AcestreamHTTPSource {
+func NewAcestreamHTTPSource(newEraURL, elcanoURL string) *AcestreamHTTPSource {
 	return &AcestreamHTTPSource{
 		httpClient: &http.Client{
 			Timeout: defaultFetchTimeout,
+		},
+		sourceURLs: map[string]string{
+			SourceNewEra: newEraURL,
+			SourceElcano: elcanoURL,
 		},
 	}
 }
@@ -46,7 +45,7 @@ func NewAcestreamHTTPSource() *AcestreamHTTPSource {
 // FetchHashes retrieves Acestream hashes from the specified source.
 // Supported sources: "new-era", "elcano".
 func (s *AcestreamHTTPSource) FetchHashes(ctx context.Context, source string) (map[string][]string, error) {
-	url, ok := sourceURLs[source]
+	url, ok := s.sourceURLs[source]
 	if !ok {
 		return nil, fmt.Errorf("unknown source: %s", source)
 	}

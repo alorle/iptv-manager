@@ -10,20 +10,20 @@ import (
 	"time"
 )
 
+const dummyURL = "http://localhost:0/unused"
+
 func TestAcestreamHTTPSource_FetchHashes_Integration(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skipping integration test in short mode")
 	}
 
 	t.Run("parse NEW ERA M3U fixture file", func(t *testing.T) {
-		// Load fixture file
 		fixturePath := filepath.Join("testdata", "acestream_newera.txt")
 		fixtureData, err := os.ReadFile(fixturePath)
 		if err != nil {
 			t.Fatalf("failed to read NEW ERA fixture file: %v", err)
 		}
 
-		// Create test HTTP server serving the fixture
 		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			w.Header().Set("Content-Type", "audio/x-mpegurl")
 			w.WriteHeader(http.StatusOK)
@@ -31,13 +31,7 @@ func TestAcestreamHTTPSource_FetchHashes_Integration(t *testing.T) {
 		}))
 		defer server.Close()
 
-		// Temporarily override source URL for testing
-		originalURL := sourceURLs[SourceNewEra]
-		sourceURLs[SourceNewEra] = server.URL
-		defer func() { sourceURLs[SourceNewEra] = originalURL }()
-
-		// Create source and fetch hashes
-		source := NewAcestreamHTTPSource()
+		source := NewAcestreamHTTPSource(server.URL, dummyURL)
 
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
@@ -54,7 +48,6 @@ func TestAcestreamHTTPSource_FetchHashes_Integration(t *testing.T) {
 			t.Errorf("expected %d channels, got %d: %v", expectedChannels, len(hashes), hashes)
 		}
 
-		// Verify HBO HD channel (keyed by tvg-id, not display name)
 		hboHashes, ok := hashes["HBO HD"]
 		if !ok {
 			t.Fatal("expected 'HBO HD' channel in results")
@@ -66,7 +59,6 @@ func TestAcestreamHTTPSource_FetchHashes_Integration(t *testing.T) {
 			t.Errorf("unexpected HBO hash: %q", hboHashes[0])
 		}
 
-		// Verify ESPN HD channel
 		espnHashes, ok := hashes["ESPN HD"]
 		if !ok {
 			t.Fatal("expected 'ESPN HD' channel in results")
@@ -75,7 +67,6 @@ func TestAcestreamHTTPSource_FetchHashes_Integration(t *testing.T) {
 			t.Errorf("expected 1 hash for ESPN HD, got %d", len(espnHashes))
 		}
 
-		// Verify DAZN 1 HD has 2 hashes (two entries with same tvg-id)
 		daznHashes, ok := hashes["DAZN 1 HD"]
 		if !ok {
 			t.Fatal("expected 'DAZN 1 HD' channel in results")
@@ -84,7 +75,6 @@ func TestAcestreamHTTPSource_FetchHashes_Integration(t *testing.T) {
 			t.Errorf("expected 2 hashes for DAZN 1 HD, got %d", len(daznHashes))
 		}
 
-		// Verify entry with empty tvg-id was skipped
 		if _, ok := hashes[""]; ok {
 			t.Error("entry with empty tvg-id should have been skipped")
 		}
@@ -93,14 +83,12 @@ func TestAcestreamHTTPSource_FetchHashes_Integration(t *testing.T) {
 	})
 
 	t.Run("parse Elcano fixture file", func(t *testing.T) {
-		// Load fixture file
 		fixturePath := filepath.Join("testdata", "acestream_elcano.json")
 		fixtureData, err := os.ReadFile(fixturePath)
 		if err != nil {
 			t.Fatalf("failed to read Elcano fixture file: %v", err)
 		}
 
-		// Create test HTTP server serving the fixture
 		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusOK)
@@ -108,13 +96,7 @@ func TestAcestreamHTTPSource_FetchHashes_Integration(t *testing.T) {
 		}))
 		defer server.Close()
 
-		// Temporarily override source URL for testing
-		originalURL := sourceURLs[SourceElcano]
-		sourceURLs[SourceElcano] = server.URL
-		defer func() { sourceURLs[SourceElcano] = originalURL }()
-
-		// Create source and fetch hashes
-		source := NewAcestreamHTTPSource()
+		source := NewAcestreamHTTPSource(dummyURL, server.URL)
 
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
@@ -131,7 +113,6 @@ func TestAcestreamHTTPSource_FetchHashes_Integration(t *testing.T) {
 			t.Errorf("expected %d channels, got %d: %v", expectedChannels, len(hashes), hashes)
 		}
 
-		// Verify HBO HD channel (grouped by tvg_id) with 2 hashes
 		hboHashes, ok := hashes["HBO HD"]
 		if !ok {
 			t.Fatal("expected 'HBO HD' channel in results")
@@ -146,7 +127,6 @@ func TestAcestreamHTTPSource_FetchHashes_Integration(t *testing.T) {
 			t.Errorf("unexpected HBO hash[1]: %q", hboHashes[1])
 		}
 
-		// Verify ESPN HD channel
 		espnHashes, ok := hashes["ESPN HD"]
 		if !ok {
 			t.Fatal("expected 'ESPN HD' channel in results")
@@ -155,12 +135,10 @@ func TestAcestreamHTTPSource_FetchHashes_Integration(t *testing.T) {
 			t.Errorf("expected 1 hash for ESPN HD, got %d", len(espnHashes))
 		}
 
-		// Verify CNN HD with empty hash was skipped
 		if _, ok := hashes["CNN HD"]; ok {
 			t.Error("CNN HD entry with empty hash should have been skipped")
 		}
 
-		// Verify entry with no tvg_id fell back to title
 		noTvgHashes, ok := hashes["No TVG ID Channel"]
 		if !ok {
 			t.Fatal("expected 'No TVG ID Channel' in results (fallback to title)")
@@ -173,19 +151,12 @@ func TestAcestreamHTTPSource_FetchHashes_Integration(t *testing.T) {
 	})
 
 	t.Run("handle HTTP errors", func(t *testing.T) {
-		// Create test HTTP server that returns 404
 		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(http.StatusNotFound)
 		}))
 		defer server.Close()
 
-		// Temporarily override source URL for testing
-		originalURL := sourceURLs[SourceNewEra]
-		sourceURLs[SourceNewEra] = server.URL
-		defer func() { sourceURLs[SourceNewEra] = originalURL }()
-
-		// Create source and attempt to fetch hashes
-		source := NewAcestreamHTTPSource()
+		source := NewAcestreamHTTPSource(server.URL, dummyURL)
 
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
@@ -199,7 +170,6 @@ func TestAcestreamHTTPSource_FetchHashes_Integration(t *testing.T) {
 	})
 
 	t.Run("handle malformed JSON for Elcano", func(t *testing.T) {
-		// Create test HTTP server serving invalid JSON
 		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusOK)
@@ -207,13 +177,7 @@ func TestAcestreamHTTPSource_FetchHashes_Integration(t *testing.T) {
 		}))
 		defer server.Close()
 
-		// Temporarily override source URL for testing
-		originalURL := sourceURLs[SourceElcano]
-		sourceURLs[SourceElcano] = server.URL
-		defer func() { sourceURLs[SourceElcano] = originalURL }()
-
-		// Create source and attempt to fetch hashes
-		source := NewAcestreamHTTPSource()
+		source := NewAcestreamHTTPSource(dummyURL, server.URL)
 
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
@@ -227,20 +191,13 @@ func TestAcestreamHTTPSource_FetchHashes_Integration(t *testing.T) {
 	})
 
 	t.Run("handle context timeout", func(t *testing.T) {
-		// Create test HTTP server that delays response
 		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			time.Sleep(100 * time.Millisecond)
 			w.WriteHeader(http.StatusOK)
 		}))
 		defer server.Close()
 
-		// Temporarily override source URL for testing
-		originalURL := sourceURLs[SourceNewEra]
-		sourceURLs[SourceNewEra] = server.URL
-		defer func() { sourceURLs[SourceNewEra] = originalURL }()
-
-		// Create source and attempt to fetch with short timeout
-		source := NewAcestreamHTTPSource()
+		source := NewAcestreamHTTPSource(server.URL, dummyURL)
 
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Millisecond)
 		defer cancel()
@@ -254,23 +211,16 @@ func TestAcestreamHTTPSource_FetchHashes_Integration(t *testing.T) {
 	})
 
 	t.Run("handle context cancellation", func(t *testing.T) {
-		// Create test HTTP server that delays response
 		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			time.Sleep(100 * time.Millisecond)
 			w.WriteHeader(http.StatusOK)
 		}))
 		defer server.Close()
 
-		// Temporarily override source URL for testing
-		originalURL := sourceURLs[SourceElcano]
-		sourceURLs[SourceElcano] = server.URL
-		defer func() { sourceURLs[SourceElcano] = originalURL }()
-
-		// Create source and attempt to fetch with cancelled context
-		source := NewAcestreamHTTPSource()
+		source := NewAcestreamHTTPSource(dummyURL, server.URL)
 
 		ctx, cancel := context.WithCancel(context.Background())
-		cancel() // Cancel immediately
+		cancel()
 
 		_, err := source.FetchHashes(ctx, SourceElcano)
 		if err == nil {
@@ -281,7 +231,7 @@ func TestAcestreamHTTPSource_FetchHashes_Integration(t *testing.T) {
 	})
 
 	t.Run("handle unknown source", func(t *testing.T) {
-		source := NewAcestreamHTTPSource()
+		source := NewAcestreamHTTPSource(dummyURL, dummyURL)
 
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
@@ -295,7 +245,6 @@ func TestAcestreamHTTPSource_FetchHashes_Integration(t *testing.T) {
 	})
 
 	t.Run("parse NEW ERA M3U with empty lines and comments", func(t *testing.T) {
-		// Create test HTTP server serving M3U data with extra lines
 		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			w.Header().Set("Content-Type", "audio/x-mpegurl")
 			w.WriteHeader(http.StatusOK)
@@ -304,13 +253,7 @@ func TestAcestreamHTTPSource_FetchHashes_Integration(t *testing.T) {
 		}))
 		defer server.Close()
 
-		// Temporarily override source URL for testing
-		originalURL := sourceURLs[SourceNewEra]
-		sourceURLs[SourceNewEra] = server.URL
-		defer func() { sourceURLs[SourceNewEra] = originalURL }()
-
-		// Create source and fetch hashes
-		source := NewAcestreamHTTPSource()
+		source := NewAcestreamHTTPSource(server.URL, dummyURL)
 
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
@@ -328,7 +271,6 @@ func TestAcestreamHTTPSource_FetchHashes_Integration(t *testing.T) {
 	})
 
 	t.Run("parse Elcano with empty hashes array", func(t *testing.T) {
-		// Create test HTTP server serving JSON with empty hashes array
 		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusOK)
@@ -336,13 +278,7 @@ func TestAcestreamHTTPSource_FetchHashes_Integration(t *testing.T) {
 		}))
 		defer server.Close()
 
-		// Temporarily override source URL for testing
-		originalURL := sourceURLs[SourceElcano]
-		sourceURLs[SourceElcano] = server.URL
-		defer func() { sourceURLs[SourceElcano] = originalURL }()
-
-		// Create source and fetch hashes
-		source := NewAcestreamHTTPSource()
+		source := NewAcestreamHTTPSource(dummyURL, server.URL)
 
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
@@ -352,7 +288,6 @@ func TestAcestreamHTTPSource_FetchHashes_Integration(t *testing.T) {
 			t.Fatalf("failed to fetch Elcano hashes: %v", err)
 		}
 
-		// Empty array should result in no channels
 		if len(hashes) != 0 {
 			t.Errorf("expected 0 channels from empty array, got %d", len(hashes))
 		}
