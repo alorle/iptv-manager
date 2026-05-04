@@ -75,7 +75,7 @@ func newProbeTestLogger() *slog.Logger {
 func newProbeTestService(probeRepo *mockProbeRepository, streamRepo *mockStreamRepository) *application.ProbeService {
 	return application.NewProbeService(
 		probeRepo, streamRepo, &mockAceStreamEngineForProbe{}, newProbeTestLogger(),
-		30*time.Second, 24*time.Hour,
+		30*time.Second, 24*time.Hour, nil, 0, 0,
 	)
 }
 

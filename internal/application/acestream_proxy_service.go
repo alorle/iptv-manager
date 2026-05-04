@@ -305,6 +305,11 @@ func (s *AceStreamProxyService) cleanupClient(infoHash, pid string) {
 	}
 }
 
+// IsStreamActive returns true if the given infohash has an active session with clients.
+func (s *AceStreamProxyService) IsStreamActive(infoHash string) bool {
+	return s.sessions.GetSession(infoHash) != nil
+}
+
 // GetActiveStreams returns information about all active stream sessions.
 func (s *AceStreamProxyService) GetActiveStreams() []StreamInfo {
 	return s.sessions.GetAllSessions()

@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strconv"
 	"strings"
 	"syscall"
 	"time"
@@ -18,15 +19,17 @@ import (
 )
 
 type config struct {
-	Port               string
-	AceStreamEngineURL string
-	EPGURL             string
-	DBPath             string
-	LogLevel           slog.Level
-	StreamWriteTimeout time.Duration
-	ProbeInterval      time.Duration
-	ProbeTimeout       time.Duration
-	ProbeWindow        time.Duration
+	Port                        string
+	AceStreamEngineURL          string
+	EPGURL                      string
+	DBPath                      string
+	LogLevel                    slog.Level
+	StreamWriteTimeout          time.Duration
+	ProbeInterval               time.Duration
+	ProbeTimeout                time.Duration
+	ProbeWindow                 time.Duration
+	ProbeDelay                  time.Duration
+	ProbeMaxConsecutiveFailures int
 }
 
 func loadConfig() config {
@@ -92,16 +95,32 @@ func loadConfig() config {
 		}
 	}
 
+	probeDelay := 2 * time.Second
+	if delayStr := os.Getenv("PROBE_DELAY"); delayStr != "" {
+		if parsed, err := time.ParseDuration(delayStr); err == nil {
+			probeDelay = parsed
+		}
+	}
+
+	probeMaxConsecFailures := 5
+	if failStr := os.Getenv("PROBE_MAX_CONSECUTIVE_FAILURES"); failStr != "" {
+		if parsed, err := strconv.Atoi(failStr); err == nil && parsed > 0 {
+			probeMaxConsecFailures = parsed
+		}
+	}
+
 	return config{
-		Port:               port,
-		AceStreamEngineURL: aceStreamURL,
-		EPGURL:             epgURL,
-		DBPath:             dbPath,
-		LogLevel:           logLevel,
-		StreamWriteTimeout: streamWriteTimeout,
-		ProbeInterval:      probeInterval,
-		ProbeTimeout:       probeTimeout,
-		ProbeWindow:        probeWindow,
+		Port:                        port,
+		AceStreamEngineURL:          aceStreamURL,
+		EPGURL:                      epgURL,
+		DBPath:                      dbPath,
+		LogLevel:                    logLevel,
+		StreamWriteTimeout:          streamWriteTimeout,
+		ProbeInterval:               probeInterval,
+		ProbeTimeout:                probeTimeout,
+		ProbeWindow:                 probeWindow,
+		ProbeDelay:                  probeDelay,
+		ProbeMaxConsecutiveFailures: probeMaxConsecFailures,
 	}
 }
 
@@ -169,7 +188,7 @@ func main() {
 	aceStreamProxyService := application.NewAceStreamProxyService(aceStreamEngine, logger, cfg.StreamWriteTimeout)
 	subscriptionService := application.NewSubscriptionService(subscriptionRepo, epgFetcher)
 	epgSyncService := application.NewEPGSyncService(epgFetcher, acestreamSource, channelRepo, streamRepo, subscriptionRepo, logger)
-	probeService := application.NewProbeService(probeRepo, streamRepo, aceStreamEngine, logger, cfg.ProbeTimeout, cfg.ProbeWindow)
+	probeService := application.NewProbeService(probeRepo, streamRepo, aceStreamEngine, logger, cfg.ProbeTimeout, cfg.ProbeWindow, aceStreamProxyService, cfg.ProbeDelay, cfg.ProbeMaxConsecutiveFailures)
 
 	// Create HTTP handlers
 	channelHandler := driver.NewChannelHTTPHandler(channelService)

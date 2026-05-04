@@ -3,6 +3,7 @@ package application
 import (
 	"cmp"
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"slices"
@@ -11,6 +12,8 @@ import (
 	"github.com/alorle/iptv-manager/internal/port/driven"
 	"github.com/alorle/iptv-manager/internal/probe"
 )
+
+var errEngineFailure = errors.New("engine failure during probe")
 
 // StreamQuality pairs a stream's infohash with its quality score and metrics.
 type StreamQuality struct {
@@ -21,12 +24,15 @@ type StreamQuality struct {
 
 // ProbeService orchestrates stream health probing and quality metrics computation.
 type ProbeService struct {
-	probeRepo    driven.ProbeRepository
-	streamRepo   driven.StreamRepository
-	engine       driven.AceStreamEngine
-	logger       *slog.Logger
-	probeTimeout time.Duration
-	window       time.Duration
+	probeRepo              driven.ProbeRepository
+	streamRepo             driven.StreamRepository
+	engine                 driven.AceStreamEngine
+	activeChecker          driven.ActiveStreamChecker
+	logger                 *slog.Logger
+	probeTimeout           time.Duration
+	window                 time.Duration
+	probeDelay             time.Duration
+	maxConsecutiveFailures int
 }
 
 // NewProbeService creates a new ProbeService.
@@ -37,37 +43,64 @@ func NewProbeService(
 	logger *slog.Logger,
 	probeTimeout time.Duration,
 	window time.Duration,
+	activeChecker driven.ActiveStreamChecker,
+	probeDelay time.Duration,
+	maxConsecutiveFailures int,
 ) *ProbeService {
 	return &ProbeService{
-		probeRepo:    probeRepo,
-		streamRepo:   streamRepo,
-		engine:       engine,
-		logger:       logger,
-		probeTimeout: probeTimeout,
-		window:       window,
+		probeRepo:              probeRepo,
+		streamRepo:             streamRepo,
+		engine:                 engine,
+		activeChecker:          activeChecker,
+		logger:                 logger,
+		probeTimeout:           probeTimeout,
+		window:                 window,
+		probeDelay:             probeDelay,
+		maxConsecutiveFailures: maxConsecutiveFailures,
 	}
 }
 
 // ProbeAllStreams runs a health-check probe on every known stream sequentially.
-// It continues probing remaining streams even if individual probes fail.
+// It skips streams that are actively being watched, throttles between probes,
+// and trips a circuit breaker after consecutive engine failures.
 func (s *ProbeService) ProbeAllStreams(ctx context.Context) error {
 	streams, err := s.streamRepo.FindAll(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to fetch streams: %w", err)
 	}
 
-	s.logger.Info("starting probe cycle", "stream_count", len(streams))
+	s.logger.Info("starting probe cycle", "stream_count", len(streams), "probe_delay", s.probeDelay)
 
-	var probed, failed int
-	for _, st := range streams {
+	var probed, failed, skipped, consecutiveFailures int
+	for i, st := range streams {
 		if ctx.Err() != nil {
-			s.logger.Info("probe cycle interrupted", "probed", probed, "failed", failed)
+			s.logger.Info("probe cycle interrupted", "probed", probed, "failed", failed, "skipped", skipped)
 			return ctx.Err()
+		}
+
+		if s.activeChecker != nil && s.activeChecker.IsStreamActive(st.InfoHash()) {
+			s.logger.Debug("skipping probe for active stream", "infohash", st.InfoHash(), "channel", st.ChannelName())
+			skipped++
+			continue
 		}
 
 		_, err := s.probeStream(ctx, st.InfoHash())
 		if err != nil {
 			failed++
+			if errors.Is(err, errEngineFailure) {
+				consecutiveFailures++
+			} else {
+				consecutiveFailures = 0
+			}
+			if s.maxConsecutiveFailures > 0 && consecutiveFailures >= s.maxConsecutiveFailures {
+				s.logger.Error("circuit breaker tripped: engine appears unhealthy, aborting probe cycle",
+					"consecutive_failures", consecutiveFailures,
+					"probed", probed,
+					"failed", failed,
+					"skipped", skipped,
+				)
+				break
+			}
 			s.logger.Warn("probe failed",
 				"infohash", st.InfoHash(),
 				"channel", st.ChannelName(),
@@ -75,10 +108,20 @@ func (s *ProbeService) ProbeAllStreams(ctx context.Context) error {
 			)
 		} else {
 			probed++
+			consecutiveFailures = 0
+		}
+
+		if s.probeDelay > 0 && i < len(streams)-1 {
+			select {
+			case <-ctx.Done():
+				s.logger.Info("probe cycle interrupted during throttle", "probed", probed, "failed", failed, "skipped", skipped)
+				return ctx.Err()
+			case <-time.After(s.probeDelay):
+			}
 		}
 	}
 
-	s.logger.Info("probe cycle completed", "probed", probed, "failed", failed)
+	s.logger.Info("probe cycle completed", "probed", probed, "failed", failed, "skipped", skipped)
 
 	if err := s.Cleanup(ctx); err != nil {
 		s.logger.Error("probe cleanup failed", "error", err)
@@ -97,7 +140,6 @@ func (s *ProbeService) probeStream(ctx context.Context, infoHash string) (probe.
 	startTime := time.Now()
 	_, err := s.engine.StartStream(probeCtx, infoHash, pid)
 	if err != nil {
-		// Stream is unavailable — record a failed probe
 		result, resultErr := probe.NewResult(
 			infoHash, time.Now(), false, 0, 0, 0, "", err.Error(),
 		)
@@ -107,15 +149,13 @@ func (s *ProbeService) probeStream(ctx context.Context, infoHash string) (probe.
 		if saveErr := s.probeRepo.Save(ctx, result); saveErr != nil {
 			return probe.Result{}, fmt.Errorf("failed to save probe result: %w", saveErr)
 		}
-		return result, nil
+		return result, errEngineFailure
 	}
 
 	startupLatency := time.Since(startTime)
 
-	// Get stats from the engine
 	stats, statsErr := s.engine.GetStats(probeCtx, pid)
 
-	// Always stop the stream, regardless of stats outcome
 	if stopErr := s.engine.StopStream(ctx, pid); stopErr != nil {
 		s.logger.Warn("failed to stop probe stream",
 			"infohash", infoHash,
@@ -125,7 +165,6 @@ func (s *ProbeService) probeStream(ctx context.Context, infoHash string) (probe.
 	}
 
 	if statsErr != nil {
-		// Stream started but stats failed — record partial probe
 		result, resultErr := probe.NewResult(
 			infoHash, time.Now(), true, startupLatency, 0, 0, "",
 			fmt.Sprintf("stats error: %s", statsErr),
@@ -139,9 +178,17 @@ func (s *ProbeService) probeStream(ctx context.Context, infoHash string) (probe.
 		return result, nil
 	}
 
+	// Zombie detection: engine returned a URL but no peers and no data flowing
+	isZombie := stats.Peers == 0 && stats.SpeedDown == 0
+	available := !isZombie
+	errorMsg := ""
+	if isZombie {
+		errorMsg = "zombie stream: 0 peers and 0 download speed"
+	}
+
 	result, resultErr := probe.NewResult(
-		infoHash, time.Now(), true, startupLatency,
-		stats.Peers, stats.SpeedDown, stats.Status, "",
+		infoHash, time.Now(), available, startupLatency,
+		stats.Peers, stats.SpeedDown, stats.Status, errorMsg,
 	)
 	if resultErr != nil {
 		return probe.Result{}, fmt.Errorf("failed to create probe result: %w", resultErr)
@@ -153,7 +200,7 @@ func (s *ProbeService) probeStream(ctx context.Context, infoHash string) (probe.
 
 	s.logger.Debug("probe completed",
 		"infohash", infoHash,
-		"available", true,
+		"available", available,
 		"peers", stats.Peers,
 		"speed_down", stats.SpeedDown,
 		"startup_latency", startupLatency,
